@@ -106,9 +106,9 @@ fun SpinWheel(
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(32.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp) // 从32dp减少到16dp
     ) {
-        Spacer(Modifier.height(40.dp))
+        // 移除顶部Spacer，直接开始转盘
         
         // 转盘容器 - 简洁设计
         Box(
@@ -128,9 +128,7 @@ fun SpinWheel(
             PointerIndicator()
         }
         
-        Spacer(Modifier.height(16.dp))
-        
-        // 旋转按钮
+        // 旋转按钮（减少间距）
         Button(
             onClick = {
                 Log.d(TAG, "=== Button Clicked ===")
@@ -213,8 +211,7 @@ fun SpinWheel(
                 )
             }
         }
-        
-        Spacer(Modifier.height(24.dp))
+        // 移除底部Spacer
     }
 }
 
@@ -853,26 +850,169 @@ private fun PointerIndicator() {
     }
 }
 
-// 结果动画
+// 结果动画 - 华丽礼物盒粒子效果
 @Composable
 fun ResultAnimation(result: String, onDismiss: () -> Unit) {
     var visible by remember { mutableStateOf(true) }
     var scale by remember { mutableFloatStateOf(0f) }
     var alpha by remember { mutableFloatStateOf(1f) }
+    var rotation by remember { mutableFloatStateOf(-10f) }
+    var particles by remember { mutableStateOf<List<Particle>>(emptyList()) }
     
     LaunchedEffect(Unit) {
-        animate(0f, 1.3f, animationSpec = tween(200, easing = FastOutSlowInEasing)) { v, _ -> scale = v }
-        animate(1.3f, 1f, animationSpec = tween(200)) { v, _ -> scale = v }
-        delay(2500)
-        animate(1f, 0f, animationSpec = tween(400)) { v, _ -> alpha = v }
+        // 创建大量礼物盒粒子 - 增加到300个
+        particles = List(300) {
+            val angle = Random.nextFloat() * 360f
+            val speed = Random.nextFloat() * 12f + 6f
+            Particle(
+                x = 0f,
+                y = 0f,
+                vx = cos(Math.toRadians(angle.toDouble())).toFloat() * speed,
+                vy = sin(Math.toRadians(angle.toDouble())).toFloat() * speed - 5f,
+                life = 1f,
+                maxLife = 1f,
+                color = listOf(
+                    Color(0xFFFFD700), Color(0xFFFFA500), Color(0xFFFF6B9D),
+                    Color(0xFF4FACFE), Color(0xFFFFFFFF), Color(0xFFFFE4B5),
+                    Color(0xFFFF1744), Color(0xFF00E676), Color(0xFF00B0FF),
+                    Color(0xFFFFEA00), Color(0xFFE040FB), Color(0xFFFF4081),
+                    Color(0xFF69F0AE), Color(0xFF40C4FF), Color(0xFFFFAB91),
+                    Color(0xFFCE93D8), Color(0xFF80DEEA), Color(0xFFFFF176)
+                ).random(),
+                size = Random.nextFloat() * 14f + 8f
+            )
+        }
+        
+        // 弹跳动画
+        animate(0f, 1.5f, animationSpec = tween(250, easing = FastOutSlowInEasing)) { v, _ -> scale = v }
+        animate(1.5f, 0.95f, animationSpec = tween(150)) { v, _ -> scale = v }
+        animate(0.95f, 1.05f, animationSpec = tween(100)) { v, _ -> scale = v }
+        animate(1.05f, 1f, animationSpec = tween(100)) { v, _ -> scale = v }
+        
+        // 旋转动画
+        animate(-10f, 10f, animationSpec = tween(200)) { v, _ -> rotation = v }
+        animate(10f, -5f, animationSpec = tween(150)) { v, _ -> rotation = v }
+        animate(-5f, 0f, animationSpec = tween(100)) { v, _ -> rotation = v }
+        
+        // 粒子动画
+        var time = 0f
+        while (time < 3000f) {
+            withFrameNanos { _ ->
+                time += 16f
+                particles = particles.map { particle ->
+                    particle.copy(
+                        x = particle.x + particle.vx,
+                        y = particle.y + particle.vy,
+                        vx = particle.vx * 0.98f,
+                        vy = particle.vy + 0.18f, // 重力
+                        life = particle.life - 0.006f
+                    )
+                }.filter { it.life > 0 }
+            }
+        }
+        
+        // 淡出
+        animate(1f, 0f, animationSpec = tween(500)) { v, _ -> alpha = v }
         visible = false
         onDismiss()
     }
     
     if (visible) {
-        Box(Modifier.fillMaxSize(), Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f * alpha)),
+            Alignment.Center
+        ) {
+            // 礼物盒粒子效果层
+            Canvas(Modifier.fillMaxSize()) {
+                val centerX = size.width / 2
+                val centerY = size.height / 2
+                
+                particles.forEach { particle ->
+                    val particleAlpha = (particle.life / particle.maxLife).coerceIn(0f, 1f) * alpha
+                    val particleX = centerX + particle.x
+                    val particleY = centerY + particle.y
+                    val boxSize = particle.size
+                    
+                    // 礼物盒光晕
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                particle.color.copy(alpha = particleAlpha * 0.6f),
+                                particle.color.copy(alpha = particleAlpha * 0.3f),
+                                Color.Transparent
+                            ),
+                            radius = boxSize * 3f
+                        ),
+                        radius = boxSize * 3f,
+                        center = Offset(particleX, particleY)
+                    )
+                    
+                    // 礼物盒主体
+                    drawRoundRect(
+                        color = particle.color.copy(alpha = particleAlpha),
+                        topLeft = Offset(particleX - boxSize * 0.5f, particleY - boxSize * 0.4f),
+                        size = androidx.compose.ui.geometry.Size(boxSize, boxSize * 0.8f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(boxSize * 0.15f)
+                    )
+                    
+                    // 礼物盒渐变高光
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = particleAlpha * 0.5f),
+                                Color.Transparent
+                            )
+                        ),
+                        topLeft = Offset(particleX - boxSize * 0.5f, particleY - boxSize * 0.4f),
+                        size = androidx.compose.ui.geometry.Size(boxSize, boxSize * 0.4f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(boxSize * 0.15f)
+                    )
+                    
+                    // 丝带（垂直）
+                    drawRect(
+                        color = Color.White.copy(alpha = particleAlpha * 0.95f),
+                        topLeft = Offset(particleX - boxSize * 0.1f, particleY - boxSize * 0.4f),
+                        size = androidx.compose.ui.geometry.Size(boxSize * 0.2f, boxSize * 0.8f)
+                    )
+                    
+                    // 丝带（水平）
+                    drawRect(
+                        color = Color.White.copy(alpha = particleAlpha * 0.95f),
+                        topLeft = Offset(particleX - boxSize * 0.5f, particleY - boxSize * 0.1f),
+                        size = androidx.compose.ui.geometry.Size(boxSize, boxSize * 0.2f)
+                    )
+                    
+                    // 蝴蝶结装饰
+                    drawCircle(
+                        color = Color.White.copy(alpha = particleAlpha),
+                        radius = boxSize * 0.25f,
+                        center = Offset(particleX - boxSize * 0.25f, particleY - boxSize * 0.5f)
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = particleAlpha),
+                        radius = boxSize * 0.25f,
+                        center = Offset(particleX + boxSize * 0.25f, particleY - boxSize * 0.5f)
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = particleAlpha),
+                        radius = boxSize * 0.15f,
+                        center = Offset(particleX, particleY - boxSize * 0.5f)
+                    )
+                }
+            }
+            
+            // 主卡片
             Card(
-                modifier = Modifier.padding(32.dp).graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha },
+                modifier = Modifier
+                    .padding(32.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        rotationZ = rotation
+                        this.alpha = alpha
+                    },
                 shape = RoundedCornerShape(32.dp),
                 elevation = CardDefaults.cardElevation(16.dp)
             ) {

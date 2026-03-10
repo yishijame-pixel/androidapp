@@ -246,6 +246,13 @@ fun EnhancedSpinWheelScreen(
                     Spacer(Modifier.height(16.dp))
                 }
                 
+                // 幸运值系统 - 紧凑版
+                com.example.funlife.ui.components.LuckyValueSystem(
+                    onLuckyValueChange = { value ->
+                        android.util.Log.d("EnhancedSpinWheel", "Lucky value changed: $value")
+                    }
+                )
+                
                 // 转盘
                 key(currentOptions.hashCode(), currentMode, currentTheme, multiSpinMode) {
                     var currentSpinIndex by remember { mutableStateOf(0) }
@@ -346,21 +353,8 @@ fun EnhancedSpinWheelScreen(
                                         // 由于 Compose 的限制，我们让用户看到进度更新后自动继续
                                     }
                                 } else {
-                                    // 单次模式显示结果
-                                    when (spinResult) {
-                                        is SpinResult.Success -> {
-                                            val reward = spinResult.coinReward
-                                            resultMessage = if (reward > 0) {
-                                                "🎉 抽中: ${spinResult.result}\n💰 获得 $reward 金币！"
-                                            } else {
-                                                "🎯 抽中: ${spinResult.result}"
-                                            }
-                                            snackbarHostState.showSnackbar(resultMessage)
-                                        }
-                                        is SpinResult.InsufficientCoins -> {
-                                            // 不应该发生
-                                        }
-                                    }
+                                    // 单次模式 - 不显示 Snackbar，只显示动画
+                                    // 动画已经在 onShowResult 中触发
                                 }
                             }
                         },
@@ -382,7 +376,7 @@ fun EnhancedSpinWheelScreen(
         }
     }
     
-    // 结果动画（覆盖在整个屏幕上）
+    // 获得动画（覆盖在整个屏幕上）- 保留
     if (showResultAnimation) {
         com.example.funlife.ui.components.ResultAnimation(
             result = animationResult,
