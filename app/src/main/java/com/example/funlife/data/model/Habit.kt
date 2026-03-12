@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class Habit(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,          // 用户ID
     val name: String,              // 习惯名称
     val icon: String,              // 图标emoji
     val color: String,             // 颜色（hex格式）

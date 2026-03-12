@@ -54,9 +54,10 @@ import com.example.funlife.data.model.CustomSpinMode
         ShopItem::class,
         PurchaseHistory::class,
         GuaranteeCounter::class,
-        CustomSpinMode::class
+        CustomSpinMode::class,
+        com.example.funlife.data.model.User::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,6 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun spinWheelTemplateDao(): SpinWheelTemplateDao
     abstract fun spinWheelHistoryDao(): SpinWheelHistoryDao
     abstract fun habitDao(): HabitDao
+    abstract fun userDao(): com.example.funlife.data.dao.UserDao
     abstract fun moodDao(): MoodDao
     abstract fun goalDao(): GoalDao
     abstract fun coinDao(): CoinDao

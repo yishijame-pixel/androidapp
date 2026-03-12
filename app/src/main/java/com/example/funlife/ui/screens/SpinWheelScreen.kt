@@ -288,9 +288,9 @@ fun TemplatesDialog(
     // 模拟模板数据（实际应该从 ViewModel 获取）
     val templates = remember {
         listOf(
-            SpinWheelTemplate(1, "今天吃什么", "火锅,烧烤,日料,川菜,粤菜,西餐,快餐,面食", "", "food", true, 15, ""),
-            SpinWheelTemplate(2, "周末娱乐", "看电影,打游戏,运动健身,逛街购物,郊游,K歌,读书,睡觉", "", "game", true, 8, ""),
-            SpinWheelTemplate(3, "做决定", "去做,不去做,再想想,问朋友", "", "decision", true, 23, "")
+            SpinWheelTemplate(1, 0, "今天吃什么", "火锅,烧烤,日料,川菜,粤菜,西餐,快餐,面食", "", "food", true, 15, ""),
+            SpinWheelTemplate(2, 0, "周末娱乐", "看电影,打游戏,运动健身,逛街购物,郊游,K歌,读书,睡觉", "", "game", true, 8, ""),
+            SpinWheelTemplate(3, 0, "做决定", "去做,不去做,再想想,问朋友", "", "decision", true, 23, "")
         )
     }
     

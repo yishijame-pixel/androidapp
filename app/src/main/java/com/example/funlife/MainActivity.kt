@@ -60,6 +60,9 @@ fun MainScreen() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     
+    // 创建 AuthViewModel
+    val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    
     // 底部导航项
     val bottomNavItems = listOf(
         BottomNavItem(
@@ -82,6 +85,13 @@ fun MainScreen() {
             icon = Icons.Default.Flag,
             label = "目标"
         )
+    )
+    
+    // 判断是否显示底部导航栏（登录/注册/欢迎页不显示）
+    val showBottomBar = currentDestination?.route !in listOf(
+        Screen.Welcome.route,
+        Screen.Login.route,
+        Screen.Register.route
     )
     
     Scaffold(
@@ -214,12 +224,14 @@ fun MainScreen() {
             }
         },
         bottomBar = {
-            // 美化的底部导航栏 - 无背景，图标发光效果
-            Surface(
-                tonalElevation = 0.dp,
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.surface
-            ) {
+            // 只在主要页面显示底部导航栏
+            if (showBottomBar) {
+                // 美化的底部导航栏 - 无背景，图标发光效果
+                Surface(
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surface
+                ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -256,6 +268,7 @@ fun MainScreen() {
                         )
                     }
                 }
+                }
             }
         }
     ) { innerPadding ->
@@ -266,7 +279,8 @@ fun MainScreen() {
         ) {
             NavGraph(
                 navController = navController,
-                modifier = Modifier.padding(innerPadding)
+                modifier = Modifier.padding(innerPadding),
+                authViewModel = authViewModel
             )
         }
     }

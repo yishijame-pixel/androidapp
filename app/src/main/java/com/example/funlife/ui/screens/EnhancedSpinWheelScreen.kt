@@ -1,10 +1,13 @@
 // EnhancedSpinWheelScreen.kt - 增强版转盘屏幕（简化版）
 package com.example.funlife.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,6 +16,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,6 +78,11 @@ fun EnhancedSpinWheelScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAnimationDialog by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    
+    // 幸运值系统状态
+    var luckyValue by remember { mutableStateOf(0) }
+    var selectedTargetOption by remember { mutableStateOf<WheelOption?>(null) }
+    var showTargetSelectionDialog by remember { mutableStateOf(false) }
     
     val allTemplates by viewModel.allTemplates.collectAsState()
     
@@ -164,197 +175,264 @@ fun EnhancedSpinWheelScreen(
             ) {
                 Spacer(Modifier.height(8.dp))
                 
-                // 连抽进度显示（固定在转盘上方）
-                if (multiSpinMode && currentMultiSpinProgress > 0) {
-                    Card(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("🎲", style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                "连抽进度: $currentMultiSpinProgress/$multiSpinCount",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                } else if (multiSpinMode && currentMultiSpinProgress == 0) {
-                    // 连抽模式已开启但还未开始的提示 - 增强版
+                // 连抽模式提示（紧凑版）
+                if (multiSpinMode && currentMultiSpinProgress == 0) {
                     Card(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth(),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        )
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 大号图标
-                            Text(
-                                "✨🎲✨",
-                                style = MaterialTheme.typography.displaySmall
-                            )
-                            
-                            // 主标题
-                            Text(
-                                "已开启 ${multiSpinCount}连抽模式",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            
-                            // 说明文字
-                            Text(
-                                "点击下方「开始旋转」按钮",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.9f)
-                            )
-                            
-                            Text(
-                                "将自动连续抽取 $multiSpinCount 次",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                            )
-                            
-                            // 取消按钮
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🎲", fontSize = 24.sp)
+                                Text(
+                                    "${multiSpinCount}连抽已就绪",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                             TextButton(
                                 onClick = { viewModel.toggleMultiSpinMode(false) },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text("取消连抽模式")
+                                Text("取消", fontSize = 12.sp)
                             }
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
                 }
                 
                 // 幸运值系统 - 紧凑版
                 com.example.funlife.ui.components.LuckyValueSystem(
+                    luckyValue = luckyValue,
                     onLuckyValueChange = { value ->
+                        luckyValue = value
                         android.util.Log.d("EnhancedSpinWheel", "Lucky value changed: $value")
                     }
                 )
                 
-                // 转盘
-                key(currentOptions.hashCode(), currentMode, currentTheme, multiSpinMode) {
-                    var currentSpinIndex by remember { mutableStateOf(0) }
-                    
-                    // 监听连抽模式变化，重置状态
-                    LaunchedEffect(multiSpinMode) {
-                        if (multiSpinMode) {
-                            currentSpinIndex = 0
+                // 目标选项选择按钮 - 优化布局
+                if (selectedTargetOption != null) {
+                    // 紧凑单行版本
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Transparent,
+                        shadowElevation = 4.dp
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF6B6B),
+                                            Color(0xFFFFD93D)
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("🎯", fontSize = 20.sp)
+                                    Text(
+                                        selectedTargetOption!!.text,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 16.sp
+                                    )
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        val baseProb = 100f / currentOptions.filter { !it.isExcluded }.size
+                                        val maxProb = 50f
+                                        val totalProb = (baseProb + (maxProb - baseProb) * (luckyValue / 100f)).toInt()
+                                        Text(
+                                            "${totalProb}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                
+                                IconButton(
+                                    onClick = { selectedTargetOption = null },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        "取消",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
-                    
-                    // 计算是否可以旋转（响应式）
-                    val canSpin = remember(userCoins, currentMode, multiSpinMode, multiSpinCount, currentSpinIndex) {
-                        val result = if (multiSpinMode && currentSpinIndex == 0) {
-                            // 连抽模式第一次：检查总金币
-                            val totalCost = currentMode.costPerSpin * multiSpinCount
-                            userCoins >= totalCost
-                        } else if (multiSpinMode && currentSpinIndex > 0) {
-                            // 连抽模式后续次数：已经扣过金币了，直接允许
-                            true
-                        } else {
-                            // 单次模式：检查单次金币
-                            userCoins >= currentMode.costPerSpin
-                        }
-                        android.util.Log.d("EnhancedSpinWheel", "canSpin calculated: $result (userCoins: $userCoins, cost: ${currentMode.costPerSpin}, multiSpinMode: $multiSpinMode, currentSpinIndex: $currentSpinIndex)")
-                        result
+                } else {
+                    OutlinedButton(
+                        onClick = { showTargetSelectionDialog = true },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFFF6B6B),
+                                    Color(0xFFFFD93D)
+                                )
+                            )
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Star,
+                            "选择目标",
+                            modifier = Modifier.size(16.dp),
+                            tint = Color(0xFFFF6B6B)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "选择目标",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
                     }
+                }
+                
+                // 转盘 - 使用独立的key确保权重可视化生效
+                var currentSpinIndex by remember { mutableStateOf(0) }
+                var isPreparingToSpin by remember { mutableStateOf(false) }
+                var currentForceResult by remember { mutableStateOf<String?>(null) }
+                var triggerSpin by remember { mutableStateOf(0) }
+                
+                // 调试日志 - 权重可视化
+                LaunchedEffect(showWeightVisualization) {
+                    android.util.Log.d("EnhancedSpinWheel", "=== Weight Visualization Changed ===")
+                    android.util.Log.d("EnhancedSpinWheel", "showWeightVisualization: $showWeightVisualization")
+                    android.util.Log.d("EnhancedSpinWheel", "currentOptions: ${currentOptions.map { "${it.text}:${it.weight}" }}")
+                }
+                
+                // 计算是否可以旋转（响应式）
+                val canSpin = remember(userCoins, currentMode, multiSpinMode, multiSpinCount, currentSpinIndex, isPreparingToSpin) {
+                    if (isPreparingToSpin) return@remember false
                     
+                    val result = if (multiSpinMode && currentSpinIndex == 0) {
+                        val totalCost = currentMode.costPerSpin * multiSpinCount
+                        userCoins >= totalCost
+                    } else if (multiSpinMode && currentSpinIndex > 0) {
+                        true
+                    } else {
+                        userCoins >= currentMode.costPerSpin
+                    }
+                    result
+                }
+                
+                // 使用key强制重组SpinWheel，确保权重可视化生效
+                key(currentOptions.hashCode(), currentMode, currentTheme, multiSpinMode, showWeightVisualization, triggerSpin) {
                     SpinWheel(
                         options = currentOptions.filter { !it.isExcluded }.map { it.text },
                         mode = currentMode.name,
-                        canSpin = canSpin,
+                        canSpin = true,
                         weights = currentOptions.filter { !it.isExcluded }.map { it.weight },
                         showWeightVisualization = showWeightVisualization,
                         theme = null,
                         multiSpinMode = multiSpinMode,
-                        autoSpinTrigger = 0, // 不再使用
+                        autoSpinTrigger = triggerSpin,
+                        forceResult = currentForceResult,
+                        showButton = false,
                         onSpinStart = {
-                            // 手动点击按钮开始旋转时的处理
-                            scope.launch {
-                                if (multiSpinMode) {
-                                    // 连抽模式：只在第一次扣除所有金币
-                                    if (currentSpinIndex == 0) {
-                                        val totalCost = currentMode.costPerSpin * multiSpinCount
-                                        if (viewModel.userCoins.value < totalCost) {
-                                            snackbarHostState.showSnackbar("❌ 金币不足！需要 $totalCost 金币")
-                                            return@launch
-                                        }
-                                        // 扣除所有金币
-                                        repeat(multiSpinCount) {
-                                            viewModel.checkAndDeductCoins()
-                                        }
-                                        // 更新进度
-                                        currentSpinIndex = 1
-                                        viewModel.incrementMultiSpinProgress()
-                                    }
-                                } else {
-                                    // 单次模式：正常扣除金币
-                                    val success = viewModel.checkAndDeductCoins()
-                                    if (!success) {
-                                        snackbarHostState.showSnackbar("❌ 金币不足！需要 ${currentMode.costPerSpin} 金币")
-                                    }
-                                }
-                            }
+                            // 在旋转开始前计算forceResult
+                            android.util.Log.d("EnhancedSpinWheel", "=== onSpinStart (inside SpinWheel) ===")
+                            android.util.Log.d("EnhancedSpinWheel", "currentForceResult at onSpinStart: $currentForceResult")
                         },
                         onAutoSpinStart = {
                             // 不再使用
                         },
                         onResult = { result ->
-                            // 旋转完成后处理结果和奖励
                             scope.launch {
+                                android.util.Log.d("EnhancedSpinWheel", "=== onResult called ===")
+                                android.util.Log.d("EnhancedSpinWheel", "result: $result")
+                                android.util.Log.d("EnhancedSpinWheel", "multiSpinMode: $multiSpinMode")
+                                android.util.Log.d("EnhancedSpinWheel", "currentSpinIndex: $currentSpinIndex")
+                                android.util.Log.d("EnhancedSpinWheel", "multiSpinCount: $multiSpinCount")
+                                
+                                // 重置forceResult
+                                currentForceResult = null
+                                
+                                // 清零幸运值（仅单次模式）
+                                if (!multiSpinMode && selectedTargetOption != null) {
+                                    luckyValue = 0
+                                    selectedTargetOption = null
+                                }
+                                
                                 val spinResult = viewModel.processSpinResult(result)
                                 
-                                // 如果是连抽模式，记录结果
                                 if (multiSpinMode) {
                                     viewModel.recordMultiSpinResult(result)
                                     
-                                    // 检查是否完成所有连抽
+                                    android.util.Log.d("EnhancedSpinWheel", "Recorded result, currentSpinIndex: $currentSpinIndex")
+                                    
                                     if (currentSpinIndex >= multiSpinCount) {
-                                        kotlinx.coroutines.delay(800)
+                                        // 连抽完成
+                                        android.util.Log.d("EnhancedSpinWheel", "=== Multi-spin COMPLETE ===")
+                                        kotlinx.coroutines.delay(500)
                                         val results = viewModel.multiSpinResults.value
                                         val summary = results.groupingBy { it }.eachCount()
                                             .entries.joinToString(", ") { "${it.key}×${it.value}" }
                                         
-                                        // 显示连抽结算动画
                                         multiSpinAnimationResult = summary
                                         showMultiSpinResultAnimation = true
                                         
-                                        // 重置连抽状态
                                         viewModel.resetMultiSpinState()
                                         currentSpinIndex = 0
+                                        
+                                        // 清零幸运值
+                                        if (selectedTargetOption != null) {
+                                            luckyValue = 0
+                                            selectedTargetOption = null
+                                        }
                                     } else {
-                                        // 继续下一次旋转：延迟后自动点击按钮
-                                        kotlinx.coroutines.delay(500)
+                                        // 继续下一次抽取 - 减少延迟提升流畅度
+                                        android.util.Log.d("EnhancedSpinWheel", "=== Continuing multi-spin ===")
+                                        android.util.Log.d("EnhancedSpinWheel", "Waiting 100ms before next spin...")
+                                        kotlinx.coroutines.delay(100)
                                         currentSpinIndex++
                                         viewModel.incrementMultiSpinProgress()
-                                        // 注意：这里需要用户再次点击按钮，或者我们需要触发按钮点击
-                                        // 由于 Compose 的限制，我们让用户看到进度更新后自动继续
+                                        
+                                        // 🔥 关键修复：自动触发下一次旋转
+                                        triggerSpin++
+                                        android.util.Log.d("EnhancedSpinWheel", "Auto-triggered next spin, triggerSpin: $triggerSpin, currentSpinIndex: $currentSpinIndex")
                                     }
-                                } else {
-                                    // 单次模式 - 不显示 Snackbar，只显示动画
-                                    // 动画已经在 onShowResult 中触发
                                 }
                             }
                         },
@@ -369,6 +447,221 @@ fun EnhancedSpinWheelScreen(
                             }
                         }
                     )
+                    
+                    // 自定义旋转按钮 - 放在转盘下方
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                isPreparingToSpin = true
+                                
+                                android.util.Log.d("EnhancedSpinWheel", "=== Custom Button Clicked ===")
+                                android.util.Log.d("EnhancedSpinWheel", "selectedTargetOption: ${selectedTargetOption?.text}")
+                                android.util.Log.d("EnhancedSpinWheel", "luckyValue: $luckyValue")
+                                
+                                // 计算是否命中目标 - 50%概率
+                                if (selectedTargetOption != null && luckyValue > 0) {
+                                    val hitProbability = (luckyValue * 0.5f).toInt()
+                                    val random = kotlin.random.Random.nextInt(100)
+                                    val hit = random < hitProbability
+                                    
+                                    android.util.Log.d("EnhancedSpinWheel", "hitProbability: $hitProbability%, random: $random, hit: $hit")
+                                    
+                                    // 根据概率决定是否命中
+                                    currentForceResult = if (hit) selectedTargetOption?.text else null
+                                    android.util.Log.d("EnhancedSpinWheel", "currentForceResult set to: $currentForceResult")
+                                } else {
+                                    currentForceResult = null
+                                    android.util.Log.d("EnhancedSpinWheel", "No target or lucky value is 0")
+                                }
+                                
+                                // 扣除金币
+                                if (multiSpinMode) {
+                                    if (currentSpinIndex == 0) {
+                                        val totalCost = currentMode.costPerSpin * multiSpinCount
+                                        if (viewModel.userCoins.value < totalCost) {
+                                            snackbarHostState.showSnackbar("❌ 金币不足！")
+                                            currentForceResult = null
+                                            isPreparingToSpin = false
+                                            return@launch
+                                        }
+                                        repeat(multiSpinCount) {
+                                            viewModel.checkAndDeductCoins()
+                                        }
+                                        currentSpinIndex = 1
+                                        viewModel.incrementMultiSpinProgress()
+                                    }
+                                } else {
+                                    if (!viewModel.checkAndDeductCoins()) {
+                                        snackbarHostState.showSnackbar("❌ 金币不足！")
+                                        currentForceResult = null
+                                        isPreparingToSpin = false
+                                        return@launch
+                                    }
+                                }
+                                
+                                isPreparingToSpin = false
+                                
+                                // 触发旋转
+                                triggerSpin++
+                                android.util.Log.d("EnhancedSpinWheel", "triggerSpin incremented to: $triggerSpin")
+                            }
+                        },
+                        enabled = !isPreparingToSpin && canSpin && currentOptions.filter { !it.isExcluded }.isNotEmpty(),
+                        modifier = Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(60.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = when (currentMode.name) {
+                                "LUCKY" -> Color(0xFFFFD700)
+                                "ADVANCED" -> Color(0xFF9C27B0)
+                                else -> Color(0xFF2196F3)
+                            },
+                            disabledContainerColor = Color(0xFFBDBDBD)
+                        ),
+                        shape = RoundedCornerShape(30.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 6.dp,
+                            pressedElevation = 10.dp
+                        )
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(if (isPreparingToSpin) "⏳" else "🎯", fontSize = 24.sp)
+                            Text(
+                                if (isPreparingToSpin) "准备中..." else "开始旋转",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    
+                    // 连抽进度条和圈中可视化
+                    if (multiSpinMode) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // 进度条
+                            if (currentMultiSpinProgress > 0) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "连抽进度",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                "$currentMultiSpinProgress / $multiSpinCount",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        
+                                        LinearProgressIndicator(
+                                            progress = currentMultiSpinProgress.toFloat() / multiSpinCount.toFloat(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(8.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 圈中可视化 - 显示已抽中的结果
+                            val multiSpinResults by viewModel.multiSpinResults.collectAsState()
+                            if (multiSpinResults.isNotEmpty()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            "🎯 已抽中",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        
+                                        // 使用FlowRow显示结果标签
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            multiSpinResults.forEach { result ->
+                                                AssistChip(
+                                                    onClick = { },
+                                                    label = { Text(result) },
+                                                    leadingIcon = {
+                                                        Text("✨", fontSize = 14.sp)
+                                                    },
+                                                    colors = AssistChipDefaults.assistChipColors(
+                                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        
+                                        // 统计信息
+                                        val resultCounts = multiSpinResults.groupingBy { it }.eachCount()
+                                        if (resultCounts.size > 1) {
+                                            Divider()
+                                            Text(
+                                                "统计",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                                            )
+                                            resultCounts.entries.sortedByDescending { it.value }.forEach { (result, count) ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        result,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                    Text(
+                                                        "×$count",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 Spacer(Modifier.height(16.dp))
@@ -402,6 +695,18 @@ fun EnhancedSpinWheelScreen(
                 showModeDialog = false
             },
             onDismiss = { showModeDialog = false }
+        )
+    }
+    
+    // 目标选项选择对话框
+    if (showTargetSelectionDialog) {
+        TargetSelectionDialog(
+            options = currentOptions,
+            onSelect = { option ->
+                selectedTargetOption = option
+                showTargetSelectionDialog = false
+            },
+            onDismiss = { showTargetSelectionDialog = false }
         )
     }
     
@@ -528,151 +833,115 @@ fun EnhancedSpinWheelScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    "转盘设置",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                // 标题
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(bottom = 8.dp)
-                )
+                ) {
+                    Text("🎡", fontSize = 28.sp)
+                    Text(
+                        "转盘设置",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 
-                // 模式管理
+                // 基础设置分组
+                SettingsGroupHeader(title = "基础设置", emoji = "⚙️")
+                
                 SettingsItem(
                     title = "模式管理",
                     description = "切换和管理转盘模式",
                     icon = Icons.Default.Category,
-                    onClick = {
-                        showModeManagementDialog = true
-                    }
+                    iconColor = Color(0xFFFF6B9D),
+                    onClick = { showModeManagementDialog = true }
                 )
                 
-                // 模板管理
                 SettingsItem(
                     title = "模板管理",
                     description = "保存和加载转盘模板",
                     icon = Icons.Default.Folder,
-                    onClick = {
-                        showTemplatesDialog = true
-                    }
+                    iconColor = Color(0xFFFFD93D),
+                    onClick = { showTemplatesDialog = true }
                 )
                 
-                // 编辑选项
                 SettingsItem(
                     title = "编辑选项",
                     description = "自定义转盘选项和权重",
                     icon = Icons.Default.Edit,
-                    onClick = {
-                        showEditOptionsDialog = true
-                    }
+                    iconColor = Color(0xFF4CAF50),
+                    onClick = { showEditOptionsDialog = true }
                 )
                 
-                // 权重可视化
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { viewModel.toggleWeightVisualization() }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.PieChart,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Column {
-                                Text(
-                                    "权重可视化",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    "显示选项权重大小",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = showWeightVisualization,
-                            onCheckedChange = { viewModel.toggleWeightVisualization() }
-                        )
-                    }
-                }
+                // 显示设置分组
+                SettingsGroupHeader(title = "显示设置", emoji = "👁️")
                 
-                // 连抽功能
+                // 权重可视化 - 特殊卡片
+                WeightVisualizationSettingsCard(
+                    checked = showWeightVisualization,
+                    onCheckedChange = { viewModel.toggleWeightVisualization() }
+                )
+                
+                // 抽取功能分组
+                SettingsGroupHeader(title = "抽取功能", emoji = "🎲")
+                
                 SettingsItem(
                     title = "连抽功能",
                     description = "3/5/10连抽，享受折扣",
                     icon = Icons.Default.Repeat,
-                    onClick = {
-                        showMultiSpinDialog = true
-                    }
+                    iconColor = Color(0xFF2196F3),
+                    onClick = { showMultiSpinDialog = true }
                 )
                 
-                // 保底设置
                 SettingsItem(
                     title = "保底设置",
                     description = "设置选项保底次数",
                     icon = Icons.Default.Shield,
-                    onClick = {
-                        showGuaranteeDialog = true
-                    }
+                    iconColor = Color(0xFFAB47BC),
+                    onClick = { showGuaranteeDialog = true }
                 )
                 
-                Divider()
+                // 外观设置分组
+                SettingsGroupHeader(title = "外观设置", emoji = "🎨")
                 
-                // 主题设置
                 SettingsItem(
                     title = "主题设置",
                     description = "选择转盘主题颜色",
                     icon = Icons.Default.Palette,
-                    onClick = {
-                        showThemeDialog = true
-                    }
+                    iconColor = Color(0xFFFF9800),
+                    onClick = { showThemeDialog = true }
                 )
                 
-                // 动画设置
                 SettingsItem(
                     title = "动画设置",
                     description = "开关各种动画效果",
                     icon = Icons.Default.Animation,
-                    onClick = {
-                        showAnimationDialog = true
-                    }
+                    iconColor = Color(0xFF00BCD4),
+                    onClick = { showAnimationDialog = true }
                 )
                 
-                Divider()
+                // 数据管理分组
+                SettingsGroupHeader(title = "数据管理", emoji = "📊")
                 
-                // 历史筛选
                 SettingsItem(
                     title = "历史筛选",
                     description = "筛选和导出历史记录",
                     icon = Icons.Default.FilterList,
-                    onClick = {
-                        showHistoryFilterDialog = true
-                    }
+                    iconColor = Color(0xFF9C27B0),
+                    onClick = { showHistoryFilterDialog = true }
                 )
                 
-                // 统计数据
                 SettingsItem(
                     title = "统计数据",
                     description = "查看详细统计图表",
                     icon = Icons.Default.BarChart,
-                    onClick = {
-                        showStatsDialog = true
-                    }
+                    iconColor = Color(0xFFFF5722),
+                    onClick = { showStatsDialog = true }
                 )
                 
                 Spacer(Modifier.height(32.dp))
@@ -1779,18 +2048,8 @@ fun MultiSpinDialog(
     val currentMode by viewModel.currentMode.collectAsState()
     val userCoins by viewModel.userCoins.collectAsState()
     val multiSpinMode by viewModel.multiSpinMode.collectAsState()
-    val multiSpinResults by viewModel.multiSpinResults.collectAsState()
     
     var selectedCount by remember { mutableStateOf(3) }
-    var showResults by remember { mutableStateOf(false) }
-    var showSuccessDialog by remember { mutableStateOf(false) }
-    
-    // 当有结果时自动显示
-    LaunchedEffect(multiSpinResults) {
-        if (multiSpinResults.isNotEmpty()) {
-            showResults = true
-        }
-    }
     
     // 计算价格
     val baseCost = currentMode.costPerSpin
@@ -1807,6 +2066,7 @@ fun MultiSpinDialog(
         else -> "无折扣"
     }
     val savedCoins = (baseCost * selectedCount) - totalCost
+    val canAfford = userCoins >= totalCost
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1818,211 +2078,142 @@ fun MultiSpinDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                if (!showResults) {
-                    // 选择连抽次数
-                    Text(
-                        "选择抽取次数",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(3, 5, 10).forEach { count ->
-                            val cost = when (count) {
-                                3 -> (baseCost * 3 * 0.9).toInt()
-                                5 -> (baseCost * 5 * 0.85).toInt()
-                                10 -> (baseCost * 10 * 0.8).toInt()
-                                else -> baseCost * count
-                            }
-                            val canAfford = userCoins >= cost
-                            
-                            FilterChip(
-                                selected = selectedCount == count,
-                                onClick = { selectedCount = count },
-                                label = { 
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Text("${count}连抽")
-                                        Text(
-                                            "$cost 💰",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                },
-                                enabled = canAfford,
-                                modifier = Modifier.weight(1f)
-                            )
+                // 选择连抽次数
+                Text(
+                    "选择抽取次数",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(3, 5, 10).forEach { count ->
+                        val cost = when (count) {
+                            3 -> (baseCost * 3 * 0.9).toInt()
+                            5 -> (baseCost * 5 * 0.85).toInt()
+                            10 -> (baseCost * 10 * 0.8).toInt()
+                            else -> baseCost * count
                         }
-                    }
-                    
-                    // 价格信息卡片
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("原价")
-                                Text(
-                                    "${baseCost * selectedCount} 💰",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("折扣")
-                                Text(
-                                    discount,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            
-                            Divider()
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "实付",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "$totalCost 💰",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            
-                            if (savedCoins > 0) {
-                                Text(
-                                    "💰 节省 $savedCoins 金币",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                    
-                    // 当前金币
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("当前金币")
-                        Text(
-                            "$userCoins 💰",
-                            fontWeight = FontWeight.Bold,
-                            color = if (userCoins >= totalCost) 
-                                MaterialTheme.colorScheme.primary 
-                            else 
-                                MaterialTheme.colorScheme.error
+                        val affordable = userCoins >= cost
+                        
+                        FilterChip(
+                            selected = selectedCount == count,
+                            onClick = { selectedCount = count },
+                            label = { 
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("${count}连抽")
+                                    Text(
+                                        "$cost 💰",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            },
+                            enabled = affordable,
+                            modifier = Modifier.weight(1f)
                         )
                     }
-                    
-                    if (userCoins < totalCost) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                "❌ 金币不足，还需要 ${totalCost - userCoins} 金币",
-                                modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                } else {
-                    // 显示结果
-                    Text(
-                        "🎉 抽取结果",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                }
+                
+                // 价格信息卡片
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
-                    
+                ) {
                     Column(
-                        modifier = Modifier.heightIn(max = 300.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        multiSpinResults.forEachIndexed { index, result ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        "第 ${index + 1} 次",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Text(
-                                        result,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("原价")
+                            Text(
+                                "${baseCost * selectedCount} 💰",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("折扣")
+                            Text(
+                                discount,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        Divider()
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "实付",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "$totalCost 💰",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        
+                        if (savedCoins > 0) {
+                            Text(
+                                "💰 节省 $savedCoins 金币",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
-                    
-                    // 统计信息
+                }
+                
+                // 当前金币
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("当前金币")
+                    Text(
+                        "$userCoins 💰",
+                        fontWeight = FontWeight.Bold,
+                        color = if (canAfford) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            MaterialTheme.colorScheme.error
+                    )
+                }
+                
+                if (!canAfford) {
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                            containerColor = MaterialTheme.colorScheme.errorContainer
                         )
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val resultCounts = multiSpinResults.groupingBy { it }.eachCount()
-                            resultCounts.forEach { (result, count) ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(result)
-                                    Text(
-                                        "$count 次",
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                            "❌ 金币不足，还需要 ${totalCost - userCoins} 金币",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
             }
@@ -2030,152 +2221,22 @@ fun MultiSpinDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (!multiSpinMode) {
-                        // 开启连抽模式
-                        viewModel.setMultiSpinCount(selectedCount)
-                        viewModel.toggleMultiSpinMode(true)
-                        showSuccessDialog = true
-                    } else {
-                        // 关闭连抽模式
-                        viewModel.toggleMultiSpinMode(false)
-                        onDismiss()
-                    }
+                    viewModel.setMultiSpinCount(selectedCount)
+                    viewModel.toggleMultiSpinMode(true)
+                    onDismiss()
                 },
-                enabled = userCoins >= totalCost
+                enabled = canAfford
             ) {
-                Text(if (multiSpinMode) "关闭连抽" else "开启连抽")
+                Text("开始连抽")
             }
         },
         dismissButton = {
-            if (multiSpinMode) {
-                TextButton(
-                    onClick = {
-                        viewModel.toggleMultiSpinMode(false)
-                        onDismiss()
-                    }
-                ) {
-                    Text("取消连抽")
-                }
-            } else {
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         }
     )
-    
-    // 成功开启连抽的提示对话框
-    if (showSuccessDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showSuccessDialog = false
-                onDismiss()
-            },
-            icon = {
-                Text("✨🎲✨", style = MaterialTheme.typography.displayMedium)
-            },
-            title = {
-                Text(
-                    "连抽模式已开启",
-                    fontWeight = FontWeight.Bold,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                "${selectedCount}连抽",
-                                style = MaterialTheme.typography.headlineLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            
-                            Text(
-                                "已成功开启",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                    
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "💡 使用说明",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        Text(
-                            "返回转盘页面",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        
-                        Text(
-                            "点击「开始旋转」按钮",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        
-                        Text(
-                            "将自动连续抽取 $selectedCount 次",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        repeat(5) {
-                            Text("⭐", fontSize = 20.sp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showSuccessDialog = false
-                        onDismiss()
-                    }
-                ) {
-                    Text("好的，去抽取")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showSuccessDialog = false
-                        onDismiss()
-                    }
-                ) {
-                    Text("知道了")
-                }
-            }
-        )
-    }
 }
-
 
 // 导出对话框
 @Composable
@@ -3250,30 +3311,181 @@ fun AnimationSettingsDialog(
 }
 
 
+// 设置分组标题
 @Composable
-private fun SettingsItem(
+private fun SettingsGroupHeader(
     title: String,
-    description: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
+    emoji: String
 ) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 4.dp)
+    ) {
+        Text(emoji, fontSize = 20.sp)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+// 权重可视化设置卡片
+@Composable
+private fun WeightVisualizationSettingsCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val scale by animateFloatAsState(
+        targetValue = if (checked) 1.02f else 1f,
+        animationSpec = tween(300)
+    )
+    
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale),
+        onClick = { onCheckedChange(!checked) },
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (checked) 4.dp else 2.dp
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (checked) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                // 图标容器
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (checked) {
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFD93D),
+                                        Color(0xFFFF9800)
+                                    )
+                                )
+                            } else {
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                )
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PieChart,
+                        contentDescription = null,
+                        tint = if (checked) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                Column {
+                    Text(
+                        "权重可视化",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (checked) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    Text(
+                        if (checked) "已开启 - 显示权重" else "显示选项权重大小",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (checked) {
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+            
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color(0xFFFFD93D),
+                    checkedTrackColor = Color(0xFFFFD93D).copy(alpha = 0.5f)
+                )
             )
+        }
+    }
+}
+
+@Composable
+private fun SettingsItem(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 彩色图标容器
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                iconColor.copy(alpha = 0.8f),
+                                iconColor
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -3284,15 +3496,75 @@ private fun SettingsItem(
                 )
                 Text(
                     description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            
+            // 箭头图标
             Icon(
                 Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
+}
+
+
+// 目标选项选择对话框
+@Composable
+private fun TargetSelectionDialog(
+    options: List<WheelOption>,
+    onSelect: (WheelOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🎯 选择目标选项") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    "选择一个目标选项，幸运值越高，转到该选项的概率越大！",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
+                
+                options.filter { !it.isExcluded }.forEach { option ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        onClick = { onSelect(option) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                option.text,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Icon(Icons.Default.Star, "选择")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }

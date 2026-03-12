@@ -43,13 +43,23 @@ data class LuckyParticle(
 
 /**
  * 幸运值系统 - 超级增强动画版
+ * @param luckyValue 当前幸运值（外部管理）
+ * @param onLuckyValueChange 幸运值变化回调
  */
 @Composable
 fun LuckyValueSystem(
     modifier: Modifier = Modifier,
-    onLuckyValueChange: (Int) -> Unit = {}
+    luckyValue: Int = 0,
+    onLuckyValueChange: (Int) -> Unit = {},
+    onResetRequest: (() -> Int)? = null
 ) {
-    var luckyValue by remember { mutableStateOf(0) }
+    var internalLuckyValue by remember { mutableStateOf(luckyValue) }
+    
+    // 同步外部状态
+    LaunchedEffect(luckyValue) {
+        internalLuckyValue = luckyValue
+    }
+    
     var maxLucky by remember { mutableStateOf(100) }
     var particles by remember { mutableStateOf<List<LuckyParticle>>(emptyList()) }
     var showFullEffect by remember { mutableStateOf(false) }
@@ -65,7 +75,7 @@ fun LuckyValueSystem(
     var showExplosion by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
-    val progress = luckyValue.toFloat() / maxLucky
+    val progress = internalLuckyValue.toFloat() / maxLucky
     
     // 进度条光效动画
     LaunchedEffect(Unit) {
@@ -191,7 +201,7 @@ fun LuckyValueSystem(
             }
         }
         
-        // 粒子层
+        // 粒子层 - 优化性能版
         Canvas(
             Modifier
                 .fillMaxWidth()
@@ -201,14 +211,14 @@ fun LuckyValueSystem(
                 if (particle.size <= 0f) return@forEach
                 
                 val alpha = (particle.life / particle.maxLife).coerceIn(0f, 1f)
-                val glowRadius = (particle.size * 3).coerceAtLeast(0.1f)
-                val coreRadius = (particle.size * 0.4f).coerceAtLeast(0.1f)
+                val glowRadius = (particle.size * 2.5f).coerceAtLeast(0.1f)
                 
+                // 简化为两层：光晕 + 主体
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            particle.color.copy(alpha = alpha * 0.8f),
-                            particle.color.copy(alpha = alpha * 0.4f),
+                            particle.color.copy(alpha = alpha * 0.7f),
+                            particle.color.copy(alpha = alpha * 0.3f),
                             Color.Transparent
                         ),
                         radius = glowRadius
@@ -217,16 +227,11 @@ fun LuckyValueSystem(
                     center = Offset(particle.x, particle.y)
                 )
                 
+                // 粒子主体
                 drawCircle(
                     color = particle.color.copy(alpha = alpha),
                     radius = particle.size,
                     center = Offset(particle.x, particle.y)
-                )
-                
-                drawCircle(
-                    color = Color.White.copy(alpha = alpha * 0.6f),
-                    radius = coreRadius,
-                    center = Offset(particle.x - particle.size * 0.2f, particle.y - particle.size * 0.2f)
                 )
             }
         }
@@ -286,627 +291,710 @@ fun LuckyValueSystem(
             }
         }
         
-        // 主要能量条组件 - 全新设计
+        // 主要能量条组件 - 超级炫酷融合设计
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(35.dp)) // 裁剪超出圆角范围的内容
         ) {
-            // 幸运值卡片 - 融合设计
-            Box(modifier = Modifier.weight(1f)) {
-                // 外层彩虹光环 - 左侧延伸
-                Canvas(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .offset(x = (-4).dp, y = 0.dp)
-                ) {
-                    // 多层流动的彩虹边框
-                    repeat(2) { layer ->
-                        val layerOffset = layer * 2f
-                        val layerAlpha = 0.7f - layer * 0.2f
-                        
-                        val colors = listOf(
-                            Color(0xFFFF6B9D),
-                            Color(0xFFFFD93D),
-                            Color(0xFF6BCF7F),
-                            Color(0xFF4FC3F7),
-                            Color(0xFFAB47BC),
-                            Color(0xFFFF6B9D)
-                        )
-                        
-                        drawRoundRect(
-                            brush = Brush.sweepGradient(
-                                colors = colors,
-                                center = Offset(size.width / 2, size.height / 2)
-                            ),
-                            topLeft = Offset(-layerOffset, -layerOffset),
-                            size = androidx.compose.ui.geometry.Size(
-                                size.width + layerOffset * 2 + 40.dp.toPx(), // 向右延伸
-                                size.height + layerOffset * 2
-                            ),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius((14 + layer * 2).dp.toPx()),
-                            alpha = layerAlpha
-                        )
-                    }
-                    
-                    // 旋转的光点
-                    val angle = borderGlow * Math.PI.toFloat() / 180f
-                    repeat(6) { i ->
-                        val pointAngle = angle + i * Math.PI.toFloat() / 3
-                        val x = size.width / 2 + cos(pointAngle) * (size.width / 2 + 2f)
-                        val y = size.height / 2 + sin(pointAngle) * (size.height / 2 + 2f)
-                        
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.95f),
-                                    Color(0xFFFFD700).copy(alpha = 0.7f),
-                                    Color(0xFFFF6B9D).copy(alpha = 0.4f),
-                                    Color.Transparent
-                                ),
-                                radius = 12f
-                            ),
-                            radius = 12f,
-                            center = Offset(x, y)
-                        )
-                        
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.9f),
-                            radius = 3f,
-                            center = Offset(x, y)
-                        )
-                    }
-                    
-                    // 流动的光带
-                    val lightBandAngle = (borderGlow * 2) * Math.PI.toFloat() / 180f
-                    val lightX = size.width / 2 + cos(lightBandAngle) * (size.width / 2)
-                    val lightY = size.height / 2 + sin(lightBandAngle) * (size.height / 2)
-                    
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.6f),
-                                Color(0xFFFFD700).copy(alpha = 0.3f),
-                                Color.Transparent
-                            ),
-                            radius = 20f
-                        ),
-                        radius = 20f,
-                        center = Offset(lightX, lightY)
-                    )
-                }
-                
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFFFFDF7).copy(alpha = 0.95f) // 更透明的奶白色
-                    ),
-                    modifier = Modifier.scale(cardScale)
-                ) {
-                    Box {
-                        // 背景动画光效 - 增强版
-                        Canvas(Modifier.matchParentSize()) {
-                            // 多层流动的彩虹渐变背景
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color(0xFFFFE5F0).copy(alpha = 0.3f), // 粉色调
-                                        Color(0xFFFFF9E6).copy(alpha = 0.4f), // 金色调
-                                        Color(0xFFE5F5FF).copy(alpha = 0.3f), // 蓝色调
-                                        Color(0xFFFFF0F5).copy(alpha = 0.3f)  // 粉色调
-                                    ),
-                                    startX = size.width * progressGlow,
-                                    endX = size.width * (progressGlow + 0.6f)
-                                )
-                            )
-                            
-                            // 第二层流动光效（反向）
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color(0xFFFFD700).copy(alpha = 0.15f),
-                                        Color(0xFFFF6B9D).copy(alpha = 0.15f),
-                                        Color.Transparent
-                                    ),
-                                    startX = size.width * (1f - progressGlow),
-                                    endX = size.width * (1.5f - progressGlow)
-                                )
-                            )
-                            
-                            // 动态光点 - 更大更亮
-                            if (progress > 0) {
-                                drawCircle(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFD700).copy(alpha = 0.6f),
-                                            Color(0xFFFFA500).copy(alpha = 0.3f),
-                                            Color.Transparent
-                                        ),
-                                        radius = 90f
-                                    ),
-                                    radius = 90f,
-                                    center = Offset(size.width * progress, size.height / 2)
-                                )
-                            }
-                            
-                            // 闪烁的小星星装饰 - 增加数量和亮度
-                            repeat(8) { i ->
-                                val starX = size.width * (i / 8f + progressGlow * 0.15f) % size.width
-                                val starY = size.height * 0.3f + sin((progressGlow + i * 45) * 0.12f) * 12f
-                                val starAlpha = (sin((progressGlow + i * 40) * 0.18f) * 0.6f + 0.4f).coerceIn(0f, 1f)
-                                
-                                // 星星光晕
-                                drawCircle(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFD700).copy(alpha = starAlpha * 0.5f),
-                                            Color.Transparent
-                                        ),
-                                        radius = 6f
-                                    ),
-                                    radius = 6f,
-                                    center = Offset(starX, starY)
-                                )
-                                
-                                // 星星主体
-                                drawCircle(
-                                    color = Color(0xFFFFD700).copy(alpha = starAlpha * 0.8f),
-                                    radius = 2.5f,
-                                    center = Offset(starX, starY)
-                                )
-                            }
-                        }
-                        
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // 旋转的四叶草
-                            val infiniteTransition = rememberInfiniteTransition(label = "clover")
-                            val rotation by infiniteTransition.animateFloat(
-                                initialValue = 0f,
-                                targetValue = 360f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(3000, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Restart
-                                ),
-                                label = "rotation"
-                            )
-                            
-                            Box(
-                                modifier = Modifier.graphicsLayer {
-                                    rotationZ = rotation
-                                }
-                            ) {
-                                Text("🍀", fontSize = 18.sp)
-                            }
-                            
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(
-                                    "幸运值",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFF6B35)
-                                )
-                                // 进度条 - 超级增强动画
-                                Box(
-                                    modifier = Modifier
-                                        .width(80.dp)
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Color.White.copy(alpha = 0.5f))
-                                ) {
-                                    // 进度条填充 - 动画过渡
-                                    val animatedProgress by animateFloatAsState(
-                                        targetValue = progress,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                            stiffness = Spring.StiffnessLow
-                                        ),
-                                        label = "progress"
-                                    )
-                                    
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(animatedProgress)
-                                            .background(
-                                                brush = Brush.horizontalGradient(
-                                                    colors = listOf(
-                                                        Color(0xFFFFD700),
-                                                        Color(0xFFFFA500),
-                                                        Color(0xFFFF8C00),
-                                                        Color(0xFFFFD700)
-                                                    )
-                                                )
-                                            )
-                                    )
-                                    
-                                    // 进度条光效 - 超级增强版
-                                    if (animatedProgress > 0) {
-                                        Canvas(Modifier.matchParentSize()) {
-                                            val glowX = size.width * animatedProgress * progressGlow
-                                            
-                                            // 主光点 - 更大更亮
-                                            drawCircle(
-                                                brush = Brush.radialGradient(
-                                                    colors = listOf(
-                                                        Color.White.copy(alpha = 0.95f),
-                                                        Color(0xFFFFD700).copy(alpha = 0.7f),
-                                                        Color(0xFFFFA500).copy(alpha = 0.4f),
-                                                        Color.Transparent
-                                                    ),
-                                                    radius = 45f
-                                                ),
-                                                radius = 45f,
-                                                center = Offset(glowX, size.height / 2)
-                                            )
-                                            
-                                            // 次级光点
-                                            drawCircle(
-                                                brush = Brush.radialGradient(
-                                                    colors = listOf(
-                                                        Color.White.copy(alpha = 0.6f),
-                                                        Color.Transparent
-                                                    ),
-                                                    radius = 20f
-                                                ),
-                                                radius = 20f,
-                                                center = Offset(glowX, size.height / 2)
-                                            )
-                                            
-                                            // 闪电效果 - 增强
-                                            if (progressGlow > 0.65f) {
-                                                val lightningAlpha = ((progressGlow - 0.65f) / 0.35f).coerceIn(0f, 1f)
-                                                
-                                                // 主闪电
-                                                drawLine(
-                                                    brush = Brush.linearGradient(
-                                                        colors = listOf(
-                                                            Color.White.copy(alpha = lightningAlpha * 0.9f),
-                                                            Color(0xFFFFD700).copy(alpha = lightningAlpha * 0.6f),
-                                                            Color.Transparent
-                                                        )
-                                                    ),
-                                                    start = Offset(glowX - 12f, 0f),
-                                                    end = Offset(glowX + 12f, size.height),
-                                                    strokeWidth = 3f
-                                                )
-                                                
-                                                // 副闪电
-                                                drawLine(
-                                                    brush = Brush.linearGradient(
-                                                        colors = listOf(
-                                                            Color.White.copy(alpha = lightningAlpha * 0.6f),
-                                                            Color.Transparent
-                                                        )
-                                                    ),
-                                                    start = Offset(glowX - 8f, 0f),
-                                                    end = Offset(glowX + 8f, size.height),
-                                                    strokeWidth = 1.5f
-                                                )
-                                            }
-                                            
-                                            // 流动的小光点
-                                            repeat(3) { i ->
-                                                val sparkX = (glowX + i * 15f - 30f).coerceIn(0f, size.width * animatedProgress)
-                                                val sparkAlpha = (sin((progressGlow + i * 120) * 0.2f) * 0.5f + 0.5f).coerceIn(0f, 1f)
-                                                
-                                                drawCircle(
-                                                    color = Color.White.copy(alpha = sparkAlpha * 0.7f),
-                                                    radius = 2f,
-                                                    center = Offset(sparkX, size.height / 2)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // 数值显示 - 带动画
-                            val animatedValue by animateIntAsState(
-                                targetValue = luckyValue,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                ),
-                                label = "value"
-                            )
-                            
-                            Box {
-                                Text(
-                                    "$animatedValue",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFFFF8C00)
-                                )
-                                
-                                // +1飘字效果
-                                if (showPlusOne) {
-                                    Text(
-                                        "+${Random.nextInt(1, 6)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFFD700),
-                                        modifier = Modifier
-                                            .offset(x = 20.dp, y = plusOneOffset.dp)
-                                            .graphicsLayer { alpha = plusOneAlpha }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // 能量进度动画 - 移到Canvas外部
+            val animatedProgress by animateFloatAsState(
+                targetValue = progress,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "energyProgress"
+            )
             
-            // 超级炫酷的点击按钮 - 融合设计
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.offset(x = (-8).dp) // 向左偏移,与卡片重叠
+            // 超级炫酷背景条 - 多层渐变和动画
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(70.dp)
             ) {
-                // 最外层脉冲光环
-                val outerPulse by rememberInfiniteTransition(label = "outerPulse").animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.3f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1500, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
+                // 第一层：深色底层阴影
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF1A1A2E).copy(alpha = 0.8f),
+                            Color(0xFF16213E).copy(alpha = 0.8f),
+                            Color(0xFF0F3460).copy(alpha = 0.8f)
+                        )
                     ),
-                    label = "outerPulse"
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(35.dp.toPx()),
+                    size = androidx.compose.ui.geometry.Size(size.width, 70.dp.toPx())
                 )
                 
-                Canvas(
-                    Modifier
-                        .size(90.dp)
-                        .scale(outerPulse)
-                ) {
+                // 第二层：流动的彩虹渐变背景
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF00F5FF).copy(alpha = 0.4f),
+                            Color(0xFF00D9FF).copy(alpha = 0.4f),
+                            Color(0xFF7B2FF7).copy(alpha = 0.4f),
+                            Color(0xFFFF006E).copy(alpha = 0.4f),
+                            Color(0xFFFFBE0B).copy(alpha = 0.4f),
+                            Color(0xFF00F5A0).copy(alpha = 0.4f)
+                        ),
+                        startX = size.width * progressGlow * 0.5f,
+                        endX = size.width * (1f + progressGlow * 0.5f)
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(35.dp.toPx()),
+                    size = androidx.compose.ui.geometry.Size(size.width, 70.dp.toPx())
+                )
+                
+                // 第三层：闪烁的星光点缀
+                repeat(12) { i ->
+                    val starX = (size.width / 12) * i + (progressGlow * 3) % 50
+                    val starY = 35.dp.toPx() + sin((progressGlow + i * 30) * 0.08f) * 20f
+                    val starAlpha = (sin((progressGlow + i * 50) * 0.12f) * 0.5f + 0.5f).coerceIn(0f, 1f)
+                    
+                    // 星光光晕
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFFFD700).copy(alpha = 0.3f / outerPulse),
-                                Color(0xFFFFA500).copy(alpha = 0.2f / outerPulse),
+                                Color.White.copy(alpha = starAlpha * 0.8f),
+                                Color(0xFF00F5FF).copy(alpha = starAlpha * 0.5f),
                                 Color.Transparent
                             ),
-                            radius = size.minDimension / 2
+                            radius = 15f
                         ),
-                        radius = size.minDimension / 2,
-                        center = Offset(size.width / 2, size.height / 2)
+                        radius = 15f,
+                        center = Offset(starX, starY)
+                    )
+                    
+                    // 星光核心
+                    drawCircle(
+                        color = Color.White.copy(alpha = starAlpha),
+                        radius = 3f,
+                        center = Offset(starX, starY)
                     )
                 }
                 
-                // 中层旋转光环 - 增强版
-                Canvas(
-                    Modifier
-                        .size(76.dp)
-                        .graphicsLayer { rotationZ = buttonRotation }
-                ) {
-                    // 多层旋转光环
-                    repeat(4) { ring ->
-                        val ringRadius = (38.dp.toPx() - ring * 7.dp.toPx()).coerceAtLeast(0.1f)
-                        val ringAlpha = 0.4f - ring * 0.08f
-                        
-                        drawCircle(
-                            brush = Brush.sweepGradient(
-                                colors = listOf(
-                                    Color(0xFFFFD700).copy(alpha = ringAlpha),
-                                    Color(0xFFFFA500).copy(alpha = ringAlpha * 0.8f),
-                                    Color(0xFFFF6B9D).copy(alpha = ringAlpha),
-                                    Color(0xFF4FACFE).copy(alpha = ringAlpha * 0.8f),
-                                    Color(0xFFAB47BC).copy(alpha = ringAlpha),
-                                    Color(0xFFFFD700).copy(alpha = ringAlpha)
-                                ),
-                                center = Offset(size.width / 2, size.height / 2)
+                // 能量进度填充 - 超级炫酷渐变
+                if (animatedProgress > 0) {
+                    // 主能量填充 - 多层渐变
+                    drawRoundRect(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFFFFEA00),
+                                Color(0xFFFFD700),
+                                Color(0xFFFFA500),
+                                Color(0xFFFF8C00),
+                                Color(0xFFFF6B35),
+                                Color(0xFFFFD700)
                             ),
-                            radius = ringRadius,
-                            center = Offset(size.width / 2, size.height / 2),
-                            style = Stroke(width = 2.5f)
-                        )
+                            endX = size.width * animatedProgress
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(35.dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(size.width * animatedProgress, 70.dp.toPx()),
+                        alpha = 0.9f
+                    )
+                    
+                    // 能量前端柔和光效 - 完全去除白色
+                    val energyEndX = size.width * animatedProgress
+                    
+                    // 外层金色光晕
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700).copy(alpha = 0.7f),
+                                Color(0xFFFFA500).copy(alpha = 0.5f),
+                                Color(0xFFFF8C00).copy(alpha = 0.3f),
+                                Color.Transparent
+                            ),
+                            radius = 60f
+                        ),
+                        radius = 60f,
+                        center = Offset(energyEndX, 35.dp.toPx())
+                    )
+                    
+                    // 中层金色光晕
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFFFEA00).copy(alpha = 0.6f),
+                                Color(0xFFFFD700).copy(alpha = 0.4f),
+                                Color.Transparent
+                            ),
+                            radius = 35f
+                        ),
+                        radius = 35f,
+                        center = Offset(energyEndX, 35.dp.toPx())
+                    )
+                    
+                    // 核心亮点 - 纯金色
+                    drawCircle(
+                        color = Color(0xFFFFEA00).copy(alpha = 0.8f),
+                        radius = 12f,
+                        center = Offset(energyEndX, 35.dp.toPx())
+                    )
+                    
+                    // 流动的能量波纹 - 金色为主
+                    val flowOffset = (progressGlow * size.width * animatedProgress) % (size.width * animatedProgress)
+                    repeat(5) { i ->
+                        val lightX = flowOffset + i * (size.width * animatedProgress / 5)
+                        if (lightX <= size.width * animatedProgress) {
+                            val waveAlpha = (sin((progressGlow + i * 72) * 0.15f) * 0.4f + 0.6f).coerceIn(0f, 1f)
+                            
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFEA00).copy(alpha = waveAlpha * 0.7f),
+                                        Color(0xFFFFD700).copy(alpha = waveAlpha * 0.5f),
+                                        Color.Transparent
+                                    ),
+                                    radius = 35f
+                                ),
+                                radius = 35f,
+                                center = Offset(lightX, 35.dp.toPx())
+                            )
+                        }
                     }
                     
-                    // 旋转的光点 - 增加到8个
+                    // 能量粒子效果
                     repeat(8) { i ->
-                        val angle = (buttonRotation + i * 45f) * Math.PI.toFloat() / 180f
-                        val radius = 34.dp.toPx()
-                        val x = size.width / 2 + cos(angle) * radius
-                        val y = size.height / 2 + sin(angle) * radius
+                        val particleX = (size.width * animatedProgress * (i / 8f) + progressGlow * 20) % (size.width * animatedProgress)
+                        val particleY = 35.dp.toPx() + sin((progressGlow * 2 + i * 45) * 0.1f) * 15f
+                        val particleAlpha = (sin((progressGlow + i * 45) * 0.15f) * 0.5f + 0.5f).coerceIn(0f, 1f)
                         
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = 0.9f),
-                                    Color(0xFFFFD700).copy(alpha = 0.6f),
-                                    Color(0xFFFF6B9D).copy(alpha = 0.3f),
+                                    Color(0xFFFFEA00).copy(alpha = particleAlpha),
                                     Color.Transparent
                                 ),
                                 radius = 8f
                             ),
                             radius = 8f,
-                            center = Offset(x, y)
-                        )
-                        
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.95f),
-                            radius = 2.5f,
-                            center = Offset(x, y)
-                        )
-                    }
-                    
-                    // 反向旋转的星星
-                    repeat(4) { i ->
-                        val angle = (-buttonRotation * 1.5f + i * 90f) * Math.PI.toFloat() / 180f
-                        val radius = 24.dp.toPx()
-                        val x = size.width / 2 + cos(angle) * radius
-                        val y = size.height / 2 + sin(angle) * radius
-                        
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFFFFEA00).copy(alpha = 0.8f),
-                                    Color.Transparent
-                                ),
-                                radius = 5f
-                            ),
-                            radius = 5f,
-                            center = Offset(x, y)
+                            center = Offset(particleX, particleY)
                         )
                     }
                 }
                 
-                Button(
-                    onClick = {
-                        scope.launch {
-                            // 按钮动画
-                            buttonScale = 0.85f
-                            cardScale = 1.05f
-                            showExplosion = true
-                            delay(80)
-                            buttonScale = 1.15f
-                            delay(80)
-                            buttonScale = 1f
-                            cardScale = 1f
-                            
-                            // 显示+1
-                            showPlusOne = true
-                            
-                            val increment = Random.nextInt(1, 6)
-                            luckyValue = (luckyValue + increment).coerceAtMost(maxLucky)
-                            onLuckyValueChange(luckyValue)
-                            
-                            // 创建更多粒子（增加到50个）
-                            val centerX = 400f
-                            val centerY = 40f
-                            val newParticles = List(50) {
-                                val angle = Random.nextFloat() * 360f
-                                val speed = Random.nextFloat() * 10f + 5f
-                                LuckyParticle(
-                                    x = centerX,
-                                    y = centerY,
-                                    vx = cos(Math.toRadians(angle.toDouble())).toFloat() * speed,
-                                    vy = sin(Math.toRadians(angle.toDouble())).toFloat() * speed - 4f,
-                                    life = 1f,
-                                    maxLife = 1f,
-                                    color = listOf(
-                                        Color(0xFFFFD700),
-                                        Color(0xFFFFA500),
-                                        Color(0xFFFF6B9D),
-                                        Color(0xFF4FACFE),
-                                        Color(0xFFFFEA00),
-                                        Color(0xFFFF1744),
-                                        Color(0xFF00E676),
-                                        Color(0xFF00B0FF)
-                                    ).random(),
-                                    size = Random.nextFloat() * 6f + 5f
-                                )
-                            }
-                            particles = particles + newParticles
-                            
-                            if (luckyValue >= maxLucky) {
-                                showFullEffect = true
-                                delay(500)
-                                luckyValue = 0
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .size(60.dp)
-                        .scale(buttonScale),
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent
-                    ),
-                    contentPadding = PaddingValues(0.dp),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 0.dp,
-                        pressedElevation = 0.dp
+                // 多层旋转边框光环
+                repeat(3) { layer ->
+                    val rotationOffset = borderGlow + layer * 120f
+                    val layerAlpha = 0.9f - layer * 0.2f
+                    
+                    drawRoundRect(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                Color(0xFF00F5FF).copy(alpha = layerAlpha),
+                                Color(0xFF7B2FF7).copy(alpha = layerAlpha),
+                                Color(0xFFFF006E).copy(alpha = layerAlpha),
+                                Color(0xFFFFBE0B).copy(alpha = layerAlpha),
+                                Color(0xFF00F5A0).copy(alpha = layerAlpha),
+                                Color(0xFF00F5FF).copy(alpha = layerAlpha)
+                            ),
+                            center = Offset(size.width / 2, 35.dp.toPx())
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius((35 + layer * 2).dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(size.width, 70.dp.toPx()),
+                        style = Stroke(width = (3f - layer * 0.5f)),
+                        alpha = layerAlpha
                     )
+                }
+                
+                // 旋转的光点装饰
+                val angle = borderGlow * Math.PI.toFloat() / 180f
+                repeat(8) { i ->
+                    val pointAngle = angle + i * Math.PI.toFloat() / 4
+                    val x = size.width / 2 + cos(pointAngle) * (size.width / 2 + 5f)
+                    val y = 35.dp.toPx() + sin(pointAngle) * 35f
+                    
+                    // 光点光晕
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.95f),
+                                Color(0xFF00F5FF).copy(alpha = 0.7f),
+                                Color(0xFFFFBE0B).copy(alpha = 0.4f),
+                                Color.Transparent
+                            ),
+                            radius = 15f
+                        ),
+                        radius = 15f,
+                        center = Offset(x, y)
+                    )
+                    
+                    // 光点核心
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.95f),
+                        radius = 4f,
+                        center = Offset(x, y)
+                    )
+                }
+            }
+            
+            // 内容层
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(70.dp)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 左侧:四叶草 + 幸运值文字
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 旋转的四叶草
+                    val infiniteTransition = rememberInfiniteTransition(label = "clover")
+                    val rotation by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(3000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "rotation"
+                    )
+                    
                     Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
                     ) {
-                        // 按钮背景渐变
-                        Canvas(Modifier.fillMaxSize()) {
-                            // 多层渐变背景
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFFFFEA00),
-                                        Color(0xFFFFD700),
-                                        Color(0xFFFFA500),
-                                        Color(0xFFFF8C00)
-                                    ),
-                                    radius = size.minDimension / 2
-                                ),
-                                radius = size.minDimension / 2,
-                                center = Offset(size.width / 2, size.height / 2)
+                        Text("🍀", fontSize = 24.sp)
+                    }
+                    
+                    Column {
+                        // "幸运值"文字 - 多层描边效果
+                        Box {
+                            // 描边层
+                            Text(
+                                "幸运值",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = (-1).dp, y = (-1).dp)
                             )
-                            
-                            // 中心高光
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.7f),
-                                        Color.White.copy(alpha = 0.3f),
-                                        Color.Transparent
-                                    ),
-                                    radius = size.minDimension / 3
-                                ),
-                                radius = size.minDimension / 3,
-                                center = Offset(size.width / 2 - size.width * 0.1f, size.height / 2 - size.height * 0.1f)
+                            Text(
+                                "幸运值",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = 1.dp, y = (-1).dp)
                             )
-                            
-                            // 流动光效
-                            val flowAngle = (buttonRotation * 2) * Math.PI.toFloat() / 180f
-                            val flowX = size.width / 2 + cos(flowAngle) * size.width * 0.2f
-                            val flowY = size.height / 2 + sin(flowAngle) * size.height * 0.2f
-                            
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.5f),
-                                        Color.Transparent
-                                    ),
-                                    radius = size.minDimension / 4
-                                ),
-                                radius = size.minDimension / 4,
-                                center = Offset(flowX, flowY)
+                            Text(
+                                "幸运值",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = (-1).dp, y = 1.dp)
+                            )
+                            Text(
+                                "幸运值",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = 1.dp, y = 1.dp)
+                            )
+                            // 主文字
+                            Text(
+                                "幸运值",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
                         
-                        // 按钮内容 - 带脉冲动画
-                        val pulseScale by rememberInfiniteTransition(label = "pulse").animateFloat(
-                            initialValue = 1f,
-                            targetValue = 1.2f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(600, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse
+                        Spacer(modifier = Modifier.height(2.dp))
+                        
+                        // 数值显示
+                        val animatedValue by animateIntAsState(
+                            targetValue = internalLuckyValue,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
                             ),
-                            label = "pulse"
+                            label = "value"
                         )
                         
-                        Box(
-                            modifier = Modifier.scale(pulseScale),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // 骰子阴影
+                        Box {
+                            // 描边层
                             Text(
-                                "🎲",
-                                fontSize = 32.sp,
-                                modifier = Modifier.offset(x = 1.dp, y = 1.dp),
-                                color = Color.Black.copy(alpha = 0.3f)
+                                "$animatedValue",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = (-1.5).dp, y = (-1.5).dp)
                             )
-                            // 骰子主体
-                            Text("🎲", fontSize = 32.sp)
+                            Text(
+                                "$animatedValue",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = 1.5.dp, y = (-1.5).dp)
+                            )
+                            Text(
+                                "$animatedValue",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = (-1.5).dp, y = 1.5.dp)
+                            )
+                            Text(
+                                "$animatedValue",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                            )
+                            // 主文字
+                            Text(
+                                "$animatedValue",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            
+                            // +1飘字效果
+                            if (showPlusOne) {
+                                Text(
+                                    "+${Random.nextInt(1, 6)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFD700),
+                                    modifier = Modifier
+                                        .offset(x = 30.dp, y = plusOneOffset.dp)
+                                        .graphicsLayer { alpha = plusOneAlpha }
+                                )
+                            }
                         }
                     }
                 }
-            }
+                
+                // 右侧:超级炫酷按钮
+                Box(contentAlignment = Alignment.Center) {
+                    // 最外层超大脉冲光环
+                    val outerPulse by rememberInfiniteTransition(label = "outerPulse").animateFloat(
+                        initialValue = 1f,
+                        targetValue = 1.4f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "outerPulse"
+                    )
+                    
+                    Canvas(
+                        Modifier
+                            .size(100.dp)
+                            .scale(outerPulse)
+                    ) {
+                        // 多层脉冲光环
+                        repeat(3) { ring ->
+                            val ringAlpha = (0.4f - ring * 0.1f) / outerPulse
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFEA00).copy(alpha = ringAlpha),
+                                        Color(0xFFFFD700).copy(alpha = ringAlpha * 0.7f),
+                                        Color(0xFFFFA500).copy(alpha = ringAlpha * 0.4f),
+                                        Color.Transparent
+                                    ),
+                                    radius = size.minDimension / 2
+                                ),
+                                radius = size.minDimension / 2 - ring * 10f,
+                                center = Offset(size.width / 2, size.height / 2)
+                            )
+                        }
+                    }
+                    
+                    // 中层多重旋转光环
+                    Canvas(
+                        Modifier
+                            .size(80.dp)
+                            .graphicsLayer { rotationZ = buttonRotation }
+                    ) {
+                        // 外层彩虹光环
+                        repeat(5) { ring ->
+                            val ringRadius = (40.dp.toPx() - ring * 6.dp.toPx()).coerceAtLeast(0.1f)
+                            val ringAlpha = 0.6f - ring * 0.1f
+                            
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFEA00).copy(alpha = ringAlpha),
+                                        Color(0xFFFFD700).copy(alpha = ringAlpha),
+                                        Color(0xFFFFA500).copy(alpha = ringAlpha),
+                                        Color(0xFFFF6B35).copy(alpha = ringAlpha),
+                                        Color(0xFFFF006E).copy(alpha = ringAlpha),
+                                        Color(0xFF7B2FF7).copy(alpha = ringAlpha),
+                                        Color(0xFF00F5FF).copy(alpha = ringAlpha),
+                                        Color(0xFFFFEA00).copy(alpha = ringAlpha)
+                                    ),
+                                    center = Offset(size.width / 2, size.height / 2)
+                                ),
+                                radius = ringRadius,
+                                center = Offset(size.width / 2, size.height / 2),
+                                style = Stroke(width = 3f)
+                            )
+                        }
+                        
+                        // 旋转的超亮光点
+                        repeat(12) { i ->
+                            val angle = (buttonRotation + i * 30f) * Math.PI.toFloat() / 180f
+                            val radius = 36.dp.toPx()
+                            val x = size.width / 2 + cos(angle) * radius
+                            val y = size.height / 2 + sin(angle) * radius
+                            
+                            // 光点外层光晕
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.95f),
+                                        Color(0xFFFFEA00).copy(alpha = 0.8f),
+                                        Color(0xFFFFD700).copy(alpha = 0.5f),
+                                        Color.Transparent
+                                    ),
+                                    radius = 12f
+                                ),
+                                radius = 12f,
+                                center = Offset(x, y)
+                            )
+                            
+                            // 光点核心
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.95f),
+                                radius = 3.5f,
+                                center = Offset(x, y)
+                            )
+                        }
+                        
+                        // 反向旋转的星星
+                        repeat(6) { i ->
+                            val angle = (-buttonRotation * 1.5f + i * 60f) * Math.PI.toFloat() / 180f
+                            val radius = 26.dp.toPx()
+                            val x = size.width / 2 + cos(angle) * radius
+                            val y = size.height / 2 + sin(angle) * radius
+                            
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFEA00).copy(alpha = 0.9f),
+                                        Color(0xFFFFD700).copy(alpha = 0.6f),
+                                        Color.Transparent
+                                    ),
+                                    radius = 8f
+                                ),
+                                radius = 8f,
+                                center = Offset(x, y)
+                            )
+                        }
+                    }
+                    
+                    // 按钮主体
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                buttonScale = 0.85f
+                                cardScale = 1.05f
+                                showExplosion = true
+                                delay(80)
+                                buttonScale = 1.15f
+                                delay(80)
+                                buttonScale = 1f
+                                cardScale = 1f
+                                
+                                showPlusOne = true
+                                
+                                val increment = Random.nextInt(1, 6)
+                                internalLuckyValue = (internalLuckyValue + increment).coerceAtMost(maxLucky)
+                                onLuckyValueChange(internalLuckyValue)
+                                
+                                // 优化粒子生成 - 性能优化版
+                                val centerX = 350f
+                                val centerY = 40f
+                                
+                                val newParticles = mutableListOf<LuckyParticle>()
+                                
+                                // 主要粒子（40个）- 快速小粒子
+                                repeat(40) {
+                                    val angle = Random.nextFloat() * 360f
+                                    val speed = Random.nextFloat() * 12f + 6f
+                                    newParticles.add(
+                                        LuckyParticle(
+                                            x = centerX,
+                                            y = centerY,
+                                            vx = cos(Math.toRadians(angle.toDouble())).toFloat() * speed,
+                                            vy = sin(Math.toRadians(angle.toDouble())).toFloat() * speed - 4f,
+                                            life = 1f,
+                                            maxLife = 1f,
+                                            color = listOf(
+                                                Color(0xFFFFEA00),
+                                                Color(0xFFFFD700),
+                                                Color(0xFFFFA500),
+                                                Color(0xFFFF8C00),
+                                                Color(0xFFFF6B35)
+                                            ).random(),
+                                            size = Random.nextFloat() * 4f + 3f
+                                        )
+                                    )
+                                }
+                                
+                                // 大粒子（20个）- 慢速
+                                repeat(20) {
+                                    val angle = Random.nextFloat() * 360f
+                                    val speed = Random.nextFloat() * 6f + 3f
+                                    newParticles.add(
+                                        LuckyParticle(
+                                            x = centerX,
+                                            y = centerY,
+                                            vx = cos(Math.toRadians(angle.toDouble())).toFloat() * speed,
+                                            vy = sin(Math.toRadians(angle.toDouble())).toFloat() * speed - 3f,
+                                            life = 1f,
+                                            maxLife = 1f,
+                                            color = Color(0xFFFFD700),
+                                            size = Random.nextFloat() * 6f + 5f
+                                        )
+                                    )
+                                }
+                                
+                                particles = particles + newParticles
+                                
+                                if (internalLuckyValue >= maxLucky) {
+                                    showFullEffect = true
+                                    // 不再自动清零，保持在100
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .size(64.dp)
+                            .scale(buttonScale),
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent
+                        ),
+                        contentPadding = PaddingValues(0.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // 按钮背景 - 超级炫酷多层渐变
+                            Canvas(Modifier.fillMaxSize()) {
+                                // 最外层光晕
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFEA00).copy(alpha = 0.8f),
+                                            Color(0xFFFFD700).copy(alpha = 0.6f),
+                                            Color(0xFFFFA500).copy(alpha = 0.4f),
+                                            Color.Transparent
+                                        ),
+                                        radius = size.minDimension / 2
+                                    ),
+                                    radius = size.minDimension / 2,
+                                    center = Offset(size.width / 2, size.height / 2)
+                                )
+                                
+                                // 主体渐变
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFEA00),
+                                            Color(0xFFFFD700),
+                                            Color(0xFFFFA500),
+                                            Color(0xFFFF8C00)
+                                        ),
+                                        radius = size.minDimension / 2.2f
+                                    ),
+                                    radius = size.minDimension / 2.2f,
+                                    center = Offset(size.width / 2, size.height / 2)
+                                )
+                                
+                                // 顶部超强高光
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = 0.9f),
+                                            Color.White.copy(alpha = 0.5f),
+                                            Color.Transparent
+                                        ),
+                                        radius = size.minDimension / 3.5f
+                                    ),
+                                    radius = size.minDimension / 3.5f,
+                                    center = Offset(size.width / 2 - size.width * 0.12f, size.height / 2 - size.height * 0.12f)
+                                )
+                                
+                                // 流动光效
+                                val flowAngle = (buttonRotation * 2) * Math.PI.toFloat() / 180f
+                                val flowX = size.width / 2 + cos(flowAngle) * size.width * 0.25f
+                                val flowY = size.height / 2 + sin(flowAngle) * size.height * 0.25f
+                                
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = 0.7f),
+                                            Color(0xFFFFEA00).copy(alpha = 0.4f),
+                                            Color.Transparent
+                                        ),
+                                        radius = size.minDimension / 4
+                                    ),
+                                    radius = size.minDimension / 4,
+                                    center = Offset(flowX, flowY)
+                                )
+                                
+                                // 边缘金色光环
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color(0xFFFFD700).copy(alpha = 0.6f),
+                                            Color(0xFFFFEA00).copy(alpha = 0.8f)
+                                        ),
+                                        radius = size.minDimension / 2.2f,
+                                        center = Offset(size.width / 2, size.height / 2)
+                                    ),
+                                    radius = size.minDimension / 2.2f,
+                                    center = Offset(size.width / 2, size.height / 2),
+                                    style = Stroke(width = 3f)
+                                )
+                            }
+                            
+                            // 按钮内容 - 超级脉冲动画
+                            val pulseScale by rememberInfiniteTransition(label = "pulse").animateFloat(
+                                initialValue = 1f,
+                                targetValue = 1.25f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(500, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "pulse"
+                            )
+                            
+                            Box(
+                                modifier = Modifier.scale(pulseScale),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // 骰子多层阴影
+                                Text(
+                                    "🎲",
+                                    fontSize = 34.sp,
+                                    modifier = Modifier.offset(x = 2.dp, y = 2.dp),
+                                    color = Color.Black.copy(alpha = 0.5f)
+                                )
+                                Text(
+                                    "🎲",
+                                    fontSize = 34.sp,
+                                    modifier = Modifier.offset(x = 1.dp, y = 1.dp),
+                                    color = Color.Black.copy(alpha = 0.3f)
+                                )
+                                // 骰子主体
+                                Text("🎲", fontSize = 34.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
         

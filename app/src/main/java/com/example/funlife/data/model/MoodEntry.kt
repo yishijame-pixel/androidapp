@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class MoodEntry(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,          // 用户ID
     val date: String,              // 日期（yyyy-MM-dd）
     val mood: String,              // 心情emoji
     val moodLevel: Int,            // 心情等级 1-5

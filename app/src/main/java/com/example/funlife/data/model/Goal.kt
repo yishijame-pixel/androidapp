@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class Goal(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,          // 用户ID
     val title: String,             // 目标标题
     val description: String = "",  // 目标描述
     val category: String,          // 分类（工作、生活、学习等）

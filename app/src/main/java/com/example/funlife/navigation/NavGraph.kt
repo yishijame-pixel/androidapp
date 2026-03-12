@@ -8,9 +8,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.funlife.ui.screens.*
 import com.example.funlife.viewmodel.AnniversaryViewModel
+import com.example.funlife.viewmodel.AuthViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
 
 sealed class Screen(val route: String, val title: String) {
+    object Welcome : Screen("welcome", "欢迎")
+    object Login : Screen("login", "登录")
+    object Register : Screen("register", "注册")
     object Home : Screen("home", "首页")
     object Habit : Screen("habit", "打卡")
     object Mood : Screen("mood", "心情")
@@ -27,19 +31,73 @@ sealed class Screen(val route: String, val title: String) {
 fun NavGraph(
     navController: NavHostController,
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
+    authViewModel: AuthViewModel,
     anniversaryViewModel: AnniversaryViewModel = viewModel(),
     scoreViewModel: ScoreViewModel = viewModel()
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Home.route,
+        startDestination = Screen.Welcome.route,
         modifier = modifier
     ) {
+        // 欢迎页
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                viewModel = authViewModel,
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route)
+                },
+                onNavigateToRegister = {
+                    navController.navigate(Screen.Register.route)
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // 登录页
+        composable(Screen.Login.route) {
+            LoginScreen(
+                viewModel = authViewModel,
+                onLoginSuccess = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                },
+                onNavigateToRegister = {
+                    navController.navigate(Screen.Register.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // 注册页
+        composable(Screen.Register.route) {
+            RegisterScreen(
+                viewModel = authViewModel,
+                onRegisterSuccess = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Register.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
         composable(Screen.Home.route) {
             HomeScreen(
                 navController = navController,
                 anniversaryViewModel = anniversaryViewModel,
-                scoreViewModel = scoreViewModel
+                scoreViewModel = scoreViewModel,
+                authViewModel = authViewModel
             )
         }
         

@@ -39,11 +39,13 @@ import java.time.format.DateTimeFormatter
 fun HomeScreen(
     navController: NavController,
     anniversaryViewModel: AnniversaryViewModel,
-    scoreViewModel: ScoreViewModel
+    scoreViewModel: ScoreViewModel,
+    authViewModel: com.example.funlife.viewmodel.AuthViewModel
 ) {
     val anniversaries by anniversaryViewModel.anniversaries.collectAsState()
     val pinnedAnniversary by anniversaryViewModel.pinnedAnniversary.collectAsState()
     val players by scoreViewModel.players.collectAsState()
+    val userSession = authViewModel.getCurrentSession()
     
     // 动画状态
     var isVisible by remember { mutableStateOf(false) }
@@ -70,7 +72,15 @@ fun HomeScreen(
                         onClick = { navController.navigate("anniversary") }
                     )
                 } else {
-                    WelcomeHeader()
+                    WelcomeHeader(
+                        userSession = userSession,
+                        onLogout = {
+                            authViewModel.logout()
+                            navController.navigate(com.example.funlife.navigation.Screen.Welcome.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -327,7 +337,10 @@ fun PinnedAnniversaryHeader(
 }
 
 @Composable
-fun WelcomeHeader() {
+fun WelcomeHeader(
+    userSession: com.example.funlife.data.model.UserSession?,
+    onLogout: () -> Unit
+) {
     val currentHour = remember { LocalDateTime.now().hour }
     val greeting = when (currentHour) {
         in 5..11 -> "早上好"
@@ -417,38 +430,100 @@ fun WelcomeHeader() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp),
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = greetingEmoji,
-                fontSize = 48.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            // 顶部：用户信息和登出按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 用户头像
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = userSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "U",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    
+                    // 用户名
+                    Column {
+                        Text(
+                            text = userSession?.nickname ?: "用户",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "@${userSession?.username ?: ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+                
+                // 登出按钮
+                IconButton(
+                    onClick = onLogout,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f))
+                ) {
+                    Icon(
+                        Icons.Default.Logout,
+                        contentDescription = "登出",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
             
-            Text(
-                text = greeting,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                fontSize = 32.sp
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = "欢迎来到趣味生活",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 18.sp
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            Text(
-                text = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy年MM月dd日 EEEE")),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.8f)
-            )
+            // 底部：问候语
+            Column {
+                Text(
+                    text = greetingEmoji,
+                    fontSize = 48.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 32.sp
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "开始你的趣味生活",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 18.sp
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy年MM月dd日 EEEE")),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }

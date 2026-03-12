@@ -68,6 +68,8 @@ fun SpinWheel(
     theme: WheelTheme? = null,
     multiSpinMode: Boolean = false,
     autoSpinTrigger: Int = 0,
+    forceResult: String? = null,
+    showButton: Boolean = true,
     onSpinStart: () -> Unit = {},
     onAutoSpinStart: () -> Unit = {},
     onResult: (String) -> Unit = {},
@@ -80,11 +82,103 @@ fun SpinWheel(
     Log.d(TAG, "Options: ${options.joinToString(", ")}")
     Log.d(TAG, "Mode: $mode, CanSpin: $canSpin, MultiSpin: $multiSpinMode")
     Log.d(TAG, "Weights: ${weights.joinToString(", ")}")
+    Log.d(TAG, "ForceResult: $forceResult")
+    Log.d(TAG, "AutoSpinTrigger: $autoSpinTrigger")
     
     val scope = rememberCoroutineScope()
     var isSpinning by remember { mutableStateOf(false) }
     var rotation by remember { mutableFloatStateOf(0f) }
     var selectedResult by remember { mutableStateOf("") }
+    
+    // 监听autoSpinTrigger变化，自动触发旋转
+    LaunchedEffect(autoSpinTrigger) {
+        if (autoSpinTrigger > 0 && !isSpinning && options.isNotEmpty()) {
+            Log.d(TAG, "=== AUTO SPIN TRIGGERED ===")
+            Log.d(TAG, "autoSpinTrigger: $autoSpinTrigger")
+            Log.d(TAG, "forceResult: $forceResult")
+            
+            onSpinStart()
+            
+            try {
+                isSpinning = true
+                
+                // 如果有强制结果，计算目标旋转角度
+                val targetRotation = if (forceResult != null && options.contains(forceResult)) {
+                    Log.d(TAG, "=== FORCE RESULT DETECTED ===")
+                    val targetIndex = options.indexOf(forceResult)
+                    val anglePerOption = 360f / options.size
+                    
+                    val targetCenterAngleInWheel = targetIndex * anglePerOption + anglePerOption / 2 - 90f
+                    val randomOffset = (Random.nextFloat() - 0.5f) * anglePerOption * 0.8f
+                    val targetAngleWithRandom = targetCenterAngleInWheel + randomOffset
+                    val targetRotationAngle = (270f - targetAngleWithRandom + 360) % 360f
+                    
+                    val currentNormalized = rotation % 360
+                    val rotationDiff = (targetRotationAngle - currentNormalized + 360) % 360
+                    val finalRotation = rotation + 360 * 3 + rotationDiff
+                    
+                    Log.d(TAG, "forceResult: $forceResult, targetIndex: $targetIndex, finalRotation: $finalRotation")
+                    
+                    finalRotation
+                } else {
+                    Log.d(TAG, "=== NO FORCE RESULT - Random Spin ===")
+                    rotation + 360 * 3 + Random.nextFloat() * 360
+                }
+                
+                // 使用更流畅的缓动函数和更短的时长
+                val animDuration = if (multiSpinMode) 1000 else 1800
+                
+                animate(
+                    initialValue = rotation,
+                    targetValue = targetRotation,
+                    animationSpec = tween(animDuration, easing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f))
+                ) { value, _ -> 
+                    rotation = value
+                }
+                
+                rotation = targetRotation % 360
+                
+                // 计算最终结果
+                val anglePerOption = 360f / options.size
+                val normalizedRotation = rotation % 360
+                
+                var resultIndex = 0
+                options.indices.forEach { i ->
+                    val optionStartInWheel = i * anglePerOption - 90f
+                    val optionEndInWheel = (i + 1) * anglePerOption - 90f
+                    
+                    var optionStartAfterRotation = (optionStartInWheel + normalizedRotation) % 360
+                    var optionEndAfterRotation = (optionEndInWheel + normalizedRotation) % 360
+                    
+                    if (optionStartAfterRotation < 0) optionStartAfterRotation += 360
+                    if (optionEndAfterRotation < 0) optionEndAfterRotation += 360
+                    
+                    val pointerAngle = 270f
+                    val isInRange = if (optionStartAfterRotation < optionEndAfterRotation) {
+                        pointerAngle >= optionStartAfterRotation && pointerAngle < optionEndAfterRotation
+                    } else {
+                        pointerAngle >= optionStartAfterRotation || pointerAngle < optionEndAfterRotation
+                    }
+                    
+                    if (isInRange) {
+                        resultIndex = i
+                    }
+                }
+                
+                selectedResult = options[resultIndex]
+                
+                Log.d(TAG, "=== FINAL RESULT ===")
+                Log.d(TAG, "Result: $selectedResult, Expected: $forceResult, Match: ${selectedResult == forceResult}")
+                
+                isSpinning = false
+                onResult(selectedResult)
+                onShowResult(selectedResult)
+            } catch (e: Exception) {
+                Log.e(TAG, "Spin error", e)
+                isSpinning = false
+            }
+        }
+    }
     
     val wheelOptions = remember(options, weights) {
         val opts = if (weights.isNotEmpty() && weights.size == options.size) {
@@ -100,8 +194,6 @@ fun SpinWheel(
         }
         opts
     }
-    
-    // 自动旋转触发已移除，改为直接在按钮点击时处理
     
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -128,8 +220,9 @@ fun SpinWheel(
             PointerIndicator()
         }
         
-        // 旋转按钮（减少间距）
-        Button(
+        // 旋转按钮（减少间距）- 可选显示
+        if (showButton) {
+            Button(
             onClick = {
                 Log.d(TAG, "=== Button Clicked ===")
                 Log.d(TAG, "isSpinning: $isSpinning")
@@ -141,34 +234,133 @@ fun SpinWheel(
                 Log.d(TAG, "Button enabled: ${!isSpinning && canSpin && options.isNotEmpty()}")
                 
                 if (!isSpinning && options.isNotEmpty()) {
-                    Log.d(TAG, "Calling onSpinStart()")
+                    Log.d(TAG, "=== BUTTON CLICK - Starting Spin ===")
+                    Log.d(TAG, "forceResult parameter: $forceResult")
+                    Log.d(TAG, "options: ${options.joinToString(", ")}")
+                    
                     onSpinStart()
                     
                     // 🔥 修复：使用 Compose 协程作用域
                     scope.launch {
                         try {
-                            Log.d(TAG, "Starting spin animation (mode: ${if (multiSpinMode) "MULTI" else "SINGLE"})")
+                            Log.d(TAG, "=== Inside Coroutine ===")
+                            Log.d(TAG, "forceResult at coroutine start: $forceResult")
                             isSpinning = true
                             
-                            val targetRotation = rotation + 360 * 5 + Random.nextFloat() * 360
+                            // 如果有强制结果，计算目标旋转角度
+                            val targetRotation = if (forceResult != null && options.contains(forceResult)) {
+                                Log.d(TAG, "=== FORCE RESULT DETECTED ===")
+                                val targetIndex = options.indexOf(forceResult)
+                                val anglePerOption = 360f / options.size
+                                
+                                // 关键：转盘绘制时，第i个选项的startAngle = i * anglePerOption - 90
+                                // 所以第i个选项在转盘上的实际角度范围是：
+                                // 起始：i * anglePerOption - 90
+                                // 结束：(i+1) * anglePerOption - 90
+                                // 中心：i * anglePerOption + anglePerOption/2 - 90
+                                
+                                val targetCenterAngleInWheel = targetIndex * anglePerOption + anglePerOption / 2 - 90f
+                                
+                                // 在目标选项范围内随机选择一个位置
+                                val randomOffset = (Random.nextFloat() - 0.5f) * anglePerOption * 0.8f
+                                val targetAngleWithRandom = targetCenterAngleInWheel + randomOffset
+                                
+                                // 指针在-90度（270度），我们需要旋转多少度让目标角度对准指针
+                                // 转盘旋转后，目标角度变成：targetAngleWithRandom + rotation
+                                // 我们要让它等于 -90（即270），所以：
+                                // targetAngleWithRandom + rotation = 270
+                                // rotation = 270 - targetAngleWithRandom
+                                
+                                val targetRotationAngle = (270f - targetAngleWithRandom + 360) % 360f
+                                
+                                // 从当前角度旋转到目标角度，加上5圈
+                                val currentNormalized = rotation % 360
+                                val rotationDiff = (targetRotationAngle - currentNormalized + 360) % 360
+                                val finalRotation = rotation + 360 * 3 + rotationDiff
+                                
+                                Log.d(TAG, "=== Force Result Calculation ===")
+                                Log.d(TAG, "forceResult: $forceResult")
+                                Log.d(TAG, "targetIndex: $targetIndex")
+                                Log.d(TAG, "anglePerOption: $anglePerOption")
+                                Log.d(TAG, "targetCenterAngleInWheel: $targetCenterAngleInWheel")
+                                Log.d(TAG, "randomOffset: $randomOffset")
+                                Log.d(TAG, "targetAngleWithRandom: $targetAngleWithRandom")
+                                Log.d(TAG, "targetRotationAngle: $targetRotationAngle")
+                                Log.d(TAG, "currentNormalized: $currentNormalized")
+                                Log.d(TAG, "rotationDiff: $rotationDiff")
+                                Log.d(TAG, "finalRotation: $finalRotation")
+                                
+                                finalRotation
+                            } else {
+                                Log.d(TAG, "=== NO FORCE RESULT - Random Spin ===")
+                                Log.d(TAG, "forceResult is null or not in options")
+                                // 正常随机旋转
+                                rotation + 360 * 3 + Random.nextFloat() * 360
+                            }
+                            
                             Log.d(TAG, "Current rotation: $rotation, Target rotation: $targetRotation")
+                            
+                            // 使用更流畅的缓动函数和更短的时长
+                            val animDuration = if (multiSpinMode) 1000 else 1800
                             
                             animate(
                                 initialValue = rotation,
                                 targetValue = targetRotation,
-                                animationSpec = tween(2000, easing = FastOutSlowInEasing)
+                                animationSpec = tween(animDuration, easing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f))
                             ) { value, _ -> 
                                 rotation = value
                             }
                             
                             rotation = targetRotation % 360
                             
+                            // 计算最终结果 - 找出指针指向的选项
                             val anglePerOption = 360f / options.size
-                            val normalizedRotation = (360 - rotation % 360) % 360
-                            val resultIndex = ((normalizedRotation + anglePerOption / 2) / anglePerOption).toInt() % options.size
+                            val normalizedRotation = rotation % 360
+                            
+                            Log.d(TAG, "=== Calculating Result ===")
+                            Log.d(TAG, "Final rotation: $rotation")
+                            Log.d(TAG, "Normalized rotation: $normalizedRotation")
+                            
+                            // 指针在 270 度（-90度），找出哪个选项包含这个角度
+                            var resultIndex = 0
+                            options.indices.forEach { i ->
+                                // 第i个选项在转盘上的角度范围（绘制时）
+                                val optionStartInWheel = i * anglePerOption - 90f
+                                val optionEndInWheel = (i + 1) * anglePerOption - 90f
+                                
+                                // 旋转后，选项的角度范围
+                                var optionStartAfterRotation = (optionStartInWheel + normalizedRotation) % 360
+                                var optionEndAfterRotation = (optionEndInWheel + normalizedRotation) % 360
+                                
+                                // 标准化到0-360范围
+                                if (optionStartAfterRotation < 0) optionStartAfterRotation += 360
+                                if (optionEndAfterRotation < 0) optionEndAfterRotation += 360
+                                
+                                // 检查 270 度是否在这个选项的范围内
+                                val pointerAngle = 270f
+                                val isInRange = if (optionStartAfterRotation < optionEndAfterRotation) {
+                                    // 正常情况：起始 < 结束
+                                    pointerAngle >= optionStartAfterRotation && pointerAngle < optionEndAfterRotation
+                                } else {
+                                    // 跨越 0 度的情况
+                                    pointerAngle >= optionStartAfterRotation || pointerAngle < optionEndAfterRotation
+                                }
+                                
+                                Log.d(TAG, "Option $i (${options[i]}): start=$optionStartAfterRotation, end=$optionEndAfterRotation, isInRange=$isInRange")
+                                
+                                if (isInRange) {
+                                    resultIndex = i
+                                }
+                            }
+                            
                             selectedResult = options[resultIndex]
                             
-                            Log.d(TAG, "Spin completed - result: $selectedResult (index: $resultIndex)")
+                            Log.d(TAG, "=== FINAL RESULT ===")
+                            Log.d(TAG, "Result index: $resultIndex")
+                            Log.d(TAG, "Result: $selectedResult")
+                            Log.d(TAG, "Expected (forceResult): $forceResult")
+                            Log.d(TAG, "Match: ${selectedResult == forceResult}")
+                            
                             isSpinning = false
                             onResult(selectedResult)
                             onShowResult(selectedResult)
@@ -210,6 +402,7 @@ fun SpinWheel(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
         }
         // 移除底部Spacer
     }
@@ -556,10 +749,59 @@ private fun SpinWheelCanvas(
                     isAntiAlias = true
                 }
                 
+                // 计算概率
+                val probability = if (totalWeight > 0) {
+                    (option.weight.toFloat() / totalWeight * 100).toInt()
+                } else {
+                    (100f / options.size).toInt()
+                }
+                
+                // 绘制选项名称
                 val drawY = fillPaint.textSize / 3
                 nativeCanvas.drawText(option.text, 0f, drawY + 2f, shadowPaint)
                 nativeCanvas.drawText(option.text, 0f, drawY, strokePaint)
                 nativeCanvas.drawText(option.text, 0f, drawY, fillPaint)
+                
+                // 如果开启权重可视化，显示概率
+                if (showWeightVisualization) {
+                    val probabilityText = "$probability%"
+                    
+                    // 概率文字样式（较小）
+                    val probShadowPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.BLACK
+                        textSize = 32f
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        style = android.graphics.Paint.Style.FILL
+                        alpha = 80
+                        isAntiAlias = true
+                    }
+                    
+                    val probStrokePaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.BLACK
+                        textSize = 32f
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        style = android.graphics.Paint.Style.STROKE
+                        strokeWidth = 5f
+                        isAntiAlias = true
+                    }
+                    
+                    val probFillPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.YELLOW
+                        textSize = 32f
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        style = android.graphics.Paint.Style.FILL
+                        isAntiAlias = true
+                    }
+                    
+                    // 在选项名称下方绘制概率
+                    val probDrawY = drawY + 50f
+                    nativeCanvas.drawText(probabilityText, 0f, probDrawY + 2f, probShadowPaint)
+                    nativeCanvas.drawText(probabilityText, 0f, probDrawY, probStrokePaint)
+                    nativeCanvas.drawText(probabilityText, 0f, probDrawY, probFillPaint)
+                }
                 
                 nativeCanvas.restore()
                 textAngle += sweepAngle

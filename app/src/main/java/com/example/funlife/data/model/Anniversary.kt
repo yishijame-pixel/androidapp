@@ -20,6 +20,7 @@ enum class AnniversaryType(val displayName: String, val emoji: String) {
 data class Anniversary(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,      // 用户ID
     val name: String,          // 纪念日名称
     val date: String,          // 日期 (格式: yyyy-MM-dd)
     val imageUri: String? = null,  // 背景图片 URI

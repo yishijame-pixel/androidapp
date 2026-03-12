@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class SpinWheelTemplate(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,               // 用户ID
     val name: String,                   // 模板名称
     val options: String,                // 选项列表（用逗号分隔）
     val weights: String = "",           // 权重列表（用逗号分隔，与options对应）

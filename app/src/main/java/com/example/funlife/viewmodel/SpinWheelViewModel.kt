@@ -507,6 +507,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     }
     
     private fun getDefaultWheelOptions(): List<WheelOption> {
+        // 默认所有选项权重相同
         return listOf("吃火锅", "看电影", "打游戏", "去旅行", "读书", "运动").map {
             WheelOption(text = it, weight = 1)
         }
