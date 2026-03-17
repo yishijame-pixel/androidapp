@@ -11,50 +11,64 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     
+    private val context = application.applicationContext
     private val repository: UserPreferencesRepository
     val preferences: StateFlow<UserPreferences>
+    
+    // 🔥 获取当前用户ID
+    private fun getCurrentUserId(): Long {
+        val sessionManager = com.example.funlife.utils.UserSessionManager(context)
+        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+    }
     
     init {
         val database = AppDatabase.getDatabase(application)
         val preferencesDao = database.userPreferencesDao()
         repository = UserPreferencesRepository(preferencesDao)
         
-        // 初始化默认偏好
+        // 🔥 修改：根据用户ID初始化偏好
         viewModelScope.launch {
-            repository.insert(UserPreferences())
+            val userId = getCurrentUserId()
+            repository.getOrCreatePreferences(userId)
         }
         
-        preferences = repository.preferences.map { 
-            it ?: UserPreferences() 
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = UserPreferences()
-        )
+        // 🔥 修改：根据用户ID获取偏好
+        preferences = repository.getPreferences(getCurrentUserId())
+            .map { it ?: UserPreferences(userId = getCurrentUserId()) }
+            .catch { e ->
+                android.util.Log.e("SettingsViewModel", "Error loading preferences", e)
+                emit(UserPreferences(userId = getCurrentUserId()))
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = UserPreferences(userId = getCurrentUserId())
+            )
     }
     
-    // 更新深色模式
+    // 🔥 修改：更新深色模式
     fun updateDarkMode(isDarkMode: Boolean) {
         viewModelScope.launch {
-            repository.updateDarkMode(isDarkMode)
+            repository.updateDarkMode(getCurrentUserId(), isDarkMode)
         }
     }
     
-    // 更新通知设置
+    // 🔥 修改：更新通知设置
     fun updateNotifications(enable: Boolean) {
         viewModelScope.launch {
-            repository.updateNotifications(enable)
+            repository.updateNotifications(getCurrentUserId(), enable)
         }
     }
     
-    // 更新默认加分值
+    // 🔥 修改：更新默认加分值
     fun updateScoreIncrement(increment: Int) {
         viewModelScope.launch {
-            repository.updateScoreIncrement(increment)
+            repository.updateScoreIncrement(getCurrentUserId(), increment)
         }
     }
     

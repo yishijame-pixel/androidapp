@@ -7,18 +7,18 @@ import kotlinx.coroutines.flow.Flow
 
 class SpinWheelTemplateRepository(private val templateDao: SpinWheelTemplateDao) {
     
-    val allTemplates: Flow<List<SpinWheelTemplate>> = templateDao.getAllTemplates()
+    fun getAllTemplates(userId: Long): Flow<List<SpinWheelTemplate>> = templateDao.getAllTemplates(userId)
     
-    fun getTemplatesByCategory(category: String): Flow<List<SpinWheelTemplate>> {
-        return templateDao.getTemplatesByCategory(category)
+    fun getTemplatesByCategory(userId: Long, category: String): Flow<List<SpinWheelTemplate>> {
+        return templateDao.getTemplatesByCategory(userId, category)
     }
     
-    fun getDefaultTemplates(): Flow<List<SpinWheelTemplate>> {
-        return templateDao.getDefaultTemplates()
+    fun getDefaultTemplates(userId: Long): Flow<List<SpinWheelTemplate>> {
+        return templateDao.getDefaultTemplates(userId)
     }
     
-    suspend fun getTemplateById(id: Int): SpinWheelTemplate? {
-        return templateDao.getTemplateById(id)
+    suspend fun getTemplateById(userId: Long, id: Int): SpinWheelTemplate? {
+        return templateDao.getTemplateById(userId, id)
     }
     
     suspend fun insert(template: SpinWheelTemplate) {
@@ -33,11 +33,11 @@ class SpinWheelTemplateRepository(private val templateDao: SpinWheelTemplateDao)
         templateDao.deleteTemplate(template)
     }
     
-    suspend fun incrementUsageCount(id: Int) {
-        templateDao.incrementUsageCount(id)
+    suspend fun incrementUsageCount(userId: Long, id: Int) {
+        templateDao.incrementUsageCount(userId, id)
     }
     
-    fun searchTemplates(query: String): Flow<List<SpinWheelTemplate>> {
-        return templateDao.searchTemplates(query)
+    fun searchTemplates(userId: Long, query: String): Flow<List<SpinWheelTemplate>> {
+        return templateDao.searchTemplates(userId, query)
     }
 }

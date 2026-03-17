@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class SpinWheelHistory(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,               // 🔥 用户ID
     val templateId: Int? = null,        // 关联的模板ID（可选）
     val templateName: String,           // 模板名称
     val result: String,                 // 转盘结果

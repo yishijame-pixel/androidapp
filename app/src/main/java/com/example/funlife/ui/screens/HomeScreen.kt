@@ -32,7 +32,9 @@ import coil.compose.AsyncImage
 import com.example.funlife.data.model.Anniversary
 import com.example.funlife.viewmodel.AnniversaryViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
+import com.example.funlife.viewmodel.GoalViewModel
 import java.time.LocalDateTime
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 @Composable
@@ -40,12 +42,14 @@ fun HomeScreen(
     navController: NavController,
     anniversaryViewModel: AnniversaryViewModel,
     scoreViewModel: ScoreViewModel,
-    authViewModel: com.example.funlife.viewmodel.AuthViewModel
+    authViewModel: com.example.funlife.viewmodel.AuthViewModel,
+    goalViewModel: GoalViewModel
 ) {
     val anniversaries by anniversaryViewModel.anniversaries.collectAsState()
     val pinnedAnniversary by anniversaryViewModel.pinnedAnniversary.collectAsState()
     val players by scoreViewModel.players.collectAsState()
     val userSession = authViewModel.getCurrentSession()
+    val countdowns by goalViewModel.countdowns.collectAsState()
     
     // 动画状态
     var isVisible by remember { mutableStateOf(false) }
@@ -106,6 +110,21 @@ fun HomeScreen(
                 enter = fadeIn() + slideInVertically()
             ) {
                 FunctionCardsSection(navController)
+            }
+        }
+        
+        // 目标小组件
+        if (countdowns.isNotEmpty()) {
+            item {
+                AnimatedVisibility(
+                    visible = isVisible,
+                    enter = fadeIn() + slideInVertically()
+                ) {
+                    GoalWidgetSection(
+                        countdowns = countdowns.take(3),
+                        onViewAll = { navController.navigate("goal") }
+                    )
+                }
             }
         }
         
@@ -1012,6 +1031,163 @@ fun MiniPlayerRow(player: com.example.funlife.data.model.Player, rank: Int) {
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
             )
+        }
+    }
+}
+
+
+@Composable
+fun GoalWidgetSection(
+    countdowns: List<com.example.funlife.data.model.Countdown>,
+    onViewAll: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🎯",
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    text = "我的目标",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            TextButton(onClick = onViewAll) {
+                Text("查看全部")
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                countdowns.forEach { countdown ->
+                    MiniGoalCard(countdown)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MiniGoalCard(countdown: com.example.funlife.data.model.Countdown) {
+    val daysRemaining = countdown.getDaysRemaining()
+    val color = Color(android.graphics.Color.parseColor(countdown.color))
+    
+    val statusColor = when {
+        daysRemaining < 0 -> Color(0xFF95A5A6)
+        daysRemaining == 0L -> Color(0xFFE74C3C)
+        daysRemaining <= 7 -> Color(0xFFFF6B35)
+        daysRemaining <= 30 -> Color(0xFFFFD700)
+        else -> Color(0xFF4ECDC4)
+    }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            // 图标
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(countdown.icon, fontSize = 24.sp)
+            }
+            
+            // 标题和日期
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    countdown.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Text(
+                    try {
+                        val date = LocalDate.parse(countdown.targetDate)
+                        val formatter = DateTimeFormatter.ofPattern("MM月dd日")
+                        date.format(formatter)
+                    } catch (e: Exception) {
+                        countdown.targetDate
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        // 倒计时标签
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = statusColor.copy(alpha = 0.15f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    when {
+                        daysRemaining > 0 -> "⏰"
+                        daysRemaining == 0L -> "🎉"
+                        else -> "✓"
+                    },
+                    fontSize = 14.sp
+                )
+                Text(
+                    when {
+                        daysRemaining > 0 -> "$daysRemaining 天"
+                        daysRemaining == 0L -> "今天"
+                        else -> "已过"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = statusColor
+                )
+            }
         }
     }
 }

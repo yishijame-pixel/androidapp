@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 class AnniversaryRepository(private val anniversaryDao: AnniversaryDao) {
     
-    val allAnniversaries: Flow<List<Anniversary>> = anniversaryDao.getAllAnniversaries()
-    val pinnedAnniversary: Flow<Anniversary?> = anniversaryDao.getPinnedAnniversary()
+    fun getAllAnniversaries(userId: Long): Flow<List<Anniversary>> = anniversaryDao.getAllAnniversaries(userId)
+    fun getPinnedAnniversary(userId: Long): Flow<Anniversary?> = anniversaryDao.getPinnedAnniversary(userId)
     
     suspend fun insert(anniversary: Anniversary) {
         anniversaryDao.insertAnniversary(anniversary)
@@ -22,9 +22,9 @@ class AnniversaryRepository(private val anniversaryDao: AnniversaryDao) {
         anniversaryDao.deleteAnniversary(anniversary)
     }
     
-    suspend fun pinAnniversary(anniversary: Anniversary) {
+    suspend fun pinAnniversary(userId: Long, anniversary: Anniversary) {
         // 先取消所有置顶
-        anniversaryDao.unpinAll()
+        anniversaryDao.unpinAll(userId)
         // 再置顶当前纪念日
         anniversaryDao.updateAnniversary(anniversary.copy(isPinned = true))
     }

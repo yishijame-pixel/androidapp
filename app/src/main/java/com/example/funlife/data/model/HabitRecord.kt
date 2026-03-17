@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class HabitRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,          // 🔥 用户ID
     val habitId: Int,              // 关联的习惯ID
     val date: String,              // 打卡日期（yyyy-MM-dd）
     val note: String = "",         // 备注

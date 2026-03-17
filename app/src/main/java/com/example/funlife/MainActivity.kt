@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -73,7 +74,7 @@ fun MainScreen() {
         BottomNavItem(
             screen = Screen.Habit,
             icon = Icons.Default.CheckCircle,
-            label = "打卡"
+            label = "习惯"
         ),
         BottomNavItem(
             screen = Screen.Mood,
@@ -81,9 +82,9 @@ fun MainScreen() {
             label = "心情"
         ),
         BottomNavItem(
-            screen = Screen.Goal,
-            icon = Icons.Default.Flag,
-            label = "目标"
+            screen = Screen.Profile,
+            icon = Icons.Default.Person,
+            label = "我的"
         )
     )
     
@@ -101,7 +102,7 @@ fun MainScreen() {
                 Screen.Home.route,
                 Screen.Habit.route,
                 Screen.Mood.route,
-                Screen.Goal.route
+                Screen.Profile.route
             )
             
             if (showTopBar) {
@@ -176,6 +177,7 @@ fun MainScreen() {
                                 Screen.Habit.route -> "📅" to "打卡"
                                 Screen.Mood.route -> "😊" to "心情"
                                 Screen.Goal.route -> "🎯" to "目标"
+                                Screen.Profile.route -> "👤" to "我的"
                                 else -> "🎉" to "FunLife"
                             }
                             

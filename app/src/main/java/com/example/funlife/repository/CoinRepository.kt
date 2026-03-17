@@ -7,28 +7,23 @@ import kotlinx.coroutines.flow.Flow
 
 class CoinRepository(private val coinDao: CoinDao) {
     
-    val userCoins: Flow<UserCoins?> = coinDao.getUserCoins()
+    fun getUserCoins(userId: Long): Flow<UserCoins?> = coinDao.getUserCoins(userId)
     
-    suspend fun initializeCoins() = coinDao.initializeCoins()
+    suspend fun initializeCoins(userId: Long) = coinDao.initializeCoins(userId)
     
-    suspend fun getCoinsAmount(): Int = coinDao.getCoinsAmount() ?: 0
+    suspend fun getCoinsAmount(userId: Long): Int = coinDao.getCoinsAmount(userId) ?: 0
     
-    suspend fun addCoins(amount: Int) = coinDao.addCoins(amount)
+    suspend fun addCoins(userId: Long, amount: Int) = coinDao.addCoins(userId, amount)
     
-    suspend fun spendCoins(amount: Int): Boolean {
-        val currentCoins = getCoinsAmount()
-        return if (currentCoins >= amount) {
-            coinDao.spendCoins(amount)
-            true
-        } else {
-            false
-        }
+    suspend fun spendCoins(userId: Long, amount: Int): Boolean {
+        // 使用原子操作，防止金币变成负数
+        val rowsAffected = coinDao.spendCoinsAtomic(userId, amount)
+        return rowsAffected > 0
     }
     
-    suspend fun removeCoins(amount: Int) {
-        val currentCoins = getCoinsAmount()
-        if (currentCoins >= amount) {
-            coinDao.spendCoins(amount)
-        }
+    suspend fun removeCoins(userId: Long, amount: Int): Boolean {
+        // 使用原子操作
+        val rowsAffected = coinDao.spendCoinsAtomic(userId, amount)
+        return rowsAffected > 0
     }
 }

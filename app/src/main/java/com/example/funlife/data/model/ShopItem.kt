@@ -21,6 +21,7 @@ data class ShopItem(
 data class PurchaseHistory(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,       // 🔥 用户ID
     val itemId: Int,            // 商品ID
     val itemName: String,       // 商品名称
     val price: Int,             // 购买价格

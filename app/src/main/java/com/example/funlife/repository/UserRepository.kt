@@ -8,7 +8,19 @@ import kotlinx.coroutines.flow.Flow
 class UserRepository(private val userDao: UserDao) {
     
     suspend fun login(username: String, password: String): User? {
-        return userDao.login(username, password)
+        val user = userDao.getUserByUsername(username) ?: return null
+        
+        // 🔥 新增：使用密码哈希验证
+        return if (com.example.funlife.utils.PasswordHasher.verifyPassword(password, user.password)) {
+            user
+        } else {
+            null
+        }
+    }
+    
+    // 🔥 新增：检查用户名是否存在（用于精确错误提示）
+    suspend fun getUserByUsername(username: String): User? {
+        return userDao.getUserByUsername(username)
     }
     
     suspend fun register(username: String, password: String, nickname: String): Result<Long> {
@@ -19,9 +31,12 @@ class UserRepository(private val userDao: UserDao) {
                 return Result.failure(Exception("用户名已存在"))
             }
             
+            // 🔥 新增：哈希密码
+            val hashedPassword = com.example.funlife.utils.PasswordHasher.hashPassword(password)
+            
             val user = User(
                 username = username,
-                password = password,
+                password = hashedPassword,  // 存储哈希后的密码
                 nickname = nickname.ifEmpty { username }
             )
             
@@ -50,5 +65,26 @@ class UserRepository(private val userDao: UserDao) {
     
     suspend fun getUserCount(): Int {
         return userDao.getUserCount()
+    }
+    
+    // 🔥 新增：修改密码
+    suspend fun changePassword(userId: Long, oldPassword: String, newPassword: String): Result<Unit> {
+        return try {
+            val user = userDao.getUserById(userId) ?: return Result.failure(Exception("用户不存在"))
+            
+            // 验证旧密码
+            if (!com.example.funlife.utils.PasswordHasher.verifyPassword(oldPassword, user.password)) {
+                return Result.failure(Exception("旧密码错误"))
+            }
+            
+            // 哈希新密码
+            val hashedNewPassword = com.example.funlife.utils.PasswordHasher.hashPassword(newPassword)
+            
+            // 更新密码
+            userDao.update(user.copy(password = hashedNewPassword))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

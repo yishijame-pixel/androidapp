@@ -9,11 +9,11 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface GoalDao {
     
-    @Query("SELECT * FROM goals WHERE isCompleted = 0 ORDER BY createdAt DESC")
-    fun getActiveGoals(): Flow<List<Goal>>
+    @Query("SELECT * FROM goals WHERE userId = :userId AND isCompleted = 0 ORDER BY createdAt DESC")
+    fun getActiveGoals(userId: Long): Flow<List<Goal>>
     
-    @Query("SELECT * FROM goals WHERE isCompleted = 1 ORDER BY completedAt DESC")
-    fun getCompletedGoals(): Flow<List<Goal>>
+    @Query("SELECT * FROM goals WHERE userId = :userId AND isCompleted = 1 ORDER BY completedAt DESC")
+    fun getCompletedGoals(userId: Long): Flow<List<Goal>>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGoal(goal: Goal)
@@ -24,8 +24,8 @@ interface GoalDao {
     @Delete
     suspend fun deleteGoal(goal: Goal)
     
-    @Query("SELECT * FROM countdowns ORDER BY targetDate ASC")
-    fun getAllCountdowns(): Flow<List<Countdown>>
+    @Query("SELECT * FROM countdowns WHERE userId = :userId ORDER BY targetDate ASC")
+    fun getAllCountdowns(userId: Long): Flow<List<Countdown>>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCountdown(countdown: Countdown)

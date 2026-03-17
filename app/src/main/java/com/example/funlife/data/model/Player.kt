@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 data class Player(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,      // 🔥 用户ID
     val name: String,          // 玩家名称
     val score: Int = 0         // 当前分数
 )

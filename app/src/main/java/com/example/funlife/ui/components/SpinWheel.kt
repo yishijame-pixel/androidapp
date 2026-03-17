@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -126,7 +128,7 @@ fun SpinWheel(
                 }
                 
                 // 使用更流畅的缓动函数和更短的时长
-                val animDuration = if (multiSpinMode) 1000 else 1800
+                val animDuration = if (multiSpinMode) 800 else 1800
                 
                 animate(
                     initialValue = rotation,
@@ -172,7 +174,10 @@ fun SpinWheel(
                 
                 isSpinning = false
                 onResult(selectedResult)
-                onShowResult(selectedResult)
+                // 只在非连抽模式下显示单次结果动画
+                if (!multiSpinMode) {
+                    onShowResult(selectedResult)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Spin error", e)
                 isSpinning = false
@@ -301,7 +306,7 @@ fun SpinWheel(
                             Log.d(TAG, "Current rotation: $rotation, Target rotation: $targetRotation")
                             
                             // 使用更流畅的缓动函数和更短的时长
-                            val animDuration = if (multiSpinMode) 1000 else 1800
+                            val animDuration = if (multiSpinMode) 800 else 1800
                             
                             animate(
                                 initialValue = rotation,
@@ -363,7 +368,10 @@ fun SpinWheel(
                             
                             isSpinning = false
                             onResult(selectedResult)
-                            onShowResult(selectedResult)
+                            // 只在非连抽模式下显示单次结果动画
+                            if (!multiSpinMode) {
+                                onShowResult(selectedResult)
+                            }
                         } catch (e: Exception) {
                             Log.e(TAG, "Spin error", e)
                             isSpinning = false
@@ -1275,60 +1283,308 @@ fun ResultAnimation(result: String, onDismiss: () -> Unit) {
     }
 }
 
-// 连抽结算动画
+// 连抽结算动画 - 全新美化版（清新风格）
 @Composable
 fun MultiSpinResultAnimation(results: String, onDismiss: () -> Unit) {
     var visible by remember { mutableStateOf(true) }
     var scale by remember { mutableFloatStateOf(0f) }
     var alpha by remember { mutableFloatStateOf(1f) }
     
+    // 解析结果
+    val resultItems = results.split(", ").map { item ->
+        val parts = item.split("×")
+        if (parts.size == 2) {
+            Pair(parts[0], parts[1].toIntOrNull() ?: 1)
+        } else {
+            Pair(item, 1)
+        }
+    }
+    
     LaunchedEffect(Unit) {
-        animate(0f, 1.3f, animationSpec = tween(300, easing = FastOutSlowInEasing)) { v, _ -> scale = v }
-        animate(1.3f, 1f, animationSpec = tween(200)) { v, _ -> scale = v }
-        delay(3500)
-        animate(1f, 0f, animationSpec = tween(600)) { v, _ -> alpha = v }
+        animate(0f, 1.2f, animationSpec = tween(400, easing = FastOutSlowInEasing)) { v, _ -> scale = v }
+        animate(1.2f, 1f, animationSpec = tween(250, easing = FastOutSlowInEasing)) { v, _ -> scale = v }
+        delay(4000)
+        animate(1f, 0f, animationSpec = tween(500)) { v, _ -> alpha = v }
         visible = false
         onDismiss()
     }
     
     if (visible) {
-        Box(Modifier.fillMaxSize(), Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f * alpha))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
             Card(
-                modifier = Modifier.padding(24.dp).fillMaxWidth(0.92f).graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha },
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(0.92f)
+                    .graphicsLayer { 
+                        scaleX = scale
+                        scaleY = scale
+                        this.alpha = alpha
+                    },
                 shape = RoundedCornerShape(32.dp),
-                elevation = CardDefaults.cardElevation(24.dp)
+                elevation = CardDefaults.cardElevation(0.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    3.dp,
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700),
+                            Color(0xFFFFA500),
+                            Color(0xFFFFD700)
+                        )
+                    )
+                )
             ) {
                 Column(
-                    modifier = Modifier.padding(36.dp).verticalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFFBF5),
+                                    Color.White,
+                                    Color.White
+                                )
+                            )
+                        )
+                        .padding(28.dp)
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(28.dp)
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    Text("🎊🎉🎊", fontSize = 56.sp)
-                    Text("连抽完成", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, fontSize = 40.sp)
-                    Text("✨ 恭喜获得以下奖励 ✨", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    // 顶部庆祝图标 - 更大更醒目
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFD700).copy(alpha = 0.2f),
+                                        Color(0xFFFFA500).copy(alpha = 0.1f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                shape = RoundedCornerShape(50)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🎊", fontSize = 64.sp)
+                    }
                     
-                    Divider(Modifier.fillMaxWidth(0.7f), thickness = 3.dp)
+                    // 主标题 - 更醒目
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "连抽完成",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 36.sp,
+                            color = Color(0xFF2C3E50)
+                        )
+                        Text(
+                            text = "Multi-Draw Complete",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF95A5A6),
+                            fontSize = 13.sp
+                        )
+                    }
                     
-                    Card(elevation = CardDefaults.cardElevation(8.dp), shape = RoundedCornerShape(24.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("🎁 抽取结果", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                            Divider(thickness = 1.dp)
-                            results.split(", ").forEach { item ->
-                                Card(shape = RoundedCornerShape(16.dp)) {
+                    // 副标题
+                    Text(
+                        text = "✨ 恭喜获得以下奖励 ✨",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF7F8C8D),
+                        fontSize = 16.sp
+                    )
+                    
+                    // 渐变分隔线
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(3.dp)
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0xFFFFD700).copy(alpha = 0.5f),
+                                        Color(0xFFFFA500).copy(alpha = 0.5f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                shape = RoundedCornerShape(50)
+                            )
+                    )
+                    
+                    Spacer(Modifier.height(4.dp))
+                    
+                    // 结果容器 - 清新卡片
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFFFFF8F0),
+                        shadowElevation = 0.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            // 标题栏
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("🎁", fontSize = 24.sp)
+                                    Text(
+                                        text = "抽取结果",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFE67E22),
+                                        fontSize = 20.sp
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = Color(0xFF00BCD4).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "共${resultItems.sumOf { it.second }}个",
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF00BCD4),
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                            
+                            // 结果列表 - 清新设计
+                            resultItems.forEach { item ->
+                                val name = item.first
+                                val count = item.second
+                                
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = Color.White,
+                                    shadowElevation = 0.dp
+                                ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(item, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Text("✨🌟", style = MaterialTheme.typography.titleLarge)
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            // 图标
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(52.dp)
+                                                    .background(
+                                                        brush = Brush.linearGradient(
+                                                            colors = listOf(
+                                                                Color(0xFFFFD700),
+                                                                Color(0xFFFFA500)
+                                                            )
+                                                        ),
+                                                        shape = RoundedCornerShape(16.dp)
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text("✨", fontSize = 28.sp)
+                                            }
+                                            
+                                            // 文字
+                                            Column(
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                Text(
+                                                    text = name,
+                                                    style = MaterialTheme.typography.titleLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF2C3E50),
+                                                    fontSize = 19.sp
+                                                )
+                                                Text(
+                                                    text = "Lucky Item",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color(0xFF95A5A6),
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                        }
+                                        
+                                        // 数量标签
+                                        Box(
+                                            modifier = Modifier
+                                                .background(
+                                                    brush = Brush.linearGradient(
+                                                        colors = listOf(
+                                                            Color(0xFF00BCD4),
+                                                            Color(0xFF00ACC1)
+                                                        )
+                                                    ),
+                                                    shape = RoundedCornerShape(14.dp)
+                                                )
+                                                .padding(horizontal = 18.dp, vertical = 10.dp)
+                                        ) {
+                                            Text(
+                                                text = "×$count",
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White,
+                                                fontSize = 22.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
+                    
+                    Spacer(Modifier.height(4.dp))
+                    
+                    // 底部提示 - 更柔和
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("👆", fontSize = 14.sp)
+                        Text(
+                            text = "点击任意处关闭",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF95A5A6),
+                            fontSize = 13.sp
+                        )
                     }
                 }
             }
         }
     }
 }
+
+

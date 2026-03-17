@@ -17,12 +17,19 @@ import java.time.temporal.ChronoUnit
 
 class StatisticsViewModel(application: Application) : AndroidViewModel(application) {
     
+    private val context = application.applicationContext
     private val anniversaryRepository: AnniversaryRepository
     private val playerRepository: PlayerRepository
     private val historyRepository: GameHistoryRepository
     
     val anniversaryStats: StateFlow<AnniversaryStatistics>
     val scoreStats: StateFlow<ScoreStatistics>
+    
+    // 🔥 获取当前用户ID
+    private fun getCurrentUserId(): Long {
+        val sessionManager = com.example.funlife.utils.UserSessionManager(context)
+        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+    }
     
     init {
         val database = AppDatabase.getDatabase(application)
@@ -31,7 +38,7 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
         historyRepository = GameHistoryRepository(database.gameHistoryDao())
         
         // 计算纪念日统计
-        anniversaryStats = anniversaryRepository.allAnniversaries.map { anniversaries ->
+        anniversaryStats = anniversaryRepository.getAllAnniversaries(getCurrentUserId()).map { anniversaries ->
             val today = LocalDate.now()
             val upcoming = anniversaries.filter { 
                 val date = LocalDate.parse(it.date)
@@ -69,14 +76,19 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
                 thisMonthCount = thisMonth.size,
                 nearestAnniversary = nearest
             )
-        }.stateIn(
+        }
+        .catch { e ->
+            android.util.Log.e("StatisticsViewModel", "Error loading anniversary stats", e)
+            emit(AnniversaryStatistics())
+        }
+        .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = AnniversaryStatistics()
         )
         
         // 计算分数统计
-        scoreStats = playerRepository.allPlayers.map { players ->
+        scoreStats = playerRepository.getAllPlayers(getCurrentUserId()).map { players ->
             val totalPlayers = players.size
             val highestScore = players.maxOfOrNull { it.score } ?: 0
             val averageScore = if (players.isNotEmpty()) {
@@ -90,7 +102,12 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
                 averageScore = averageScore,
                 topPlayer = topPlayer
             )
-        }.stateIn(
+        }
+        .catch { e ->
+            android.util.Log.e("StatisticsViewModel", "Error loading score stats", e)
+            emit(ScoreStatistics())
+        }
+        .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ScoreStatistics()
@@ -99,10 +116,10 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
     
     // 获取游戏历史统计
     suspend fun getGameCount(gameType: String): Int {
-        return historyRepository.getCountByType(gameType)
+        return historyRepository.getCountByType(getCurrentUserId(), gameType)
     }
     
     suspend fun getTotalPlayers(): Int {
-        return historyRepository.getTotalPlayers()
+        return historyRepository.getTotalPlayers(getCurrentUserId())
     }
 }

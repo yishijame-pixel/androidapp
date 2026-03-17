@@ -7,18 +7,18 @@ import kotlinx.coroutines.flow.Flow
 
 class GameHistoryRepository(private val gameHistoryDao: GameHistoryDao) {
     
-    val allHistory: Flow<List<GameHistory>> = gameHistoryDao.getAllHistory()
+    fun getAllHistory(userId: Long): Flow<List<GameHistory>> = gameHistoryDao.getAllHistory(userId)
     
-    fun getHistoryByType(gameType: String): Flow<List<GameHistory>> {
-        return gameHistoryDao.getHistoryByType(gameType)
+    fun getHistoryByType(userId: Long, gameType: String): Flow<List<GameHistory>> {
+        return gameHistoryDao.getHistoryByType(userId, gameType)
     }
     
-    fun getHistoryByPlayer(playerName: String): Flow<List<GameHistory>> {
-        return gameHistoryDao.getHistoryByPlayer(playerName)
+    fun getHistoryByPlayer(userId: Long, playerName: String): Flow<List<GameHistory>> {
+        return gameHistoryDao.getHistoryByPlayer(userId, playerName)
     }
     
-    fun getRecentHistory(limit: Int = 20): Flow<List<GameHistory>> {
-        return gameHistoryDao.getRecentHistory(limit)
+    fun getRecentHistory(userId: Long, limit: Int = 20): Flow<List<GameHistory>> {
+        return gameHistoryDao.getRecentHistory(userId, limit)
     }
     
     suspend fun insert(history: GameHistory) {
@@ -29,19 +29,20 @@ class GameHistoryRepository(private val gameHistoryDao: GameHistoryDao) {
         gameHistoryDao.deleteHistory(history)
     }
     
-    suspend fun clearAll() {
-        gameHistoryDao.clearAllHistory()
+    suspend fun clearAll(userId: Long) {
+        gameHistoryDao.clearAllHistory(userId)
     }
     
-    suspend fun deleteHistoryBefore(beforeDate: String) {
-        gameHistoryDao.deleteHistoryBefore(beforeDate)
+    suspend fun deleteHistoryBefore(userId: Long, beforeDate: String) {
+        gameHistoryDao.deleteHistoryBefore(userId, beforeDate)
     }
     
-    suspend fun getCountByType(gameType: String): Int {
-        return gameHistoryDao.getCountByType(gameType)
+    suspend fun getCountByType(userId: Long, gameType: String): Int {
+        return gameHistoryDao.getCountByType(userId, gameType)
     }
     
-    suspend fun getTotalPlayers(): Int {
-        return gameHistoryDao.getTotalPlayers()
+    suspend fun getTotalPlayers(userId: Long): Int {
+        return gameHistoryDao.getTotalPlayers(userId)
     }
+
 }

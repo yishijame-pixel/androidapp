@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 interface PlayerDao {
     
     // 获取所有玩家（按分数降序排序）
-    @Query("SELECT * FROM players ORDER BY score DESC")
-    fun getAllPlayers(): Flow<List<Player>>
+    @Query("SELECT * FROM players WHERE userId = :userId ORDER BY score DESC")
+    fun getAllPlayers(userId: Long): Flow<List<Player>>
     
     // 插入玩家
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -26,10 +26,10 @@ interface PlayerDao {
     suspend fun deletePlayer(player: Player)
     
     // 删除所有玩家
-    @Query("DELETE FROM players")
-    suspend fun deleteAllPlayers()
+    @Query("DELETE FROM players WHERE userId = :userId")
+    suspend fun deleteAllPlayers(userId: Long)
     
     // 重置所有分数
-    @Query("UPDATE players SET score = 0")
-    suspend fun resetAllScores()
+    @Query("UPDATE players SET score = 0 WHERE userId = :userId")
+    suspend fun resetAllScores(userId: Long)
 }

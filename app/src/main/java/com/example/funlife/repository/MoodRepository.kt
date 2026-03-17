@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 class MoodRepository(private val moodDao: MoodDao) {
     
-    val allMoods: Flow<List<MoodEntry>> = moodDao.getAllMoodEntries()
+    fun getAllMoods(userId: Long): Flow<List<MoodEntry>> = moodDao.getAllMoodEntries(userId)
     
     suspend fun insertMood(mood: MoodEntry) = moodDao.insertMood(mood)
     
@@ -15,7 +15,7 @@ class MoodRepository(private val moodDao: MoodDao) {
     
     suspend fun deleteMood(mood: MoodEntry) = moodDao.deleteMood(mood)
     
-    suspend fun getMoodByDate(date: String) = moodDao.getMoodByDate(date)
+    suspend fun getMoodByDate(userId: Long, date: String) = moodDao.getMoodByDate(userId, date)
     
-    fun getRecentMoods(limit: Int) = moodDao.getRecentMoods(limit)
+    fun getRecentMoods(userId: Long, limit: Int) = moodDao.getRecentMoods(userId, limit)
 }

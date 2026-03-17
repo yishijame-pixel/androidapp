@@ -20,6 +20,7 @@ import com.example.funlife.data.dao.CoinDao
 import com.example.funlife.data.dao.ShopDao
 import com.example.funlife.data.dao.GuaranteeCounterDao
 import com.example.funlife.data.dao.CustomSpinModeDao
+import com.example.funlife.data.dao.OperationLogDao
 import com.example.funlife.data.model.Anniversary
 import com.example.funlife.data.model.Player
 import com.example.funlife.data.model.GameHistory
@@ -36,6 +37,7 @@ import com.example.funlife.data.model.ShopItem
 import com.example.funlife.data.model.PurchaseHistory
 import com.example.funlife.data.model.GuaranteeCounter
 import com.example.funlife.data.model.CustomSpinMode
+import com.example.funlife.data.model.OperationLog
 
 @Database(
     entities = [
@@ -55,9 +57,10 @@ import com.example.funlife.data.model.CustomSpinMode
         PurchaseHistory::class,
         GuaranteeCounter::class,
         CustomSpinMode::class,
-        com.example.funlife.data.model.User::class
+        com.example.funlife.data.model.User::class,
+        OperationLog::class
     ],
-    version = 12,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -76,6 +79,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shopDao(): ShopDao
     abstract fun guaranteeCounterDao(): GuaranteeCounterDao
     abstract fun customSpinModeDao(): CustomSpinModeDao
+    abstract fun operationLogDao(): OperationLogDao
     
     companion object {
         @Volatile
@@ -355,6 +359,212 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建用户表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        username TEXT NOT NULL UNIQUE,
+                        password TEXT NOT NULL,
+                        email TEXT NOT NULL DEFAULT '',
+                        nickname TEXT NOT NULL DEFAULT '',
+                        avatar TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL,
+                        lastLoginAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+            }
+        }
+        
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建操作日志表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS operation_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL DEFAULT 0,
+                        operation TEXT NOT NULL,
+                        details TEXT NOT NULL,
+                        result TEXT NOT NULL,
+                        errorMessage TEXT NOT NULL DEFAULT '',
+                        timestamp INTEGER NOT NULL
+                    )
+                """)
+                
+                // 创建索引以提高查询性能
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_operation_logs_userId 
+                    ON operation_logs(userId)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_operation_logs_operation 
+                    ON operation_logs(operation)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_operation_logs_timestamp 
+                    ON operation_logs(timestamp)
+                """)
+            }
+        }
+        
+        // 🔥 多用户数据隔离迁移
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 第一步：为所有表添加 userId 列
+                try {
+                    database.execSQL("ALTER TABLE game_history ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE players ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE anniversaries ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE spin_wheel_history ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE spin_wheel_templates ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE guarantee_counter ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE custom_spin_modes ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE habits ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE habit_records ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE mood_entries ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE goals ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE countdowns ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE user_coins ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                try {
+                    database.execSQL("ALTER TABLE purchase_history ADD COLUMN userId INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    // 列可能已存在，忽略错误
+                }
+                
+                // 第二步：创建索引以提高查询性能
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_game_history_userId ON game_history(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_players_userId ON players(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_anniversaries_userId ON anniversaries(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_spin_wheel_history_userId ON spin_wheel_history(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_spin_wheel_templates_userId ON spin_wheel_templates(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_guarantee_counters_userId ON guarantee_counter(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_custom_spin_modes_userId ON custom_spin_modes(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_habits_userId ON habits(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_habit_records_userId ON habit_records(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_mood_entries_userId ON mood_entries(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_goals_userId ON goals(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_countdowns_userId ON countdowns(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_user_coins_userId ON user_coins(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_purchase_history_userId ON purchase_history(userId)")
+            }
+        }
+        
+        // 🔥 UserPreferences多用户支持和转盘设置持久化
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 步骤1：创建新的user_preferences表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_preferences_new (
+                        userId INTEGER PRIMARY KEY NOT NULL,
+                        isDarkMode INTEGER NOT NULL DEFAULT 0,
+                        enableNotifications INTEGER NOT NULL DEFAULT 1,
+                        notificationDaysBefore INTEGER NOT NULL DEFAULT 7,
+                        defaultScoreIncrement INTEGER NOT NULL DEFAULT 1,
+                        enableSound INTEGER NOT NULL DEFAULT 1,
+                        enableVibration INTEGER NOT NULL DEFAULT 1,
+                        autoBackup INTEGER NOT NULL DEFAULT 0,
+                        language TEXT NOT NULL DEFAULT 'zh',
+                        sortOrder TEXT NOT NULL DEFAULT 'date_asc',
+                        wheelTheme TEXT NOT NULL DEFAULT 'default',
+                        showWeightVisualization INTEGER NOT NULL DEFAULT 0,
+                        particleEffectEnabled INTEGER NOT NULL DEFAULT 1,
+                        fireworksEnabled INTEGER NOT NULL DEFAULT 1,
+                        coinAnimationEnabled INTEGER NOT NULL DEFAULT 1,
+                        lastTemplateId INTEGER,
+                        lastCustomOptions TEXT NOT NULL DEFAULT '',
+                        lastSpinMode TEXT NOT NULL DEFAULT 'NORMAL'
+                    )
+                """)
+                
+                // 步骤2：迁移旧数据（如果存在）
+                // 注意：旧表使用id=1，新表使用userId，需要手动处理
+                database.execSQL("""
+                    INSERT OR IGNORE INTO user_preferences_new 
+                    (userId, isDarkMode, enableNotifications, notificationDaysBefore, 
+                     defaultScoreIncrement, enableSound, enableVibration, autoBackup, language, sortOrder)
+                    SELECT 0, isDarkMode, enableNotifications, notificationDaysBefore,
+                           defaultScoreIncrement, enableSound, enableVibration, autoBackup, language, sortOrder
+                    FROM user_preferences WHERE id = 1
+                """)
+                
+                // 步骤3：删除旧表
+                database.execSQL("DROP TABLE IF EXISTS user_preferences")
+                
+                // 步骤4：重命名新表
+                database.execSQL("ALTER TABLE user_preferences_new RENAME TO user_preferences")
+                
+                // 步骤5：创建索引
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_user_preferences_userId ON user_preferences(userId)")
+            }
+        }
+        
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -372,9 +582,14 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
-                    MIGRATION_10_11
+                    MIGRATION_10_11,
+                    MIGRATION_11_12,
+                    MIGRATION_12_13,
+                    MIGRATION_13_14,
+                    MIGRATION_14_15
                 )
-                .fallbackToDestructiveMigration()
+                // 🔥 修复：移除破坏性降级，保护用户数据
+                // .fallbackToDestructiveMigration()  // 已移除！
                 .build()
                 INSTANCE = instance
                 instance

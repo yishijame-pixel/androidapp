@@ -7,7 +7,22 @@ import kotlinx.coroutines.flow.Flow
 
 class UserPreferencesRepository(private val userPreferencesDao: UserPreferencesDao) {
     
-    val preferences: Flow<UserPreferences?> = userPreferencesDao.getPreferences()
+    // 🔥 修改：根据用户ID获取偏好
+    fun getPreferences(userId: Long): Flow<UserPreferences?> = 
+        userPreferencesDao.getPreferences(userId)
+    
+    // 🔥 新增：同步获取偏好
+    suspend fun getPreferencesSync(userId: Long): UserPreferences? =
+        userPreferencesDao.getPreferencesSync(userId)
+    
+    // 🔥 新增：获取或创建默认偏好
+    suspend fun getOrCreatePreferences(userId: Long): UserPreferences {
+        return userPreferencesDao.getPreferencesSync(userId) ?: run {
+            val defaultPrefs = UserPreferences(userId = userId)
+            userPreferencesDao.insertPreferences(defaultPrefs)
+            defaultPrefs
+        }
+    }
     
     suspend fun insert(preferences: UserPreferences) {
         userPreferencesDao.insertPreferences(preferences)
@@ -17,15 +32,57 @@ class UserPreferencesRepository(private val userPreferencesDao: UserPreferencesD
         userPreferencesDao.updatePreferences(preferences)
     }
     
-    suspend fun updateDarkMode(isDarkMode: Boolean) {
-        userPreferencesDao.updateDarkMode(isDarkMode)
+    // 🔥 修改：添加userId参数
+    suspend fun updateDarkMode(userId: Long, isDarkMode: Boolean) {
+        userPreferencesDao.updateDarkMode(userId, isDarkMode)
     }
     
-    suspend fun updateNotifications(enable: Boolean) {
-        userPreferencesDao.updateNotifications(enable)
+    suspend fun updateNotifications(userId: Long, enable: Boolean) {
+        userPreferencesDao.updateNotifications(userId, enable)
     }
     
-    suspend fun updateScoreIncrement(increment: Int) {
-        userPreferencesDao.updateScoreIncrement(increment)
+    suspend fun updateScoreIncrement(userId: Long, increment: Int) {
+        userPreferencesDao.updateScoreIncrement(userId, increment)
+    }
+    
+    // 🔥 新增：转盘相关设置更新方法
+    suspend fun updateSound(userId: Long, enable: Boolean) {
+        userPreferencesDao.updateSound(userId, enable)
+    }
+    
+    suspend fun updateVibration(userId: Long, enable: Boolean) {
+        userPreferencesDao.updateVibration(userId, enable)
+    }
+    
+    suspend fun updateWheelTheme(userId: Long, theme: String) {
+        userPreferencesDao.updateWheelTheme(userId, theme)
+    }
+    
+    suspend fun updateWeightVisualization(userId: Long, show: Boolean) {
+        userPreferencesDao.updateWeightVisualization(userId, show)
+    }
+    
+    suspend fun updateParticleEffect(userId: Long, enable: Boolean) {
+        userPreferencesDao.updateParticleEffect(userId, enable)
+    }
+    
+    suspend fun updateFireworks(userId: Long, enable: Boolean) {
+        userPreferencesDao.updateFireworks(userId, enable)
+    }
+    
+    suspend fun updateCoinAnimation(userId: Long, enable: Boolean) {
+        userPreferencesDao.updateCoinAnimation(userId, enable)
+    }
+    
+    suspend fun updateLastTemplate(userId: Long, templateId: Int?) {
+        userPreferencesDao.updateLastTemplate(userId, templateId)
+    }
+    
+    suspend fun updateLastCustomOptions(userId: Long, options: String) {
+        userPreferencesDao.updateLastCustomOptions(userId, options)
+    }
+    
+    suspend fun updateLastSpinMode(userId: Long, mode: String) {
+        userPreferencesDao.updateLastSpinMode(userId, mode)
     }
 }

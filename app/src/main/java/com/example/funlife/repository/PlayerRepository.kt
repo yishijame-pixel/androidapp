@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 class PlayerRepository(private val playerDao: PlayerDao) {
     
-    val allPlayers: Flow<List<Player>> = playerDao.getAllPlayers()
+    fun getAllPlayers(userId: Long): Flow<List<Player>> = playerDao.getAllPlayers(userId)
     
     suspend fun insert(player: Player) {
         Log.d("PlayerRepository", "Inserting player: $player")
@@ -26,8 +26,13 @@ class PlayerRepository(private val playerDao: PlayerDao) {
         playerDao.deletePlayer(player)
     }
     
-    suspend fun resetAllScores() {
+    suspend fun resetAllScores(userId: Long) {
         Log.d("PlayerRepository", "Resetting all scores")
-        playerDao.resetAllScores()
+        playerDao.resetAllScores(userId)
+    }
+    
+    suspend fun deleteAllPlayers(userId: Long) {
+        Log.d("PlayerRepository", "Deleting all players")
+        playerDao.deleteAllPlayers(userId)
     }
 }

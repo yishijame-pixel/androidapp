@@ -7,19 +7,19 @@ import kotlinx.coroutines.flow.Flow
 
 class SpinWheelHistoryRepository(private val historyDao: SpinWheelHistoryDao) {
     
-    fun getAllHistory(): Flow<List<SpinWheelHistory>> = historyDao.getAllHistory()
+    fun getAllHistory(userId: Long): Flow<List<SpinWheelHistory>> = historyDao.getAllHistory(userId)
     
-    fun getHistoryByTemplate(templateId: Int): Flow<List<SpinWheelHistory>> = 
-        historyDao.getHistoryByTemplate(templateId)
+    fun getHistoryByTemplate(userId: Long, templateId: Int): Flow<List<SpinWheelHistory>> = 
+        historyDao.getHistoryByTemplate(userId, templateId)
     
-    fun getRecentHistory(limit: Int = 20): Flow<List<SpinWheelHistory>> = 
-        historyDao.getRecentHistory(limit)
+    fun getRecentHistory(userId: Long, limit: Int = 20): Flow<List<SpinWheelHistory>> = 
+        historyDao.getRecentHistory(userId, limit)
     
-    suspend fun getCount(): Int = historyDao.getCount()
+    suspend fun getCount(userId: Long): Int = historyDao.getCount(userId)
     
-    suspend fun getTotalCoinCost(): Int = historyDao.getTotalCoinCost() ?: 0
+    suspend fun getTotalCoinCost(userId: Long): Int = historyDao.getTotalCoinCost(userId) ?: 0
     
-    suspend fun getTotalCoinReward(): Int = historyDao.getTotalCoinReward() ?: 0
+    suspend fun getTotalCoinReward(userId: Long): Int = historyDao.getTotalCoinReward(userId) ?: 0
     
     suspend fun insert(history: SpinWheelHistory) {
         historyDao.insert(history)
@@ -29,20 +29,25 @@ class SpinWheelHistoryRepository(private val historyDao: SpinWheelHistoryDao) {
         historyDao.delete(history)
     }
     
-    suspend fun deleteAll() {
-        historyDao.deleteAll()
+    suspend fun deleteAll(userId: Long) {
+        historyDao.deleteAll(userId)
     }
     
     // 筛选功能
-    fun getHistoryByDateRange(startTime: Long, endTime: Long): Flow<List<SpinWheelHistory>> = 
-        historyDao.getHistoryByDateRange(startTime, endTime)
+    fun getHistoryByDateRange(userId: Long, startTime: Long, endTime: Long): Flow<List<SpinWheelHistory>> = 
+        historyDao.getHistoryByDateRange(userId, startTime, endTime)
     
-    fun getHistoryByMode(mode: String): Flow<List<SpinWheelHistory>> = 
-        historyDao.getHistoryByMode(mode)
+    fun getHistoryByMode(userId: Long, mode: String): Flow<List<SpinWheelHistory>> = 
+        historyDao.getHistoryByMode(userId, mode)
     
-    fun getHistoryByDateRangeAndMode(startTime: Long, endTime: Long, mode: String): Flow<List<SpinWheelHistory>> = 
-        historyDao.getHistoryByDateRangeAndMode(startTime, endTime, mode)
+    fun getHistoryByDateRangeAndMode(userId: Long, startTime: Long, endTime: Long, mode: String): Flow<List<SpinWheelHistory>> = 
+        historyDao.getHistoryByDateRangeAndMode(userId, startTime, endTime, mode)
     
-    fun searchHistoryByResult(searchQuery: String): Flow<List<SpinWheelHistory>> = 
-        historyDao.searchHistoryByResult(searchQuery)
+    fun searchHistoryByResult(userId: Long, searchQuery: String): Flow<List<SpinWheelHistory>> = 
+        historyDao.searchHistoryByResult(userId, searchQuery)
+    
+    // 🔥 新增：定期清理旧记录
+    suspend fun cleanOldHistory(userId: Long, maxRecords: Int = 1000) {
+        historyDao.cleanOldHistory(userId, maxRecords)
+    }
 }

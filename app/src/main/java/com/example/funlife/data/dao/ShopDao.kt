@@ -21,9 +21,9 @@ interface ShopDao {
     @Insert
     suspend fun insertPurchaseHistory(purchase: PurchaseHistory)
     
-    @Query("SELECT * FROM purchase_history ORDER BY timestamp DESC")
-    fun getPurchaseHistory(): Flow<List<PurchaseHistory>>
+    @Query("SELECT * FROM purchase_history WHERE userId = :userId ORDER BY timestamp DESC")
+    fun getPurchaseHistory(userId: Long): Flow<List<PurchaseHistory>>
     
-    @Query("SELECT COUNT(*) FROM purchase_history WHERE itemId = :itemId")
-    suspend fun getPurchaseCount(itemId: Int): Int
+    @Query("SELECT COUNT(*) FROM purchase_history WHERE userId = :userId AND itemId = :itemId")
+    suspend fun getPurchaseCount(userId: Long, itemId: Int): Int
 }

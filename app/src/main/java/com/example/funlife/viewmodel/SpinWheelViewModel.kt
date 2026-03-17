@@ -14,15 +14,23 @@ import com.example.funlife.repository.SpinWheelTemplateRepository
 import com.example.funlife.repository.CoinRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlin.random.Random
 
 class SpinWheelViewModel(application: Application) : AndroidViewModel(application) {
     
+    private val context = application.applicationContext
     private val templateRepository: SpinWheelTemplateRepository
     private val historyRepository: SpinWheelHistoryRepository
     private val coinRepository: CoinRepository
     private val guaranteeCounterDao: com.example.funlife.data.dao.GuaranteeCounterDao
     private val customModeRepository: com.example.funlife.repository.CustomSpinModeRepository
+    
+    // 🔥 获取当前用户ID
+    private fun getCurrentUserId(): Long {
+        val sessionManager = com.example.funlife.utils.UserSessionManager(context)
+        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+    }
     
     init {
         val database = AppDatabase.getDatabase(application)
@@ -35,7 +43,11 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 所有可用模式
     val allModes: StateFlow<List<com.example.funlife.data.model.CustomSpinMode>> = 
-        customModeRepository.getAllActiveModes()
+        customModeRepository.getAllActiveModes(getCurrentUserId())
+            .catch { e ->
+                android.util.Log.e("SpinWheelViewModel", "Error loading custom modes", e)
+                emit(emptyList())
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     
     // 当前选中的自定义模式
@@ -48,20 +60,35 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 保底计数器
     val guaranteeCounters: StateFlow<List<com.example.funlife.data.model.GuaranteeCounter>> = 
-        guaranteeCounterDao.getAllEnabledCounters()
+        guaranteeCounterDao.getAllEnabledCounters(getCurrentUserId())
+            .catch { e ->
+                android.util.Log.e("SpinWheelViewModel", "Error loading guarantee counters", e)
+                emit(emptyList())
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     
     // 所有模板
-    val allTemplates: StateFlow<List<SpinWheelTemplate>> = templateRepository.allTemplates
+    val allTemplates: StateFlow<List<SpinWheelTemplate>> = templateRepository.getAllTemplates(getCurrentUserId())
+        .catch { e ->
+            android.util.Log.e("SpinWheelViewModel", "Error loading templates", e)
+            emit(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     
     // 最近历史记录
-    val recentHistory: StateFlow<List<SpinWheelHistory>> = historyRepository.getRecentHistory(20)
+    val recentHistory: StateFlow<List<SpinWheelHistory>> = historyRepository.getRecentHistory(getCurrentUserId(), 20)
+        .catch { e ->
+            android.util.Log.e("SpinWheelViewModel", "Error loading recent history", e)
+            emit(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     
     // 筛选后的历史记录
     private val _filteredHistory = MutableStateFlow<List<SpinWheelHistory>>(emptyList())
     val filteredHistory: StateFlow<List<SpinWheelHistory>> = _filteredHistory.asStateFlow()
+    
+    // 🔥 新增：Flow 收集任务管理
+    private var filterJob: Job? = null
     
     // 筛选条件
     private val _filterMode = MutableStateFlow<String?>(null)
@@ -90,8 +117,12 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     val currentMode: StateFlow<SpinWheelMode> = _currentMode.asStateFlow()
     
     // 用户金币
-    val userCoins: StateFlow<Int> = coinRepository.userCoins
+    val userCoins: StateFlow<Int> = coinRepository.getUserCoins(getCurrentUserId())
         .map { it?.coins ?: 0 }
+        .catch { e ->
+            android.util.Log.e("SpinWheelViewModel", "Error loading user coins", e)
+            emit(0)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     
     // 设置：启用音效
@@ -151,17 +182,18 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         // 初始化默认模板和金币
         viewModelScope.launch {
+            val userId = getCurrentUserId()
             // 初始化金币（如果还没有记录）
-            coinRepository.initializeCoins()
+            coinRepository.initializeCoins(userId)
             
             // 给新用户一些初始金币（100金币）
-            val currentCoins = coinRepository.getCoinsAmount()
+            val currentCoins = coinRepository.getCoinsAmount(userId)
             if (currentCoins == 0) {
-                coinRepository.addCoins(100)
+                coinRepository.addCoins(userId, 100)
             }
             
             createDefaultTemplatesIfNeeded()
-            customModeRepository.initializeDefaultModes()
+            customModeRepository.initializeDefaultModes(userId)
             
             // 设置默认模式为第一个可用模式
             allModes.first().firstOrNull()?.let { mode ->
@@ -175,21 +207,21 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 更新历史记录数量
     private suspend fun updateHistoryCount() {
-        _historyCount.value = historyRepository.getCount()
+        _historyCount.value = historyRepository.getCount(getCurrentUserId())
     }
     
     // 更新统计数据
     private suspend fun updateStatistics() {
-        _totalSpins.value = historyRepository.getCount()
-        _totalCoinsSpent.value = historyRepository.getTotalCoinCost()
-        _totalCoinsEarned.value = historyRepository.getTotalCoinReward()
+        _totalSpins.value = historyRepository.getCount(getCurrentUserId())
+        _totalCoinsSpent.value = historyRepository.getTotalCoinCost(getCurrentUserId())
+        _totalCoinsEarned.value = historyRepository.getTotalCoinReward(getCurrentUserId())
     }
     
     // 切换转盘模式（使用自定义模式）
     fun setCustomMode(mode: com.example.funlife.data.model.CustomSpinMode) {
         _currentCustomMode.value = mode
         viewModelScope.launch {
-            customModeRepository.incrementUsageCount(mode.id)
+            customModeRepository.incrementUsageCount(getCurrentUserId(), mode.id)
         }
     }
     
@@ -222,7 +254,24 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         
         // 扣除金币
         if (mode.costPerSpin > 0) {
-            coinRepository.spendCoins(mode.costPerSpin)
+            coinRepository.spendCoins(getCurrentUserId(), mode.costPerSpin)
+        }
+        
+        return true
+    }
+    
+    // 🔥 新增：连抽模式一次性扣除金币
+    suspend fun deductCoinsForMultiSpin(totalCost: Int): Boolean {
+        val coins = userCoins.value
+        
+        // 检查金币
+        if (coins < totalCost) {
+            return false
+        }
+        
+        // 一次性扣除总金额
+        if (totalCost > 0) {
+            return coinRepository.spendCoins(getCurrentUserId(), totalCost)
         }
         
         return true
@@ -241,7 +290,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         
         // 发放奖励
         if (coinReward > 0) {
-            coinRepository.addCoins(coinReward)
+            coinRepository.addCoins(getCurrentUserId(), coinReward)
         }
         
         // 保存历史
@@ -263,7 +312,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         
         // 扣除金币
         if (mode.costPerSpin > 0) {
-            coinRepository.spendCoins(mode.costPerSpin)
+            coinRepository.spendCoins(getCurrentUserId(), mode.costPerSpin)
         }
         
         // 使用传入的结果，而不是重新计算
@@ -278,7 +327,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         
         // 发放奖励
         if (coinReward > 0) {
-            coinRepository.addCoins(coinReward)
+            coinRepository.addCoins(getCurrentUserId(), coinReward)
         }
         
         // 保存历史
@@ -289,19 +338,20 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 根据权重选择选项（带保底机制）
     private suspend fun selectOptionByWeight(): String {
+        val userId = getCurrentUserId()
         val options = _currentOptions.value.filter { !it.isExcluded }
         if (options.isEmpty()) return "无可用选项"
         
         // 检查保底机制
         if (_guaranteeSettings.value.enabled) {
             for (option in options) {
-                val counter = guaranteeCounterDao.getCounterByOption(option.text)
+                val counter = guaranteeCounterDao.getCounterByOption(userId, option.text)
                 if (counter != null && counter.currentCount >= counter.guaranteeThreshold) {
                     // 触发保底
-                    guaranteeCounterDao.resetCounter(option.text)
+                    guaranteeCounterDao.resetCounter(userId, option.text)
                     // 重置其他计数器
                     options.filter { it.text != option.text }.forEach {
-                        guaranteeCounterDao.incrementCounter(it.text)
+                        guaranteeCounterDao.incrementCounter(userId, it.text)
                     }
                     return option.text
                 }
@@ -327,9 +377,9 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         if (_guaranteeSettings.value.enabled) {
             options.forEach { option ->
                 if (option.text == result) {
-                    guaranteeCounterDao.resetCounter(option.text)
+                    guaranteeCounterDao.resetCounter(userId, option.text)
                 } else {
-                    guaranteeCounterDao.incrementCounter(option.text)
+                    guaranteeCounterDao.incrementCounter(userId, option.text)
                 }
             }
         }
@@ -351,7 +401,32 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     // 保存模板
     fun saveTemplate(name: String, options: List<String>, weights: List<Int> = emptyList(), category: String = "custom") {
         viewModelScope.launch {
+            // 🔥 新增：输入验证
+            if (name.isBlank() || name.length > 30) {
+                android.util.Log.w("SpinWheelViewModel", "Invalid template name")
+                return@launch
+            }
+            
+            // 验证选项
+            for (option in options) {
+                val optionValidation = com.example.funlife.utils.ValidationUtils.validateWheelOption(option)
+                if (optionValidation is com.example.funlife.utils.ValidationResult.Error) {
+                    android.util.Log.w("SpinWheelViewModel", "Invalid wheel option: ${optionValidation.message}")
+                    return@launch
+                }
+            }
+            
+            // 验证权重
+            for (weight in weights) {
+                val weightValidation = com.example.funlife.utils.ValidationUtils.validateWeight(weight)
+                if (weightValidation is com.example.funlife.utils.ValidationResult.Error) {
+                    android.util.Log.w("SpinWheelViewModel", "Invalid weight: ${weightValidation.message}")
+                    return@launch
+                }
+            }
+            
             val template = SpinWheelTemplate(
+                userId = getCurrentUserId(),
                 name = name,
                 options = SpinWheelTemplate.createOptionsString(options),
                 weights = if (weights.isNotEmpty()) SpinWheelTemplate.createWeightsString(weights) else "",
@@ -404,6 +479,10 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             coinReward = coinReward
         )
         historyRepository.insert(history)
+        
+        // 🔥 新增：定期清理旧记录（保留最近1000条）
+        historyRepository.cleanOldHistory(getCurrentUserId(), 1000)
+        
         updateHistoryCount()
         updateStatistics()
     }
@@ -427,7 +506,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     // 清空所有历史
     fun clearAllHistory() {
         viewModelScope.launch {
-            historyRepository.deleteAll()
+            historyRepository.deleteAll(getCurrentUserId())
             updateHistoryCount()
             updateStatistics()
         }
@@ -472,11 +551,13 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 创建默认模板
     private suspend fun createDefaultTemplatesIfNeeded() {
-        val templates = templateRepository.allTemplates.first()
+        val userId = getCurrentUserId()
+        val templates = allTemplates.first()
         if (templates.isEmpty()) {
             // 美食模板
             templateRepository.insert(
                 SpinWheelTemplate(
+                    userId = userId,
                     name = "今天吃什么",
                     options = "火锅,烧烤,日料,川菜,粤菜,西餐,快餐,面食",
                     category = "food",
@@ -487,6 +568,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             // 娱乐模板
             templateRepository.insert(
                 SpinWheelTemplate(
+                    userId = userId,
                     name = "周末娱乐",
                     options = "看电影,打游戏,运动健身,逛街购物,郊游,K歌,读书,睡觉",
                     category = "game",
@@ -497,6 +579,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             // 决策模板
             templateRepository.insert(
                 SpinWheelTemplate(
+                    userId = userId,
                     name = "做决定",
                     options = "去做,不去做,再想想,问朋友",
                     category = "decision",
@@ -547,7 +630,11 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 应用筛选条件
     private fun applyFilters() {
-        viewModelScope.launch {
+        // 🔥 修复：取消之前的收集任务，防止内存泄漏
+        filterJob?.cancel()
+        
+        filterJob = viewModelScope.launch {
+            val userId = getCurrentUserId()
             val mode = _filterMode.value
             val dateRange = _filterDateRange.value
             val query = _searchQuery.value
@@ -556,26 +643,26 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
                 // 有日期范围和模式
                 dateRange != null && mode != null -> {
                     historyRepository.getHistoryByDateRangeAndMode(
-                        dateRange.first, dateRange.second, mode
+                        userId, dateRange.first, dateRange.second, mode
                     )
                 }
                 // 只有日期范围
                 dateRange != null -> {
                     historyRepository.getHistoryByDateRange(
-                        dateRange.first, dateRange.second
+                        userId, dateRange.first, dateRange.second
                     )
                 }
                 // 只有模式
                 mode != null -> {
-                    historyRepository.getHistoryByMode(mode)
+                    historyRepository.getHistoryByMode(userId, mode)
                 }
                 // 只有搜索关键词
                 query.isNotEmpty() -> {
-                    historyRepository.searchHistoryByResult(query)
+                    historyRepository.searchHistoryByResult(userId, query)
                 }
                 // 无筛选条件
                 else -> {
-                    historyRepository.getAllHistory()
+                    historyRepository.getAllHistory(userId)
                 }
             }
             
@@ -663,7 +750,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         _isMultiSpinning.value = true
         
         // 扣除金币
-        coinRepository.spendCoins(totalCost)
+        coinRepository.spendCoins(getCurrentUserId(), totalCost)
         
         // 执行多次抽取
         val results = mutableListOf<String>()
@@ -685,7 +772,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         
         // 发放总奖励
         if (totalReward > 0) {
-            coinRepository.addCoins(totalReward)
+            coinRepository.addCoins(getCurrentUserId(), totalReward)
         }
         
         _multiSpinResults.value = results
@@ -713,11 +800,13 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 初始化选项的保底计数器
     suspend fun initializeGuaranteeCounters(options: List<String>) {
+        val userId = getCurrentUserId()
         options.forEach { optionText ->
-            val existing = guaranteeCounterDao.getCounterByOption(optionText)
+            val existing = guaranteeCounterDao.getCounterByOption(userId, optionText)
             if (existing == null) {
                 guaranteeCounterDao.insert(
                     com.example.funlife.data.model.GuaranteeCounter(
+                        userId = userId,
                         optionText = optionText,
                         guaranteeThreshold = _guaranteeSettings.value.defaultThreshold
                     )
@@ -728,7 +817,8 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 更新特定选项的保底阈值
     suspend fun updateGuaranteeThreshold(optionText: String, threshold: Int) {
-        val counter = guaranteeCounterDao.getCounterByOption(optionText)
+        val userId = getCurrentUserId()
+        val counter = guaranteeCounterDao.getCounterByOption(userId, optionText)
         if (counter != null) {
             guaranteeCounterDao.update(counter.copy(guaranteeThreshold = threshold))
         }
@@ -736,20 +826,20 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 重置所有保底计数器
     suspend fun resetAllGuaranteeCounters() {
-        guaranteeCounterDao.resetAllCounters()
+        guaranteeCounterDao.resetAllCounters(getCurrentUserId())
     }
     
     // ========== 统计分析功能 ==========
     
     // 获取选项统计数据
     suspend fun getOptionStatistics(): Map<String, Int> {
-        val history = historyRepository.getAllHistory().first()
+        val history = historyRepository.getAllHistory(getCurrentUserId()).first()
         return history.groupingBy { it.result }.eachCount()
     }
     
     // 获取金币收支趋势（按天）
     suspend fun getCoinTrendByDay(days: Int = 7): List<Pair<Long, Int>> {
-        val history = historyRepository.getAllHistory().first()
+        val history = historyRepository.getAllHistory(getCurrentUserId()).first()
         val now = System.currentTimeMillis()
         val startTime = now - (days * 24 * 60 * 60 * 1000L)
         
@@ -769,7 +859,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     
     // 分析最幸运时间段（按小时）
     suspend fun getLuckyHourAnalysis(): Map<Int, LuckyStats> {
-        val history = historyRepository.getAllHistory().first()
+        val history = historyRepository.getAllHistory(getCurrentUserId()).first()
         
         return history.groupBy { 
             // 按小时分组

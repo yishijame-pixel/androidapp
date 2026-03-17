@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
 data class CustomSpinMode(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,                // 🔥 用户ID
     val name: String,                    // 模式名称
     val emoji: String = "🎲",            // 模式图标
     val description: String = "",        // 模式描述

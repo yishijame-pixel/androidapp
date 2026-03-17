@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 class GoalRepository(private val goalDao: GoalDao) {
     
-    val activeGoals: Flow<List<Goal>> = goalDao.getActiveGoals()
-    val completedGoals: Flow<List<Goal>> = goalDao.getCompletedGoals()
-    val allCountdowns: Flow<List<Countdown>> = goalDao.getAllCountdowns()
+    fun getActiveGoals(userId: Long): Flow<List<Goal>> = goalDao.getActiveGoals(userId)
+    fun getCompletedGoals(userId: Long): Flow<List<Goal>> = goalDao.getCompletedGoals(userId)
+    fun getAllCountdowns(userId: Long): Flow<List<Countdown>> = goalDao.getAllCountdowns(userId)
     
     suspend fun insertGoal(goal: Goal) = goalDao.insertGoal(goal)
     

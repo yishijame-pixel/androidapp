@@ -10,6 +10,7 @@ import java.time.temporal.ChronoUnit
 data class Countdown(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,          // 🔥 用户ID
     val title: String,             // 倒数日标题
     val targetDate: String,        // 目标日期（yyyy-MM-dd）
     val category: String,          // 分类

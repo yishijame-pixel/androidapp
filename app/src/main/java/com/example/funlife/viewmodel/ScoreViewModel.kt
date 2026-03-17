@@ -11,29 +11,42 @@ import com.example.funlife.repository.PlayerRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 class ScoreViewModel(application: Application) : AndroidViewModel(application) {
     
+    private val context = application.applicationContext
     private val repository: PlayerRepository
     val players: StateFlow<List<Player>>
+    
+    // 🔥 获取当前用户ID
+    private fun getCurrentUserId(): Long {
+        val sessionManager = com.example.funlife.utils.UserSessionManager(context)
+        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+    }
     
     init {
         val database = AppDatabase.getDatabase(application)
         val playerDao = database.playerDao()
         repository = PlayerRepository(playerDao)
         
-        players = repository.allPlayers.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+        players = repository.getAllPlayers(getCurrentUserId())
+            .catch { e ->
+                android.util.Log.e("ScoreViewModel", "Error loading players", e)
+                emit(emptyList())
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
     }
     
     // 添加玩家
     fun addPlayer(name: String) {
         viewModelScope.launch {
-            val player = Player(name = name, score = 0)
+            val player = Player(userId = getCurrentUserId(), name = name, score = 0)
             repository.insert(player)
             Log.d("ScoreViewModel", "Added player: $name")
         }
@@ -77,7 +90,7 @@ class ScoreViewModel(application: Application) : AndroidViewModel(application) {
     fun resetAllScores() {
         viewModelScope.launch {
             Log.d("ScoreViewModel", "Resetting all scores")
-            repository.resetAllScores()
+            repository.resetAllScores(getCurrentUserId())
         }
     }
 }

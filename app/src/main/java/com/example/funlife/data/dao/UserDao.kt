@@ -7,9 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UserDao {
-    @Query("SELECT * FROM users WHERE username = :username AND password = :password LIMIT 1")
-    suspend fun login(username: String, password: String): User?
-    
+    // 🔥 修改：移除密码比对，改为只查询用户名
+    // 密码验证在 Repository 层使用哈希比对
     @Query("SELECT * FROM users WHERE username = :username LIMIT 1")
     suspend fun getUserByUsername(username: String): User?
     

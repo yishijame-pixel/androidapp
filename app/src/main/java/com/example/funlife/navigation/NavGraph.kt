@@ -10,6 +10,7 @@ import com.example.funlife.ui.screens.*
 import com.example.funlife.viewmodel.AnniversaryViewModel
 import com.example.funlife.viewmodel.AuthViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
+import com.example.funlife.viewmodel.GoalViewModel
 
 sealed class Screen(val route: String, val title: String) {
     object Welcome : Screen("welcome", "欢迎")
@@ -25,6 +26,7 @@ sealed class Screen(val route: String, val title: String) {
     object Statistics : Screen("statistics", "统计")
     object History : Screen("history", "历史")
     object Settings : Screen("settings", "设置")
+    object Profile : Screen("profile", "我的")
 }
 
 @Composable
@@ -33,7 +35,8 @@ fun NavGraph(
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
     authViewModel: AuthViewModel,
     anniversaryViewModel: AnniversaryViewModel = viewModel(),
-    scoreViewModel: ScoreViewModel = viewModel()
+    scoreViewModel: ScoreViewModel = viewModel(),
+    goalViewModel: GoalViewModel = viewModel()
 ) {
     NavHost(
         navController = navController,
@@ -97,7 +100,8 @@ fun NavGraph(
                 navController = navController,
                 anniversaryViewModel = anniversaryViewModel,
                 scoreViewModel = scoreViewModel,
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                goalViewModel = goalViewModel
             )
         }
         
@@ -164,6 +168,17 @@ fun NavGraph(
         composable("shop") {
             ShopScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                authViewModel = authViewModel,
+                onLogout = {
+                    navController.navigate(Screen.Welcome.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
     }

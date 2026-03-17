@@ -8,9 +8,13 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface UserPreferencesDao {
     
-    // 获取用户偏好
-    @Query("SELECT * FROM user_preferences WHERE id = 1")
-    fun getPreferences(): Flow<UserPreferences?>
+    // 🔥 修改：根据用户ID获取偏好
+    @Query("SELECT * FROM user_preferences WHERE userId = :userId")
+    fun getPreferences(userId: Long): Flow<UserPreferences?>
+    
+    // 🔥 修改：根据用户ID同步获取偏好
+    @Query("SELECT * FROM user_preferences WHERE userId = :userId")
+    suspend fun getPreferencesSync(userId: Long): UserPreferences?
     
     // 插入或更新偏好
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -20,15 +24,55 @@ interface UserPreferencesDao {
     @Update
     suspend fun updatePreferences(preferences: UserPreferences)
     
-    // 更新深色模式
-    @Query("UPDATE user_preferences SET isDarkMode = :isDarkMode WHERE id = 1")
-    suspend fun updateDarkMode(isDarkMode: Boolean)
+    // 🔥 修改：更新深色模式
+    @Query("UPDATE user_preferences SET isDarkMode = :isDarkMode WHERE userId = :userId")
+    suspend fun updateDarkMode(userId: Long, isDarkMode: Boolean)
     
-    // 更新通知设置
-    @Query("UPDATE user_preferences SET enableNotifications = :enable WHERE id = 1")
-    suspend fun updateNotifications(enable: Boolean)
+    // 🔥 修改：更新通知设置
+    @Query("UPDATE user_preferences SET enableNotifications = :enable WHERE userId = :userId")
+    suspend fun updateNotifications(userId: Long, enable: Boolean)
     
-    // 更新默认加分值
-    @Query("UPDATE user_preferences SET defaultScoreIncrement = :increment WHERE id = 1")
-    suspend fun updateScoreIncrement(increment: Int)
+    // 🔥 修改：更新默认加分值
+    @Query("UPDATE user_preferences SET defaultScoreIncrement = :increment WHERE userId = :userId")
+    suspend fun updateScoreIncrement(userId: Long, increment: Int)
+    
+    // 🔥 新增：更新音效设置
+    @Query("UPDATE user_preferences SET enableSound = :enable WHERE userId = :userId")
+    suspend fun updateSound(userId: Long, enable: Boolean)
+    
+    // 🔥 新增：更新震动设置
+    @Query("UPDATE user_preferences SET enableVibration = :enable WHERE userId = :userId")
+    suspend fun updateVibration(userId: Long, enable: Boolean)
+    
+    // 🔥 新增：更新转盘主题
+    @Query("UPDATE user_preferences SET wheelTheme = :theme WHERE userId = :userId")
+    suspend fun updateWheelTheme(userId: Long, theme: String)
+    
+    // 🔥 新增：更新权重可视化
+    @Query("UPDATE user_preferences SET showWeightVisualization = :show WHERE userId = :userId")
+    suspend fun updateWeightVisualization(userId: Long, show: Boolean)
+    
+    // 🔥 新增：更新粒子效果
+    @Query("UPDATE user_preferences SET particleEffectEnabled = :enable WHERE userId = :userId")
+    suspend fun updateParticleEffect(userId: Long, enable: Boolean)
+    
+    // 🔥 新增：更新烟花效果
+    @Query("UPDATE user_preferences SET fireworksEnabled = :enable WHERE userId = :userId")
+    suspend fun updateFireworks(userId: Long, enable: Boolean)
+    
+    // 🔥 新增：更新金币动画
+    @Query("UPDATE user_preferences SET coinAnimationEnabled = :enable WHERE userId = :userId")
+    suspend fun updateCoinAnimation(userId: Long, enable: Boolean)
+    
+    // 🔥 新增：保存最后使用的模板
+    @Query("UPDATE user_preferences SET lastTemplateId = :templateId WHERE userId = :userId")
+    suspend fun updateLastTemplate(userId: Long, templateId: Int?)
+    
+    // 🔥 新增：保存最后自定义的选项
+    @Query("UPDATE user_preferences SET lastCustomOptions = :options WHERE userId = :userId")
+    suspend fun updateLastCustomOptions(userId: Long, options: String)
+    
+    // 🔥 新增：保存最后使用的转盘模式
+    @Query("UPDATE user_preferences SET lastSpinMode = :mode WHERE userId = :userId")
+    suspend fun updateLastSpinMode(userId: Long, mode: String)
 }

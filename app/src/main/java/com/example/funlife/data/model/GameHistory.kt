@@ -10,6 +10,7 @@ import java.time.format.DateTimeFormatter
 data class GameHistory(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,           // 🔥 用户ID
     val gameType: String,           // 游戏类型：score_counter, spin_wheel
     val playerName: String,         // 玩家名称
     val score: Int = 0,             // 分数

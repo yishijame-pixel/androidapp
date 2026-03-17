@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
 data class GuaranteeCounter(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0,                // 🔥 用户ID
     val optionText: String,              // 选项文本
     val currentCount: Int = 0,           // 当前未中次数
     val guaranteeThreshold: Int = 10,    // 保底阈值（默认10次）

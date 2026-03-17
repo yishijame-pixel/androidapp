@@ -10,11 +10,11 @@ class ShopRepository(private val shopDao: ShopDao) {
     
     val allShopItems: Flow<List<ShopItem>> = shopDao.getAllShopItems()
     
-    val purchaseHistory: Flow<List<PurchaseHistory>> = shopDao.getPurchaseHistory()
+    fun getPurchaseHistory(userId: Long): Flow<List<PurchaseHistory>> = shopDao.getPurchaseHistory(userId)
     
     suspend fun getShopItem(itemId: Int) = shopDao.getShopItem(itemId)
     
     suspend fun insertPurchaseHistory(purchase: PurchaseHistory) = shopDao.insertPurchaseHistory(purchase)
     
-    suspend fun getPurchaseCount(itemId: Int) = shopDao.getPurchaseCount(itemId)
+    suspend fun getPurchaseCount(userId: Long, itemId: Int) = shopDao.getPurchaseCount(userId, itemId)
 }

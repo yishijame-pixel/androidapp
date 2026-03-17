@@ -9,12 +9,12 @@ import kotlinx.coroutines.flow.Flow
 interface AnniversaryDao {
     
     // 获取所有纪念日（置顶的在前，然后按日期排序）
-    @Query("SELECT * FROM anniversaries ORDER BY isPinned DESC, date ASC")
-    fun getAllAnniversaries(): Flow<List<Anniversary>>
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId ORDER BY isPinned DESC, date ASC")
+    fun getAllAnniversaries(userId: Long): Flow<List<Anniversary>>
     
     // 获取置顶的纪念日
-    @Query("SELECT * FROM anniversaries WHERE isPinned = 1 ORDER BY date ASC LIMIT 1")
-    fun getPinnedAnniversary(): Flow<Anniversary?>
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId AND isPinned = 1 ORDER BY date ASC LIMIT 1")
+    fun getPinnedAnniversary(userId: Long): Flow<Anniversary?>
     
     // 插入纪念日
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -33,6 +33,6 @@ interface AnniversaryDao {
     suspend fun deleteById(id: Int)
     
     // 取消所有置顶
-    @Query("UPDATE anniversaries SET isPinned = 0")
-    suspend fun unpinAll()
+    @Query("UPDATE anniversaries SET isPinned = 0 WHERE userId = :userId")
+    suspend fun unpinAll(userId: Long)
 }

@@ -21,37 +21,60 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
     private val shopRepository = ShopRepository(database.shopDao())
     private val coinRepository = CoinRepository(database.coinDao())
     private val habitRepository = HabitRepository(database.habitDao())
+    private val sessionManager = com.example.funlife.utils.UserSessionManager(application)
     
-    val shopItems: StateFlow<List<ShopItem>> = shopRepository.allShopItems.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    // 🔥 新增：获取当前用户ID
+    private fun getCurrentUserId(): Long {
+        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+    }
     
-    val userCoins: StateFlow<UserCoins?> = coinRepository.userCoins.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
+    val shopItems: StateFlow<List<ShopItem>> = shopRepository.allShopItems
+        .catch { e ->
+            android.util.Log.e("ShopViewModel", "Error loading shop items", e)
+            emit(emptyList())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
     
-    val purchaseHistory: StateFlow<List<PurchaseHistory>> = shopRepository.purchaseHistory.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    val userCoins: StateFlow<UserCoins?> = coinRepository.getUserCoins(getCurrentUserId())
+        .catch { e ->
+            android.util.Log.e("ShopViewModel", "Error loading user coins", e)
+            emit(null)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+    
+    val purchaseHistory: StateFlow<List<PurchaseHistory>> = shopRepository.getPurchaseHistory(getCurrentUserId())
+        .catch { e ->
+            android.util.Log.e("ShopViewModel", "Error loading purchase history", e)
+            emit(emptyList())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
     
     init {
         viewModelScope.launch {
-            coinRepository.initializeCoins()
+            coinRepository.initializeCoins(getCurrentUserId())
         }
     }
     
     fun purchaseItem(item: ShopItem, habitId: Int? = null) {
         viewModelScope.launch {
-            val success = coinRepository.spendCoins(item.price)
+            val userId = getCurrentUserId()
+            val success = coinRepository.spendCoins(userId, item.price)
             if (success) {
                 // 记录购买历史
                 val purchase = PurchaseHistory(
+                    userId = userId,
                     itemId = item.id,
                     itemName = item.name,
                     price = item.price,
@@ -64,13 +87,13 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                     "makeup_card" -> {
                         // 给指定习惯添加补卡卡片
                         habitId?.let {
-                            val currentCards = habitRepository.getMakeupCards(it)
-                            habitRepository.updateMakeupCards(it, currentCards + item.value)
+                            val currentCards = habitRepository.getMakeupCards(userId, it)
+                            habitRepository.updateMakeupCards(userId, it, currentCards + item.value)
                         }
                     }
                     "coins" -> {
                         // 添加金币
-                        coinRepository.addCoins(item.value)
+                        coinRepository.addCoins(userId, item.value)
                     }
                     // 其他类型可以在这里扩展
                 }
@@ -79,6 +102,6 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     suspend fun canAfford(price: Int): Boolean {
-        return coinRepository.getCoinsAmount() >= price
+        return coinRepository.getCoinsAmount(getCurrentUserId()) >= price
     }
 }
