@@ -204,4 +204,18 @@ object WheelThemes {
     fun getSeasonalThemes(): List<WheelTheme> {
         return getAllThemes().filter { it.isSeasonalTheme }
     }
+    
+    // 根据名称获取主题
+    fun fromString(name: String): WheelTheme {
+        return when (name) {
+            "默认" -> Default
+            "春节" -> SpringFestival
+            "圣诞节" -> Christmas
+            "夜间" -> Dark
+            "彩虹" -> Rainbow
+            "海洋" -> Ocean
+            "森林" -> Forest
+            else -> Default
+        }
+    }
 }

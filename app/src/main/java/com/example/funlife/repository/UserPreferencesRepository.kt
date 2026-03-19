@@ -85,4 +85,9 @@ class UserPreferencesRepository(private val userPreferencesDao: UserPreferencesD
     suspend fun updateLastSpinMode(userId: Long, mode: String) {
         userPreferencesDao.updateLastSpinMode(userId, mode)
     }
+    
+    // 🔥 新增：保存最后使用的自定义模式ID
+    suspend fun updateLastCustomModeId(userId: Long, modeId: Int?) {
+        userPreferencesDao.updateLastCustomModeId(userId, modeId)
+    }
 }

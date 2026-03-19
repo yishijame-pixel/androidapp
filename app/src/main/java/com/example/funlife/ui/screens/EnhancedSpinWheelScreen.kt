@@ -1,4 +1,4 @@
-// EnhancedSpinWheelScreen.kt - 增强版转盘屏幕（简化版）
+﻿// EnhancedSpinWheelScreen.kt - 增强版转盘屏幕（简化版）
 package com.example.funlife.ui.screens
 
 import androidx.compose.animation.*
@@ -49,6 +49,17 @@ fun EnhancedSpinWheelScreen(
     val multiSpinMode by viewModel.multiSpinMode.collectAsState()
     val multiSpinCount by viewModel.multiSpinCount.collectAsState()
     val currentMultiSpinProgress by viewModel.currentMultiSpinProgress.collectAsState()
+    val saveMessage by viewModel.saveMessage.collectAsState()
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    // 显示保存消息
+    LaunchedEffect(saveMessage) {
+        saveMessage?.let { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.clearSaveMessage()
+        }
+    }
     
     // 调试日志
     LaunchedEffect(userCoins, currentMode, multiSpinMode, multiSpinCount, currentOptions) {
@@ -1039,7 +1050,7 @@ fun EnhancedSpinWheelScreen(
     
     // 编辑选项对话框
     if (showEditOptionsDialog) {
-        EditOptionsDialog(
+        com.example.funlife.ui.components.EnhancedEditOptionsDialog(
             currentOptions = currentOptions,
             onOptionsUpdated = { updatedOptions ->
                 viewModel.updateOptions(updatedOptions)

@@ -60,7 +60,7 @@ import com.example.funlife.data.model.OperationLog
         com.example.funlife.data.model.User::class,
         OperationLog::class
     ],
-    version = 15,
+    version = 16,  // 🔥 升级到版本16
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -565,6 +565,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        // 🔥 新增：版本15到16 - 添加lastCustomModeId字段
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 添加lastCustomModeId列到user_preferences表
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN lastCustomModeId INTEGER DEFAULT NULL
+                """.trimIndent())
+            }
+        }
+        
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -586,7 +597,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_11_12,
                     MIGRATION_12_13,
                     MIGRATION_13_14,
-                    MIGRATION_14_15
+                    MIGRATION_14_15,
+                    MIGRATION_15_16  // 🔥 新增
                 )
                 // 🔥 修复：移除破坏性降级，保护用户数据
                 // .fallbackToDestructiveMigration()  // 已移除！

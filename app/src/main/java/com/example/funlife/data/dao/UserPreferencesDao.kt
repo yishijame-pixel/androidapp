@@ -75,4 +75,8 @@ interface UserPreferencesDao {
     // 🔥 新增：保存最后使用的转盘模式
     @Query("UPDATE user_preferences SET lastSpinMode = :mode WHERE userId = :userId")
     suspend fun updateLastSpinMode(userId: Long, mode: String)
+    
+    // 🔥 新增：保存最后使用的自定义模式ID
+    @Query("UPDATE user_preferences SET lastCustomModeId = :modeId WHERE userId = :userId")
+    suspend fun updateLastCustomModeId(userId: Long, modeId: Int?)
 }

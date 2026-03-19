@@ -25,6 +25,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     private val coinRepository: CoinRepository
     private val guaranteeCounterDao: com.example.funlife.data.dao.GuaranteeCounterDao
     private val customModeRepository: com.example.funlife.repository.CustomSpinModeRepository
+    private val preferencesRepository: com.example.funlife.repository.UserPreferencesRepository  // 🔥 新增
     
     // 🔥 获取当前用户ID
     private fun getCurrentUserId(): Long {
@@ -39,6 +40,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         coinRepository = CoinRepository(database.coinDao())
         guaranteeCounterDao = database.guaranteeCounterDao()
         customModeRepository = com.example.funlife.repository.CustomSpinModeRepository(database.customSpinModeDao())
+        preferencesRepository = com.example.funlife.repository.UserPreferencesRepository(database.userPreferencesDao())  // 🔥 新增
     }
     
     // 所有可用模式
@@ -133,6 +135,14 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     private val _vibrationEnabled = MutableStateFlow(true)
     val vibrationEnabled: StateFlow<Boolean> = _vibrationEnabled.asStateFlow()
     
+    // 🔥 新增：保存状态提示
+    private val _saveMessage = MutableStateFlow<String?>(null)
+    val saveMessage: StateFlow<String?> = _saveMessage.asStateFlow()
+    
+    fun clearSaveMessage() {
+        _saveMessage.value = null
+    }
+    
     // 当前主题
     private val _currentTheme = MutableStateFlow(com.example.funlife.data.model.WheelThemes.Default)
     val currentTheme: StateFlow<com.example.funlife.data.model.WheelTheme> = _currentTheme.asStateFlow()
@@ -183,6 +193,31 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         // 初始化默认模板和金币
         viewModelScope.launch {
             val userId = getCurrentUserId()
+            android.util.Log.d("SpinWheelViewModel", "=== ViewModel Initialization Started, userId=$userId ===")
+            
+            // 🔥 步骤1：初始化或获取用户偏好
+            val prefs = preferencesRepository.getOrCreatePreferences(userId)
+            android.util.Log.d("SpinWheelViewModel", "User preferences loaded: lastTemplateId=${prefs.lastTemplateId}, lastCustomOptions length=${prefs.lastCustomOptions.length}")
+            
+            // 🔥 步骤2：从偏好中恢复设置
+            _soundEnabled.value = prefs.enableSound
+            _vibrationEnabled.value = prefs.enableVibration
+            _showWeightVisualization.value = prefs.showWeightVisualization
+            _particleEffectEnabled.value = prefs.particleEffectEnabled
+            _fireworksEnabled.value = prefs.fireworksEnabled
+            _coinAnimationEnabled.value = prefs.coinAnimationEnabled
+            
+            // 恢复主题
+            val theme = com.example.funlife.data.model.WheelThemes.fromString(prefs.wheelTheme)
+            _currentTheme.value = theme
+            
+            // 恢复转盘模式
+            try {
+                _currentMode.value = SpinWheelMode.valueOf(prefs.lastSpinMode)
+            } catch (e: Exception) {
+                _currentMode.value = SpinWheelMode.NORMAL
+            }
+            
             // 初始化金币（如果还没有记录）
             coinRepository.initializeCoins(userId)
             
@@ -195,13 +230,79 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             createDefaultTemplatesIfNeeded()
             customModeRepository.initializeDefaultModes(userId)
             
-            // 设置默认模式为第一个可用模式
-            allModes.first().firstOrNull()?.let { mode ->
-                _currentCustomMode.value = mode
+            // 🔥 步骤2.5：恢复最后使用的自定义模式
+            prefs.lastCustomModeId?.let { modeId ->
+                allModes.first().find { it.id == modeId }?.let { mode ->
+                    _currentCustomMode.value = mode
+                    android.util.Log.d("SpinWheelViewModel", "Custom mode restored: ${mode.name}")
+                }
+            } ?: run {
+                // 设置默认模式为第一个可用模式
+                allModes.first().firstOrNull()?.let { mode ->
+                    _currentCustomMode.value = mode
+                    android.util.Log.d("SpinWheelViewModel", "Default mode set: ${mode.name}")
+                }
+            }
+            
+            // 🔥 步骤3：恢复选项（优先恢复自定义选项，其次才是模板）
+            android.util.Log.d("SpinWheelViewModel", "=== Step 3: Restoring Options ===")
+            android.util.Log.d("SpinWheelViewModel", "lastCustomOptions: ${prefs.lastCustomOptions}")
+            android.util.Log.d("SpinWheelViewModel", "lastCustomOptions length: ${prefs.lastCustomOptions.length}")
+            android.util.Log.d("SpinWheelViewModel", "lastTemplateId: ${prefs.lastTemplateId}")
+            
+            // 先检查是否有自定义选项
+            var optionsRestored = false
+            if (prefs.lastCustomOptions.isNotEmpty() && prefs.lastCustomOptions != "[]") {
+                try {
+                    val optionsJson = prefs.lastCustomOptions
+                    android.util.Log.d("SpinWheelViewModel", "Attempting to restore custom options: $optionsJson")
+                    val options = parseOptionsFromJson(optionsJson)
+                    android.util.Log.d("SpinWheelViewModel", "Parsed ${options.size} options from JSON")
+                    
+                    // 🔥 验证：至少需要2个选项
+                    if (options.size >= 2) {
+                        _currentOptions.value = options
+                        _currentTemplate.value = null  // 🔥 确保清除模板状态
+                        optionsRestored = true
+                        android.util.Log.d("SpinWheelViewModel", "✓✓✓ Custom options restored successfully: ${options.size} options")
+                        options.forEachIndexed { index, opt ->
+                            android.util.Log.d("SpinWheelViewModel", "  [$index] ${opt.text} (weight=${opt.weight}, excluded=${opt.isExcluded})")
+                        }
+                    } else {
+                        android.util.Log.w("SpinWheelViewModel", "✗ Restored options count < 2 (got ${options.size}), will try template")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("SpinWheelViewModel", "✗ Failed to restore custom options", e)
+                    e.printStackTrace()
+                }
+            } else {
+                android.util.Log.d("SpinWheelViewModel", "No custom options to restore (empty or [])")
+            }
+            
+            // 如果没有恢复自定义选项，才尝试恢复模板
+            if (!optionsRestored) {
+                android.util.Log.d("SpinWheelViewModel", "Custom options not restored, trying template...")
+                prefs.lastTemplateId?.let { templateId ->
+                    android.util.Log.d("SpinWheelViewModel", "Restoring template with ID: $templateId")
+                    allTemplates.first().find { it.id == templateId }?.let { template ->
+                        _currentTemplate.value = template
+                        _currentOptions.value = template.getWheelOptions()
+                        android.util.Log.d("SpinWheelViewModel", "✓ Template restored: ${template.name}")
+                    } ?: run {
+                        android.util.Log.w("SpinWheelViewModel", "✗ Template with ID $templateId not found")
+                    }
+                } ?: run {
+                    android.util.Log.d("SpinWheelViewModel", "No template to restore (lastTemplateId is null)")
+                    android.util.Log.d("SpinWheelViewModel", "Using default options")
+                }
+            } else {
+                android.util.Log.d("SpinWheelViewModel", "✓ Skipping template restore (custom options already restored)")
             }
             
             updateHistoryCount()
             updateStatistics()
+            
+            android.util.Log.d("SpinWheelViewModel", "=== ViewModel Initialization Completed ===")
         }
     }
     
@@ -220,14 +321,38 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     // 切换转盘模式（使用自定义模式）
     fun setCustomMode(mode: com.example.funlife.data.model.CustomSpinMode) {
         _currentCustomMode.value = mode
+        
+        // 🔥 同步更新基础模式，确保UI显示正确
+        _currentMode.value = when {
+            mode.name.contains("普通", ignoreCase = true) -> SpinWheelMode.NORMAL
+            mode.name.contains("进阶", ignoreCase = true) -> SpinWheelMode.ADVANCED
+            mode.name.contains("幸运", ignoreCase = true) -> SpinWheelMode.LUCKY
+            mode.hasReward -> SpinWheelMode.LUCKY
+            mode.costPerSpin > 10 -> SpinWheelMode.ADVANCED
+            mode.costPerSpin > 0 -> SpinWheelMode.ADVANCED
+            else -> SpinWheelMode.NORMAL
+        }
+        
+        android.util.Log.d("SpinWheelViewModel", "Custom mode set: ${mode.name}, base mode: ${_currentMode.value.name}")
+        
+        // 🔥 保存到用户偏好
         viewModelScope.launch {
             customModeRepository.incrementUsageCount(getCurrentUserId(), mode.id)
+            preferencesRepository.updateLastCustomModeId(getCurrentUserId(), mode.id)
+            preferencesRepository.updateLastSpinMode(getCurrentUserId(), _currentMode.value.name)
+            android.util.Log.d("SpinWheelViewModel", "Mode preferences saved: customModeId=${mode.id}, spinMode=${_currentMode.value.name}")
         }
     }
     
     // 切换转盘模式（使用基础模式）
     fun setMode(mode: SpinWheelMode) {
         _currentMode.value = mode
+        
+        // 🔥 保存到用户偏好
+        viewModelScope.launch {
+            preferencesRepository.updateLastSpinMode(getCurrentUserId(), mode.name)
+            android.util.Log.d("SpinWheelViewModel", "Base mode set and saved: ${mode.name}")
+        }
     }
     
     // 检查是否有足够金币（使用自定义模式）
@@ -442,15 +567,92 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         _currentTemplate.value = template
         _currentOptions.value = template.getWheelOptions()
         
-        // 增加使用次数
+        // 增加使用次数并保存模板ID
         viewModelScope.launch {
             templateRepository.update(template.copy(usageCount = template.usageCount + 1))
+            
+            // 🔥 保存最后使用的模板ID，并清除自定义选项
+            preferencesRepository.updateLastTemplate(getCurrentUserId(), template.id)
+            preferencesRepository.updateLastCustomOptions(getCurrentUserId(), "")
+            android.util.Log.d("SpinWheelViewModel", "Template loaded and saved: ${template.name}, id=${template.id}")
         }
     }
     
     // 更新当前选项
-    fun updateOptions(options: List<WheelOption>) {
-        _currentOptions.value = options
+    fun updateOptions(options: List<WheelOption>) = viewModelScope.launch {
+        android.util.Log.d("SpinWheelViewModel", "=== updateOptions called with ${options.size} options ===")
+        
+        // 🔥 验证：至少需要2个选项
+        if (options.size < 2) {
+            android.util.Log.w("SpinWheelViewModel", "Cannot update options: need at least 2 options, got ${options.size}")
+            _saveMessage.value = "至少需要2个选项"
+            return@launch
+        }
+        
+        // 🔥 验证：去除重复选项
+        val uniqueOptions = options.distinctBy { it.text }
+        if (uniqueOptions.size < options.size) {
+            android.util.Log.w("SpinWheelViewModel", "Removed ${options.size - uniqueOptions.size} duplicate options")
+        }
+        
+        // 打印每个选项的详细信息
+        uniqueOptions.forEachIndexed { index, option ->
+            android.util.Log.d("SpinWheelViewModel", "Option $index: text='${option.text}', weight=${option.weight}, excluded=${option.isExcluded}")
+        }
+        
+        // 🔥 立即更新UI
+        _currentOptions.value = uniqueOptions
+        
+        // 🔥 清除当前模板状态
+        _currentTemplate.value = null
+        android.util.Log.d("SpinWheelViewModel", "Template cleared")
+        
+        // 🔥 同步保存到数据库（确保保存完成）
+        try {
+            val userId = getCurrentUserId()
+            android.util.Log.d("SpinWheelViewModel", "Current userId: $userId")
+            
+            // 🔥 确保用户偏好记录存在
+            val prefs = preferencesRepository.getOrCreatePreferences(userId)
+            android.util.Log.d("SpinWheelViewModel", "User preferences ensured for userId=$userId")
+            
+            val json = optionsToJson(uniqueOptions)
+            android.util.Log.d("SpinWheelViewModel", "JSON to save: $json")
+            
+            // 🔥 使用 update 更新整个记录，强制清除 lastTemplateId
+            val updatedPrefs = prefs.copy(
+                lastCustomOptions = json,
+                lastTemplateId = null  // 🔥 强制清除模板ID
+            )
+            preferencesRepository.update(updatedPrefs)
+            android.util.Log.d("SpinWheelViewModel", "✓ Preferences updated successfully")
+            
+            // 🔥 验证保存：立即读取回来检查
+            val verifyPrefs = preferencesRepository.getPreferencesSync(userId)
+            if (verifyPrefs != null) {
+                android.util.Log.d("SpinWheelViewModel", "Verification - saved options: ${verifyPrefs.lastCustomOptions}")
+                android.util.Log.d("SpinWheelViewModel", "Verification - template ID: ${verifyPrefs.lastTemplateId}")
+                
+                if (verifyPrefs.lastCustomOptions == json && verifyPrefs.lastTemplateId == null) {
+                    android.util.Log.d("SpinWheelViewModel", "✓✓✓ Save verification PASSED")
+                    _saveMessage.value = "选项已保存 (${uniqueOptions.size}个)"
+                } else {
+                    android.util.Log.e("SpinWheelViewModel", "✗✗✗ Save verification FAILED!")
+                    android.util.Log.e("SpinWheelViewModel", "Expected options: $json")
+                    android.util.Log.e("SpinWheelViewModel", "Got options: ${verifyPrefs.lastCustomOptions}")
+                    android.util.Log.e("SpinWheelViewModel", "Expected templateId: null")
+                    android.util.Log.e("SpinWheelViewModel", "Got templateId: ${verifyPrefs.lastTemplateId}")
+                    _saveMessage.value = "保存验证失败"
+                }
+            } else {
+                android.util.Log.e("SpinWheelViewModel", "✗ Verification failed: preferences not found")
+                _saveMessage.value = "保存失败：找不到用户偏好"
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SpinWheelViewModel", "✗ Failed to save custom options", e)
+            e.printStackTrace()
+            _saveMessage.value = "保存失败：${e.message}"
+        }
     }
     
     // 切换选项排除状态
@@ -458,12 +660,115 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         _currentOptions.value = _currentOptions.value.map {
             if (it.text == optionText) it.copy(isExcluded = !it.isExcluded) else it
         }
+        
+        // 🔥 清除当前模板状态
+        _currentTemplate.value = null
+        
+        // 🔥 自动保存
+        viewModelScope.launch {
+            val json = optionsToJson(_currentOptions.value)
+            android.util.Log.d("SpinWheelViewModel", "Toggled exclusion for '$optionText', saving: $json")
+            preferencesRepository.updateLastCustomOptions(getCurrentUserId(), json)
+            preferencesRepository.updateLastTemplate(getCurrentUserId(), null)
+            android.util.Log.d("SpinWheelViewModel", "Exclusion state saved, template cleared")
+        }
     }
     
     // 设置选项权重
     fun setOptionWeight(optionText: String, weight: Int) {
         _currentOptions.value = _currentOptions.value.map {
             if (it.text == optionText) it.copy(weight = weight.coerceIn(1, 10)) else it
+        }
+        
+        // 🔥 清除当前模板状态
+        _currentTemplate.value = null
+        
+        // 🔥 自动保存
+        viewModelScope.launch {
+            val json = optionsToJson(_currentOptions.value)
+            android.util.Log.d("SpinWheelViewModel", "Set weight for '$optionText' to $weight, saving: $json")
+            preferencesRepository.updateLastCustomOptions(getCurrentUserId(), json)
+            preferencesRepository.updateLastTemplate(getCurrentUserId(), null)
+            android.util.Log.d("SpinWheelViewModel", "Weight saved, template cleared")
+        }
+    }
+    
+    // 🔥 新增：将选项转换为JSON
+    private fun optionsToJson(options: List<WheelOption>): String {
+        return try {
+            val items = options.joinToString(",") { option ->
+                // 🔥 转义特殊字符
+                val escapedText = option.text.replace("\"", "\\\"").replace("\n", "\\n")
+                """{"text":"$escapedText","weight":${option.weight},"isExcluded":${option.isExcluded}}"""
+            }
+            val json = "[$items]"
+            android.util.Log.d("SpinWheelViewModel", "optionsToJson: $json")
+            json
+        } catch (e: Exception) {
+            android.util.Log.e("SpinWheelViewModel", "Failed to convert options to JSON", e)
+            ""
+        }
+    }
+    
+    // 🔥 新增：从JSON解析选项
+    private fun parseOptionsFromJson(json: String): List<WheelOption> {
+        return try {
+            android.util.Log.d("SpinWheelViewModel", "parseOptionsFromJson input: $json")
+            
+            if (json.isBlank() || json == "[]") {
+                android.util.Log.w("SpinWheelViewModel", "Empty JSON, returning empty list")
+                return emptyList()
+            }
+            
+            // 简单的JSON解析：格式为 [{"text":"选项1","weight":1,"isExcluded":false},...]
+            val options = mutableListOf<WheelOption>()
+            val items = json.trim().removeSurrounding("[", "]").split("},")
+            
+            android.util.Log.d("SpinWheelViewModel", "Parsing ${items.size} items")
+            
+            for ((index, item) in items.withIndex()) {
+                try {
+                    val cleanItem = item.trim().removeSurrounding("{", "}").replace("}", "")
+                    
+                    // 🔥 使用正则表达式解析 JSON 字段（支持中文和特殊字符）
+                    var text = ""
+                    var weight = 1
+                    var isExcluded = false
+                    
+                    // 提取 text 字段
+                    val textMatch = Regex(""""text":"([^"]*?)"""").find(cleanItem)
+                    if (textMatch != null) {
+                        text = textMatch.groupValues[1].replace("\\\"", "\"").replace("\\n", "\n")
+                    }
+                    
+                    // 提取 weight 字段
+                    val weightMatch = Regex(""""weight":(\d+)""").find(cleanItem)
+                    if (weightMatch != null) {
+                        weight = weightMatch.groupValues[1].toIntOrNull() ?: 1
+                    }
+                    
+                    // 提取 isExcluded 字段
+                    val excludedMatch = Regex(""""isExcluded":(true|false)""").find(cleanItem)
+                    if (excludedMatch != null) {
+                        isExcluded = excludedMatch.groupValues[1].toBoolean()
+                    }
+                    
+                    if (text.isNotEmpty()) {
+                        options.add(WheelOption(text, weight, isExcluded))
+                        android.util.Log.d("SpinWheelViewModel", "✓ Parsed option $index: text='$text', weight=$weight, excluded=$isExcluded")
+                    } else {
+                        android.util.Log.w("SpinWheelViewModel", "✗ Skipping empty option at index $index")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("SpinWheelViewModel", "✗ Failed to parse option at index $index", e)
+                }
+            }
+            
+            android.util.Log.d("SpinWheelViewModel", "Successfully parsed ${options.size} options")
+            options
+        } catch (e: Exception) {
+            android.util.Log.e("SpinWheelViewModel", "Failed to parse options JSON", e)
+            emptyList()
         }
     }
     

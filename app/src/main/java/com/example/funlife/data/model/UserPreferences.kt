@@ -28,5 +28,6 @@ data class UserPreferences(
     // 🔥 新增：最后使用的模板和选项
     val lastTemplateId: Int? = null,                   // 最后使用的模板ID
     val lastCustomOptions: String = "",                // 最后自定义的选项（JSON格式）
-    val lastSpinMode: String = "NORMAL"                // 最后使用的转盘模式
+    val lastSpinMode: String = "NORMAL",               // 最后使用的转盘模式（基础模式）
+    val lastCustomModeId: Int? = null                  // 🔥 新增：最后使用的自定义模式ID
 )
