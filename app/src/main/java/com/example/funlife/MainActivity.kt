@@ -24,6 +24,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -48,7 +50,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             FunLifeTheme {
-                MainScreen()
+                var showSplash by remember { mutableStateOf(true) }
+                
+                if (showSplash) {
+                    com.example.funlife.ui.screens.SplashScreen(
+                        onTimeout = { showSplash = false }
+                    )
+                } else {
+                    MainScreen()
+                }
             }
         }
     }

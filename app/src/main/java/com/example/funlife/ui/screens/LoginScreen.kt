@@ -46,6 +46,8 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorShakeKey by remember { mutableStateOf(0) }  // 🔥 新增：用于触发震动动画
     
     val authState by viewModel.authState.collectAsState()
     val focusManager = LocalFocusManager.current
@@ -62,16 +64,26 @@ fun LoginScreen(
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Success -> {
+                isLoading = false
                 onLoginSuccess()
                 viewModel.resetAuthState()
             }
             is AuthState.Error -> {
+                isLoading = false
                 errorMessage = (authState as AuthState.Error).message
                 showError = true
+                errorShakeKey++  // 🔥 触发震动动画
+                // 🔥 立即重置状态，允许下次点击
+                viewModel.resetAuthState()
             }
-            else -> {
+            is AuthState.Loading -> {
+                isLoading = true
                 showError = false
             }
+            is AuthState.Idle -> {
+                isLoading = false
+            }
+            else -> {}
         }
     }
     
@@ -349,14 +361,40 @@ fun LoginScreen(
                             )
                         }
                         
-                        // 错误提示
+                        // 错误提示 - 带震动动画
                         AnimatedVisibility(
                             visible = showError,
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
+                            // 🔥 震动动画效果 - 使用 Animatable 确保每次都触发
+                            val shakeOffset = remember { Animatable(0f) }
+                            
+                            LaunchedEffect(errorShakeKey) {
+                                if (errorShakeKey > 0) {
+                                    shakeOffset.snapTo(0f)
+                                    shakeOffset.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = keyframes {
+                                            durationMillis = 500
+                                            -15f at 50
+                                            15f at 100
+                                            -15f at 150
+                                            15f at 200
+                                            -10f at 250
+                                            10f at 300
+                                            -5f at 350
+                                            5f at 400
+                                            0f at 500
+                                        }
+                                    )
+                                }
+                            }
+                            
                             Surface(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset(x = shakeOffset.value.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 color = Color(0xFFE94560).copy(alpha = 0.2f)
                             ) {
@@ -391,10 +429,12 @@ fun LoginScreen(
                                     username.isEmpty() -> {
                                         errorMessage = "请输入用户名"
                                         showError = true
+                                        errorShakeKey++  // 🔥 触发震动
                                     }
                                     password.isEmpty() -> {
                                         errorMessage = "请输入密码"
                                         showError = true
+                                        errorShakeKey++  // 🔥 触发震动
                                     }
                                     else -> viewModel.login(username, password)
                                 }
@@ -407,7 +447,7 @@ fun LoginScreen(
                                 containerColor = Color.Transparent
                             ),
                             contentPadding = PaddingValues(0.dp),
-                            enabled = authState !is AuthState.Loading
+                            enabled = !isLoading
                         ) {
                             Box(
                                 modifier = Modifier
@@ -423,7 +463,7 @@ fun LoginScreen(
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (authState is AuthState.Loading) {
+                                if (isLoading) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(24.dp),
                                         color = Color.White,

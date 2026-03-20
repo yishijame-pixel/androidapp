@@ -340,7 +340,8 @@ fun EnhancedSpinWheelScreen(
                 }
                 
                 // 使用key强制重组SpinWheel，确保权重可视化生效
-                key(currentOptions.hashCode(), currentMode, currentTheme, multiSpinMode, showWeightVisualization, triggerSpin) {
+                // 🔥 修复：移除 currentMode 避免切换模式时触发重组导致转盘旋转
+                key(currentOptions.hashCode(), currentTheme, multiSpinMode, showWeightVisualization, triggerSpin) {
                     SpinWheel(
                         options = currentOptions.filter { !it.isExcluded }.map { it.text },
                         mode = currentMode.name,
@@ -992,6 +993,7 @@ fun EnhancedSpinWheelScreen(
     if (showResultAnimation) {
         com.example.funlife.ui.components.ResultAnimation(
             result = animationResult,
+            mode = currentMode,
             onDismiss = { showResultAnimation = false }
         )
     }

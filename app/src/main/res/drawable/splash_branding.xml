@@ -1,0 +1,96 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="80dp"
+    android:viewportWidth="240"
+    android:viewportHeight="80">
+    
+    <!-- 背景卡片 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.95"
+        android:pathData="M15,0 L225,0 A15,15 0,0 1,240 15 L240,65 A15,15 0,0 1,225 80 L15,80 A15,15 0,0 1,0 65 L0,15 A15,15 0,0 1,15 0 Z"/>
+    
+    <!-- 阴影效果 -->
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.15"
+        android:pathData="M15,5 L225,5 A15,15 0,0 1,235 20 L235,70 A15,15 0,0 1,220 80 L15,80 A15,15 0,0 1,5 65 L5,20 A15,15 0,0 1,15 5 Z"/>
+    
+    <!-- 文字 "一" - 上横线 -->
+    <path
+        android:fillColor="#FF6B6B"
+        android:pathData="M60,22 L180,22 A3,3 0,0 1,183 25 L183,28 A3,3 0,0 1,180 31 L60,31 A3,3 0,0 1,57 28 L57,25 A3,3 0,0 1,60 22 Z"/>
+    
+    <!-- 文字 "一" - 上横线渐变装饰 -->
+    <path
+        android:fillColor="#FF8A80"
+        android:fillAlpha="0.5"
+        android:pathData="M60,22 L180,22 L180,25 L60,25 Z"/>
+    
+    <!-- 文字 "十" - 竖线 -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M117,15 L123,15 A3,3 0,0 1,126 18 L126,62 A3,3 0,0 1,123 65 L117,65 A3,3 0,0 1,114 62 L114,18 A3,3 0,0 1,117 15 Z"/>
+    
+    <!-- 文字 "十" - 竖线渐变装饰 -->
+    <path
+        android:fillColor="#81C784"
+        android:fillAlpha="0.5"
+        android:pathData="M117,15 L123,15 L123,40 L117,40 Z"/>
+    
+    <!-- 文字 "十" - 横线 -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M60,49 L180,49 A3,3 0,0 1,183 52 L183,55 A3,3 0,0 1,180 58 L60,58 A3,3 0,0 1,57 55 L57,52 A3,3 0,0 1,60 49 Z"/>
+    
+    <!-- 文字 "十" - 横线渐变装饰 -->
+    <path
+        android:fillColor="#64B5F6"
+        android:fillAlpha="0.5"
+        android:pathData="M60,49 L180,49 L180,52 L60,52 Z"/>
+    
+    <!-- 左侧装饰小狗爪印 -->
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.6"
+        android:pathData="M30,35 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"/>
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.6"
+        android:pathData="M25,42 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0"/>
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.6"
+        android:pathData="M35,42 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0"/>
+    
+    <!-- 右侧装饰小狗爪印 -->
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.6"
+        android:pathData="M210,35 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"/>
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.6"
+        android:pathData="M205,42 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0"/>
+    <path
+        android:fillColor="#FFB74D"
+        android:fillAlpha="0.6"
+        android:pathData="M215,42 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0"/>
+    
+    <!-- 顶部装饰星星 -->
+    <path
+        android:fillColor="#FFD700"
+        android:fillAlpha="0.7"
+        android:pathData="M120,8 L122,12 L126,12 L123,15 L124,19 L120,16 L116,19 L117,15 L114,12 L118,12 Z"/>
+    
+    <!-- 底部装饰心形 -->
+    <path
+        android:fillColor="#FF6B9D"
+        android:fillAlpha="0.6"
+        android:pathData="M115,68 C115,66 113,65 111,65 C109,65 107,66 107,68 C107,70 109,72 111,73 L115,73 C117,72 119,70 119,68 C119,66 117,65 115,65 C113,65 111,66 111,68 L115,68 Z"/>
+    
+    <path
+        android:fillColor="#FF6B9D"
+        android:fillAlpha="0.6"
+        android:pathData="M125,68 C125,66 123,65 121,65 C119,65 117,66 117,68 C117,70 119,72 121,73 L125,73 C127,72 129,70 129,68 C129,66 127,65 125,65 C123,65 121,66 121,68 L125,68 Z"/>
+</vector>

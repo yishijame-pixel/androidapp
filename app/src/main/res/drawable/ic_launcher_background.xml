@@ -1,0 +1,40 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- 渐变背景 -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:startY="0"
+                android:startX="0"
+                android:endY="108"
+                android:endX="108"
+                android:type="linear">
+                <item android:offset="0" android:color="#FFF9C4"/>
+                <item android:offset="0.5" android:color="#FFE082"/>
+                <item android:offset="1" android:color="#FFCA28"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    
+    <!-- 装饰圆点 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.3"
+        android:pathData="M20,20 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.2"
+        android:pathData="M88,25 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.25"
+        android:pathData="M15,85 m-3.5,0 a3.5,3.5 0,1 1,7 0 a3.5,3.5 0,1 1,-7 0"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.3"
+        android:pathData="M90,88 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"/>
+</vector>

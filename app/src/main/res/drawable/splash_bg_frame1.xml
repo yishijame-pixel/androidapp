@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 主渐变背景 -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="135"
+                android:startColor="#FFF8E1"
+                android:centerColor="#FFE082"
+                android:endColor="#FFB74D"
+                android:type="linear"/>
+        </shape>
+    </item>
+    
+    <!-- 顶部光晕效果 -->
+    <item
+        android:width="400dp"
+        android:height="400dp"
+        android:gravity="center_horizontal|top"
+        android:top="-150dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#60FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:type="radial"
+                android:gradientRadius="200dp"/>
+        </shape>
+    </item>
+    
+    <!-- 底部光晕效果 -->
+    <item
+        android:width="350dp"
+        android:height="350dp"
+        android:gravity="center_horizontal|bottom"
+        android:bottom="-100dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#40FF8A65"
+                android:endColor="#00FF8A65"
+                android:type="radial"
+                android:gradientRadius="175dp"/>
+        </shape>
+    </item>
+</layer-list>
