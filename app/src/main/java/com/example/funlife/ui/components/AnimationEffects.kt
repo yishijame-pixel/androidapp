@@ -44,8 +44,8 @@ fun SpinParticleEffect(
     
     LaunchedEffect(isSpinning) {
         if (isSpinning) {
-            // 创建粒子
-            particles = List(30) {
+            // 创建粒子 - 减少数量从30到15，提升性能
+            particles = List(15) {
                 val angle = Random.nextFloat() * 360f
                 val speed = Random.nextFloat() * 2f + 1f
                 Particle(
@@ -120,16 +120,13 @@ fun FireworksEffect(
         if (trigger && !isAnimating) {
             isAnimating = true
             
-            // 创建烟花粒子
-            val centerX = 0f
-            val centerY = -100f
-            
-            particles = List(60) {
+            // 创建烟花粒子 - 减少数量从60到30，提升性能
+            particles = List(30) {
                 val angle = (it * 6f) + Random.nextFloat() * 6f
                 val speed = Random.nextFloat() * 8f + 4f
                 Particle(
-                    x = centerX,
-                    y = centerY,
+                    x = 0f,
+                    y = 0f,
                     vx = cos(Math.toRadians(angle.toDouble())).toFloat() * speed,
                     vy = sin(Math.toRadians(angle.toDouble())).toFloat() * speed,
                     life = 1f,

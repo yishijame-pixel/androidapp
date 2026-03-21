@@ -11,9 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.funlife.viewmodel.StatisticsViewModel
+import com.example.funlife.ui.components.PageHeader
+import com.example.funlife.ui.components.PageHeaderGradients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,79 +28,71 @@ fun StatisticsScreen(
     val scoreStats by viewModel.scoreStats.collectAsState()
     val scrollState = rememberScrollState()
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        "数据统计",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    ) 
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.Default.ArrowBack, 
-                            contentDescription = "返回",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-        // 纪念日统计
-        StatisticsSection(title = "纪念日统计") {
-            StatisticsCard(
-                icon = Icons.Default.CalendarToday,
-                title = "总数",
-                value = anniversaryStats.totalCount.toString(),
-                color = MaterialTheme.colorScheme.primary
+            // 美化的页面头部
+            PageHeader(
+                title = "数据统计",
+                emoji = "📊",
+                gradientColors = listOf(
+                    Color(0xFF9B59B6),
+                    Color(0xFFBB8FCE),
+                    Color(0xFFD7BDE2)
+                ),
+                subtitle = "查看详细分析",
+                showBackButton = true,
+                onBackClick = onNavigateBack
             )
             
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                StatisticsCard(
-                    icon = Icons.Default.TrendingUp,
-                    title = "即将到来",
-                    value = anniversaryStats.upcomingCount.toString(),
-                    color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.weight(1f)
-                )
-                StatisticsCard(
-                    icon = Icons.Outlined.CheckCircle,
-                    title = "已过去",
-                    value = anniversaryStats.passedCount.toString(),
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatisticsCard(
-                    icon = Icons.Default.Today,
-                    title = "今天",
-                    value = anniversaryStats.todayCount.toString(),
-                    color = MaterialTheme.colorScheme.error,
+                // 纪念日统计
+                StatisticsSection(title = "纪念日统计") {
+                    StatisticsCard(
+                        icon = Icons.Default.CalendarToday,
+                        title = "总数",
+                        value = anniversaryStats.totalCount.toString(),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        StatisticsCard(
+                            icon = Icons.Default.TrendingUp,
+                            title = "即将到来",
+                            value = anniversaryStats.upcomingCount.toString(),
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatisticsCard(
+                            icon = Icons.Outlined.CheckCircle,
+                            title = "已过去",
+                            value = anniversaryStats.passedCount.toString(),
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        StatisticsCard(
+                            icon = Icons.Default.Today,
+                            title = "今天",
+                            value = anniversaryStats.todayCount.toString(),
+                            color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f)
                 )
                 StatisticsCard(
@@ -223,6 +218,7 @@ fun StatisticsScreen(
                 )
             }
         }
+            }
         }
     }
 }

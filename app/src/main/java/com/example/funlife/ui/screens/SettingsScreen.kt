@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.SettingsViewModel
+import com.example.funlife.ui.components.PageHeader
+import com.example.funlife.ui.components.PageHeaderGradients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,60 +47,46 @@ fun SettingsScreen(
     val preferences by viewModel.preferences.collectAsState()
     val scrollState = rememberScrollState()
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("⚙️", fontSize = 24.sp)
-                        Text(
-                            "设置",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.Default.ArrowBack, 
-                            contentDescription = "返回",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // 外观设置
-            SettingsSection(
-                title = "外观设置",
-                emoji = "🎨"
+            // 美化的页面头部
+            PageHeader(
+                title = "设置",
+                emoji = "⚙️",
+                gradientColors = listOf(
+                    Color(0xFF9B59B6),
+                    Color(0xFFBB8FCE),
+                    Color(0xFFD7BDE2)
+                ),
+                subtitle = "个性化你的应用",
+                showBackButton = true,
+                onBackClick = onNavigateBack
+            )
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                SettingsSwitchItem(
-                    icon = Icons.Default.DarkMode,
-                    title = "深色模式",
-                    description = "启用深色主题",
-                    checked = preferences.isDarkMode,
-                    onCheckedChange = { viewModel.updateDarkMode(it) }
-                )
-            }
+                // 外观设置
+                SettingsSection(
+                    title = "外观设置",
+                    emoji = "🎨"
+                ) {
+                    SettingsSwitchItem(
+                        icon = Icons.Default.DarkMode,
+                        title = "深色模式",
+                        description = "启用深色主题",
+                        checked = preferences.isDarkMode,
+                        onCheckedChange = { viewModel.updateDarkMode(it) }
+                    )
+                }
             
             // 通知设置
             SettingsSection(
@@ -215,6 +203,7 @@ fun SettingsScreen(
             
             // 底部间距
             Spacer(Modifier.height(16.dp))
+            }
         }
     }
 }

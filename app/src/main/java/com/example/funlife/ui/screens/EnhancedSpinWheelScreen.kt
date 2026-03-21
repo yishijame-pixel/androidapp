@@ -51,6 +51,20 @@ fun EnhancedSpinWheelScreen(
     val currentMultiSpinProgress by viewModel.currentMultiSpinProgress.collectAsState()
     val saveMessage by viewModel.saveMessage.collectAsState()
     
+    // 加载状态 - 显示1秒加载动画
+    var isLoading by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1000) // 显示1秒加载动画
+        isLoading = false
+    }
+    
+    // 如果正在加载，显示加载动画
+    if (isLoading) {
+        com.example.funlife.ui.components.SpinWheelLoadingAnimation()
+        return
+    }
+    
     val context = androidx.compose.ui.platform.LocalContext.current
     
     // 显示保存消息
@@ -180,6 +194,28 @@ fun EnhancedSpinWheelScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
+            // 加载状态
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "加载中...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            } else {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = currentTheme.backgroundColor
@@ -190,9 +226,8 @@ fun EnhancedSpinWheelScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Spacer(Modifier.height(8.dp))
                 
                 // 幸运值系统 - 紧凑版
                 com.example.funlife.ui.components.LuckyValueSystem(
@@ -1268,6 +1303,7 @@ fun EnhancedSpinWheelScreen(
                 Spacer(Modifier.height(32.dp))
             }
         }
+    }
     }
 }
 

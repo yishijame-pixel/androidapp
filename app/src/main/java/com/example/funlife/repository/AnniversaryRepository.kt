@@ -32,4 +32,25 @@ class AnniversaryRepository(private val anniversaryDao: AnniversaryDao) {
     suspend fun unpinAnniversary(anniversary: Anniversary) {
         anniversaryDao.updateAnniversary(anniversary.copy(isPinned = false))
     }
+    
+    // 筛选和搜索
+    fun getAnniversariesByType(userId: Long, type: String): Flow<List<Anniversary>> = 
+        anniversaryDao.getAnniversariesByType(userId, type)
+    
+    fun searchAnniversaries(userId: Long, query: String): Flow<List<Anniversary>> = 
+        anniversaryDao.searchAnniversaries(userId, query)
+    
+    fun getUpcomingAnniversaries(userId: Long): Flow<List<Anniversary>> = 
+        anniversaryDao.getUpcomingAnniversaries(userId)
+    
+    fun getExpiredAnniversaries(userId: Long): Flow<List<Anniversary>> = 
+        anniversaryDao.getExpiredAnniversaries(userId)
+    
+    fun getAnniversariesByImportance(userId: Long): Flow<List<Anniversary>> = 
+        anniversaryDao.getAnniversariesByImportance(userId)
+    
+    // 更新排序
+    suspend fun updateAnniversariesOrder(anniversaries: List<Anniversary>) {
+        anniversaryDao.updateAnniversaries(anniversaries)
+    }
 }

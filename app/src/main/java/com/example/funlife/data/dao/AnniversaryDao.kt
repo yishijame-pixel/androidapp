@@ -35,4 +35,32 @@ interface AnniversaryDao {
     // 取消所有置顶
     @Query("UPDATE anniversaries SET isPinned = 0 WHERE userId = :userId")
     suspend fun unpinAll(userId: Long)
+    
+    // 按类型筛选
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId AND type = :type ORDER BY isPinned DESC, date ASC")
+    fun getAnniversariesByType(userId: Long, type: String): Flow<List<Anniversary>>
+    
+    // 搜索纪念日（按名称或备注）
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId AND (name LIKE '%' || :query || '%' OR note LIKE '%' || :query || '%') ORDER BY isPinned DESC, date ASC")
+    fun searchAnniversaries(userId: Long, query: String): Flow<List<Anniversary>>
+    
+    // 获取即将到来的纪念日（N天内）
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId ORDER BY date ASC")
+    fun getUpcomingAnniversaries(userId: Long): Flow<List<Anniversary>>
+    
+    // 获取已过期的纪念日（不重复的）
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId AND isYearly = 0 ORDER BY date DESC")
+    fun getExpiredAnniversaries(userId: Long): Flow<List<Anniversary>>
+    
+    // 按重要程度排序
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId ORDER BY importance DESC, isPinned DESC, date ASC")
+    fun getAnniversariesByImportance(userId: Long): Flow<List<Anniversary>>
+    
+    // 按自定义顺序排序
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId ORDER BY customOrder ASC, isPinned DESC, date ASC")
+    fun getAnniversariesByCustomOrder(userId: Long): Flow<List<Anniversary>>
+    
+    // 批量更新排序
+    @Update
+    suspend fun updateAnniversaries(anniversaries: List<Anniversary>)
 }

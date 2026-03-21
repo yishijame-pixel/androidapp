@@ -8,6 +8,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.funlife.data.dao.AnniversaryDao
+import com.example.funlife.data.dao.AnniversaryReminderDao
 import com.example.funlife.data.dao.PlayerDao
 import com.example.funlife.data.dao.GameHistoryDao
 import com.example.funlife.data.dao.UserPreferencesDao
@@ -22,6 +23,7 @@ import com.example.funlife.data.dao.GuaranteeCounterDao
 import com.example.funlife.data.dao.CustomSpinModeDao
 import com.example.funlife.data.dao.OperationLogDao
 import com.example.funlife.data.model.Anniversary
+import com.example.funlife.data.model.AnniversaryReminder
 import com.example.funlife.data.model.Player
 import com.example.funlife.data.model.GameHistory
 import com.example.funlife.data.model.UserPreferences
@@ -41,7 +43,8 @@ import com.example.funlife.data.model.OperationLog
 
 @Database(
     entities = [
-        Anniversary::class, 
+        Anniversary::class,
+        AnniversaryReminder::class,
         Player::class,
         GameHistory::class,
         UserPreferences::class,
@@ -60,12 +63,13 @@ import com.example.funlife.data.model.OperationLog
         com.example.funlife.data.model.User::class,
         OperationLog::class
     ],
-    version = 16,  // 🔥 升级到版本16
+    version = 18,  // 🔥 升级到版本18
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     
     abstract fun anniversaryDao(): AnniversaryDao
+    abstract fun anniversaryReminderDao(): AnniversaryReminderDao
     abstract fun playerDao(): PlayerDao
     abstract fun gameHistoryDao(): GameHistoryDao
     abstract fun userPreferencesDao(): UserPreferencesDao
@@ -576,6 +580,46 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        // 🔥 新增：版本16到17 - 添加纪念日提醒表
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建纪念日提醒表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS anniversary_reminders (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        anniversaryId INTEGER NOT NULL,
+                        userId INTEGER NOT NULL,
+                        daysBeforeList TEXT NOT NULL DEFAULT '1,3,7',
+                        reminderTime TEXT NOT NULL DEFAULT '09:00',
+                        isEnabled INTEGER NOT NULL DEFAULT 1,
+                        notifyOnDay INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                
+                // 创建索引
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_anniversary_reminders_userId 
+                    ON anniversary_reminders(userId)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_anniversary_reminders_anniversaryId 
+                    ON anniversary_reminders(anniversaryId)
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本17到18 - 添加自定义排序字段
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 添加customOrder列到anniversaries表
+                database.execSQL("""
+                    ALTER TABLE anniversaries 
+                    ADD COLUMN customOrder INTEGER NOT NULL DEFAULT 0
+                """)
+            }
+        }
+        
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -598,7 +642,9 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_12_13,
                     MIGRATION_13_14,
                     MIGRATION_14_15,
-                    MIGRATION_15_16  // 🔥 新增
+                    MIGRATION_15_16,
+                    MIGRATION_16_17,
+                    MIGRATION_17_18   // 🔥 新增
                 )
                 // 🔥 修复：移除破坏性降级，保护用户数据
                 // .fallbackToDestructiveMigration()  // 已移除！

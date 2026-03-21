@@ -1,4 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">一十</string>
+    
+    <!-- Anniversary Screen -->
+    <string name="anniversary_title">纪念日</string>
+    <string name="anniversary_subtitle">珍藏美好回忆</string>
+    <string name="anniversary_add">添加纪念日</string>
+    <string name="anniversary_add_button">添加</string>
+    <string name="anniversary_search">搜索纪念日…</string>
+    <string name="anniversary_search_button">搜索</string>
+    <string name="anniversary_type">类型</string>
+    <string name="anniversary_all_types">全部类型</string>
+    <string name="anniversary_clear">清除</string>
+    <string name="anniversary_stats">统计</string>
+    <string name="anniversary_close">关闭</string>
+    <string name="anniversary_empty">还没有纪念日</string>
+    <string name="anniversary_empty_hint">点击下方按钮添加一个吧</string>
+    
+    <!-- Add/Edit Anniversary Dialog -->
+    <string name="anniversary_dialog_add_title">添加纪念日</string>
+    <string name="anniversary_dialog_edit_title">编辑纪念日</string>
+    <string name="anniversary_name">纪念日名称</string>
+    <string name="anniversary_name_hint">例如：生日、结婚纪念日</string>
+    <string name="anniversary_type_label">类型</string>
+    <string name="anniversary_select_type">选择类型</string>
+    <string name="anniversary_select_date">选择日期</string>
+    <string name="anniversary_date_label">选择日期</string>
+    <string name="anniversary_calendar">日历</string>
+    <string name="anniversary_repeat_yearly">每年重复</string>
+    <string name="anniversary_repeat_yearly_hint">自动计算每年的纪念日</string>
+    <string name="anniversary_importance">重要程度</string>
+    <string name="anniversary_stars">%d 星</string>
+    <string name="anniversary_note">备注（可选）</string>
+    <string name="anniversary_note_hint">添加一些特殊的回忆…</string>
+    <string name="anniversary_image">背景图片（可选）</string>
+    <string name="anniversary_selected_image">选中的图片</string>
+    <string name="anniversary_remove_image">删除图片</string>
+    <string name="anniversary_add_image">添加图片</string>
+    <string name="anniversary_click_select_image">点击选择图片</string>
+    <string name="anniversary_confirm">确定</string>
+    <string name="anniversary_save">保存</string>
+    <string name="anniversary_cancel">取消</string>
 </resources>

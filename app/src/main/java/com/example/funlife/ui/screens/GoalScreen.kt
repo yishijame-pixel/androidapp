@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.funlife.data.model.Countdown
 import com.example.funlife.viewmodel.GoalViewModel
+import com.example.funlife.ui.components.PageHeader
+import com.example.funlife.ui.components.PageHeaderGradients
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -49,27 +51,39 @@ fun GoalScreen(
             )
         }
     ) { padding ->
-        if (countdowns.isEmpty()) {
-            EmptyGoalState(Modifier.padding(padding))
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 顶部统计卡片
-                item {
-                    GoalOverviewCard(countdowns)
-                }
-                
-                // 倒数日列表
-                items(countdowns, key = { it.id }) { countdown ->
-                    EnhancedCountdownCard(
-                        countdown = countdown,
-                        onDelete = { viewModel.deleteCountdown(countdown) }
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // 美化的页面头部
+            PageHeader(
+                title = "目标倒数",
+                emoji = "🎯",
+                gradientColors = PageHeaderGradients.Goal,
+                subtitle = "记录重要时刻"
+            )
+            
+            if (countdowns.isEmpty()) {
+                EmptyGoalState(Modifier.fillMaxSize())
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 顶部统计卡片
+                    item {
+                        GoalOverviewCard(countdowns)
+                    }
+                    
+                    // 倒数日列表
+                    items(countdowns, key = { it.id }) { countdown ->
+                        EnhancedCountdownCard(
+                            countdown = countdown,
+                            onDelete = { viewModel.deleteCountdown(countdown) }
+                        )
+                    }
                 }
             }
         }

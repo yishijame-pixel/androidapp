@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.funlife.data.model.MoodEntry
 import com.example.funlife.viewmodel.MoodViewModel
+import com.example.funlife.ui.components.PageHeader
+import com.example.funlife.ui.components.PageHeaderGradients
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -49,27 +51,39 @@ fun MoodScreen(
             )
         }
     ) { padding ->
-        if (moods.isEmpty()) {
-            EmptyMoodState(Modifier.padding(padding))
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 顶部统计卡片
-                item {
-                    MoodOverviewCard(moods)
-                }
-                
-                // 心情记录列表
-                items(moods, key = { it.id }) { mood ->
-                    EnhancedMoodCard(
-                        mood = mood,
-                        onDelete = { viewModel.deleteMood(mood) }
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // 美化的页面头部
+            PageHeader(
+                title = "心情日记",
+                emoji = "😊",
+                gradientColors = PageHeaderGradients.Mood,
+                subtitle = "记录每一天的情绪"
+            )
+            
+            if (moods.isEmpty()) {
+                EmptyMoodState(Modifier.fillMaxSize())
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 顶部统计卡片
+                    item {
+                        MoodOverviewCard(moods)
+                    }
+                    
+                    // 心情记录列表
+                    items(moods, key = { it.id }) { mood ->
+                        EnhancedMoodCard(
+                            mood = mood,
+                            onDelete = { viewModel.deleteMood(mood) }
+                        )
+                    }
                 }
             }
         }

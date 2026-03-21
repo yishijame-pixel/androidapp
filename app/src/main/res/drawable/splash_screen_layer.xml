@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 背景渐变 -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:startColor="#FFF8E1"
+                android:centerColor="#FFE082"
+                android:endColor="#FFCA28"
+                android:type="linear" />
+        </shape>
+    </item>
+    
+    <!-- 装饰圆点1 - 左上 -->
+    <item
+        android:top="60dp"
+        android:left="20dp"
+        android:width="120dp"
+        android:height="120dp">
+        <shape android:shape="oval">
+            <solid android:color="#26FFB74D" />
+        </shape>
+    </item>
+    
+    <!-- 装饰圆点2 - 右上 -->
+    <item
+        android:top="120dp"
+        android:right="10dp"
+        android:width="100dp"
+        android:height="100dp">
+        <shape android:shape="oval">
+            <solid android:color="#26FF8A65" />
+        </shape>
+    </item>
+    
+    <!-- 装饰圆点3 - 左下 -->
+    <item
+        android:bottom="100dp"
+        android:left="30dp"
+        android:width="90dp"
+        android:height="90dp">
+        <shape android:shape="oval">
+            <solid android:color="#26FFD54F" />
+        </shape>
+    </item>
+    
+    <!-- 装饰圆点4 - 右下 -->
+    <item
+        android:bottom="180dp"
+        android:right="40dp"
+        android:width="80dp"
+        android:height="80dp">
+        <shape android:shape="oval">
+            <solid android:color="#26FF6B9D" />
+        </shape>
+    </item>
+    
+    <!-- 小装饰点1 -->
+    <item
+        android:top="200dp"
+        android:left="60dp"
+        android:width="40dp"
+        android:height="40dp">
+        <shape android:shape="oval">
+            <solid android:color="#1AFF8A65" />
+        </shape>
+    </item>
+    
+    <!-- 小装饰点2 -->
+    <item
+        android:bottom="250dp"
+        android:right="80dp"
+        android:width="50dp"
+        android:height="50dp">
+        <shape android:shape="oval">
+            <solid android:color="#1AFFB74D" />
+        </shape>
+    </item>
+    
+    <!-- Logo外圈光晕 -->
+    <item
+        android:gravity="center"
+        android:width="220dp"
+        android:height="220dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#40FFB74D"
+                android:endColor="#00FFB74D"
+                android:type="radial"
+                android:gradientRadius="110dp" />
+        </shape>
+    </item>
+    
+    <!-- Logo外圈白色 -->
+    <item
+        android:gravity="center"
+        android:width="200dp"
+        android:height="200dp">
+        <shape android:shape="oval">
+            <solid android:color="#60FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- Logo圆形背景 -->
+    <item
+        android:gravity="center"
+        android:width="180dp"
+        android:height="180dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#FFB74D"
+                android:centerColor="#FF9F5A"
+                android:endColor="#FF8A65"
+                android:type="radial"
+                android:gradientRadius="90dp" />
+        </shape>
+    </item>
+    
+    <!-- 可爱的"一十"Logo -->
+    <item
+        android:gravity="center"
+        android:width="140dp"
+        android:height="140dp"
+        android:drawable="@drawable/cute_logo_yishi" />
+    
+</layer-list>

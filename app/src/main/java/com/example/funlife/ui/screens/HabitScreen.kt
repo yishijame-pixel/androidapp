@@ -32,6 +32,9 @@ import com.example.funlife.data.model.HabitRecord
 import com.example.funlife.viewmodel.HabitViewModel
 import com.example.funlife.viewmodel.HabitWithStats
 import com.example.funlife.viewmodel.CheckInResult
+import com.example.funlife.ui.components.EnhancedTopBar
+import com.example.funlife.ui.components.TopBarAction
+import com.example.funlife.ui.components.TopBarGradients
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -50,24 +53,34 @@ fun HabitScreen(
     var bonusMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     
-    Scaffold(
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showDialog = true },
-                icon = { Icon(Icons.Default.Add, "添加") },
-                text = { Text("添加习惯") },
-                containerColor = MaterialTheme.colorScheme.primary
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 新的增强版顶部导航栏
+        EnhancedTopBar(
+            title = "习惯打卡",
+            subtitle = "坚持每一天，成就更好的自己",
+            icon = Icons.Default.CheckCircle,
+            gradientColors = TopBarGradients.Green,
+            actions = listOf(
+                TopBarAction(
+                    icon = Icons.Default.Add,
+                    contentDescription = "添加习惯",
+                    onClick = { showDialog = true },
+                    highlighted = true
+                ),
+                TopBarAction(
+                    icon = Icons.Default.BarChart,
+                    contentDescription = "统计",
+                    onClick = { /* 查看统计 */ }
+                )
             )
-        }
-    ) { padding ->
+        )
+        
         Box(modifier = Modifier.fillMaxSize()) {
             if (habitsWithStats.isEmpty()) {
-                EmptyHabitState(Modifier.padding(padding))
+                EmptyHabitState(Modifier.fillMaxSize())
             } else {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {

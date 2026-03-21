@@ -12,10 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.funlife.data.model.GameHistory
 import com.example.funlife.viewmodel.HistoryViewModel
+import com.example.funlife.ui.components.PageHeader
+import com.example.funlife.ui.components.PageHeaderGradients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,43 +30,42 @@ fun HistoryScreen(
     var selectedFilter by remember { mutableStateOf("all") }
     var showClearDialog by remember { mutableStateOf(false) }
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        "历史记录",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    ) 
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.Default.ArrowBack, 
-                            contentDescription = "返回",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showClearDialog = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "清空历史")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // 美化的页面头部
+            Box {
+                PageHeader(
+                    title = "历史记录",
+                    emoji = "📜",
+                    gradientColors = listOf(
+                        Color(0xFF3498DB),
+                        Color(0xFF5DADE2),
+                        Color(0xFF85C1E9)
+                    ),
+                    subtitle = "回顾过往活动",
+                    showBackButton = true,
+                    onBackClick = onNavigateBack
+                )
+                
+                // 清空按钮 - 悬浮在右上角
+                IconButton(
+                    onClick = { showClearDialog = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 20.dp, end = 20.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "清空历史",
+                        tint = Color.White
+                    )
+                }
+            }
+            
             // 过滤器
             ScrollableTabRow(
                 selectedTabIndex = when (selectedFilter) {

@@ -45,6 +45,8 @@ class UserSessionManager(context: Context) {
         val currentTime = System.currentTimeMillis()
         val expiryTime = currentTime + SESSION_VALIDITY_MILLIS
         
+        android.util.Log.d("UserSessionManager", "保存会话: userId=${session.userId}, username=${session.username}")
+        
         prefs.edit().apply {
             putLong(KEY_USER_ID, session.userId)
             putString(KEY_USERNAME, session.username)
@@ -55,6 +57,8 @@ class UserSessionManager(context: Context) {
             putLong(KEY_EXPIRY_TIME, expiryTime)
             apply()
         }
+        
+        android.util.Log.d("UserSessionManager", "会话保存成功，有效期至: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(expiryTime))}")
     }
     
     fun getSession(): UserSession? {
@@ -69,7 +73,9 @@ class UserSessionManager(context: Context) {
     }
     
     fun getCurrentUserId(): Long {
-        return prefs.getLong(KEY_USER_ID, -1)
+        val userId = prefs.getLong(KEY_USER_ID, -1)
+        android.util.Log.d("UserSessionManager", "getCurrentUserId: $userId")
+        return userId
     }
     
     // 🔥 修复：检查会话是否过期
@@ -79,16 +85,21 @@ class UserSessionManager(context: Context) {
         val expiryTime = prefs.getLong(KEY_EXPIRY_TIME, 0)
         val currentTime = System.currentTimeMillis()
         
+        android.util.Log.d("UserSessionManager", "检查登录状态: isLoggedIn=$isLoggedIn, userId=$userId")
+        
         // 检查会话是否过期
         if (isLoggedIn && userId != -1L) {
             if (currentTime > expiryTime) {
                 // 会话已过期，清除会话
+                android.util.Log.w("UserSessionManager", "会话已过期，清除会话")
                 clearSession()
                 return false
             }
+            android.util.Log.d("UserSessionManager", "会话有效")
             return true
         }
         
+        android.util.Log.d("UserSessionManager", "未登录")
         return false
     }
     

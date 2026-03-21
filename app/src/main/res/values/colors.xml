@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#6650a4</color>
-    
-    <!-- Splash Screen 颜色 -->
-    <color name="splash_background">#FFF9C4</color>
-    <color name="splash_icon_background">#FFB74D</color>
+    <color name="splash_bg_top">#FFF8E1</color>
+    <color name="splash_bg_center">#FFE082</color>
+    <color name="splash_bg_bottom">#FFCA28</color>
+    <color name="splash_circle_outer">#FFFFFFFF</color>
+    <color name="splash_circle_inner_start">#FFB74D</color>
+    <color name="splash_circle_inner_end">#FF8A65</color>
 </resources>

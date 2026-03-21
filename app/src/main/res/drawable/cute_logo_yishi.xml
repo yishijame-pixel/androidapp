@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 超可爱的"一十"Logo - 完美对称版 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- ========== "一"字 ========== -->
+    
+    <!-- "一"字阴影 -->
+    <item
+        android:top="33dp"
+        android:left="22dp"
+        android:right="22dp"
+        android:height="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#40000000" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    
+    <!-- "一"字主体 - 渐变 -->
+    <item
+        android:top="28dp"
+        android:left="18dp"
+        android:right="18dp"
+        android:height="20dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#5D4037"
+                android:centerColor="#6D4C41"
+                android:endColor="#4E342E"
+                android:angle="90" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    
+    <!-- "一"字顶部高光 -->
+    <item
+        android:top="29dp"
+        android:left="20dp"
+        android:right="20dp"
+        android:height="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#60FFFFFF" />
+            <corners android:topLeftRadius="10dp" android:topRightRadius="10dp" />
+        </shape>
+    </item>
+    
+    <!-- "一"字中心高光 -->
+    <item
+        android:top="32dp"
+        android:left="30dp"
+        android:width="40dp"
+        android:height="8dp">
+        <shape android:shape="oval">
+            <solid android:color="#90FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- ========== "十"字 - 完美对称版本 ========== -->
+    
+    <!-- 设计思路：
+         容器高度：140dp
+         "一"字结束：48dp
+         可用空间：48-132dp（84dp）
+         横线中心：90dp
+         竖线：从55dp到125dp（70dp长），横线正好在中间
+    -->
+    
+    <!-- 竖线阴影 -->
+    <item
+        android:top="58dp"
+        android:gravity="center_horizontal"
+        android:width="22dp"
+        android:height="70dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#40000000" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+    
+    <!-- 竖线主体 - 渐变 -->
+    <item
+        android:top="55dp"
+        android:gravity="center_horizontal"
+        android:width="22dp"
+        android:height="70dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#5D4037"
+                android:centerColor="#6D4C41"
+                android:endColor="#4E342E"
+                android:angle="0" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+    
+    <!-- 竖线左侧高光 -->
+    <item
+        android:top="61dp"
+        android:gravity="center_horizontal"
+        android:width="5dp"
+        android:height="58dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#60FFFFFF" />
+            <corners android:topLeftRadius="11dp" android:bottomLeftRadius="11dp" />
+        </shape>
+    </item>
+    
+    <!-- 竖线中心高光 -->
+    <item
+        android:top="70dp"
+        android:gravity="center_horizontal"
+        android:width="9dp"
+        android:height="45dp">
+        <shape android:shape="oval">
+            <solid android:color="#90FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- ========== "十"字横线（在竖线正中间：90dp） ========== -->
+    
+    <!-- 横线阴影 -->
+    <item
+        android:top="82dp"
+        android:left="22dp"
+        android:right="22dp"
+        android:height="22dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#40000000" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+    
+    <!-- 横线主体 - 渐变 -->
+    <item
+        android:top="79dp"
+        android:left="18dp"
+        android:right="18dp"
+        android:height="22dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#5D4037"
+                android:centerColor="#6D4C41"
+                android:endColor="#4E342E"
+                android:angle="90" />
+            <corners android:radius="11dp" />
+        </shape>
+    </item>
+    
+    <!-- 横线顶部高光 -->
+    <item
+        android:top="80dp"
+        android:left="20dp"
+        android:right="20dp"
+        android:height="5dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#60FFFFFF" />
+            <corners android:topLeftRadius="11dp" android:topRightRadius="11dp" />
+        </shape>
+    </item>
+    
+    <!-- 横线中心高光 -->
+    <item
+        android:top="83dp"
+        android:left="30dp"
+        android:width="45dp"
+        android:height="9dp">
+        <shape android:shape="oval">
+            <solid android:color="#90FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- ========== 可爱装饰圆点 ========== -->
+    
+    <!-- 左上角 - 黄色星星效果 -->
+    <item
+        android:top="12dp"
+        android:left="6dp"
+        android:width="18dp"
+        android:height="18dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#FFD54F"
+                android:endColor="#FFC107"
+                android:type="radial"
+                android:gradientRadius="9dp" />
+        </shape>
+    </item>
+    <item
+        android:top="15dp"
+        android:left="9dp"
+        android:width="8dp"
+        android:height="8dp">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- 右上角 - 粉色爱心效果 -->
+    <item
+        android:top="18dp"
+        android:right="6dp"
+        android:width="16dp"
+        android:height="16dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#FF6B9D"
+                android:endColor="#E91E63"
+                android:type="radial"
+                android:gradientRadius="8dp" />
+        </shape>
+    </item>
+    <item
+        android:top="21dp"
+        android:right="9dp"
+        android:width="7dp"
+        android:height="7dp">
+        <shape android:shape="oval">
+            <solid android:color="#80FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- 左下角 - 蓝色水滴效果 -->
+    <item
+        android:top="117dp"
+        android:left="8dp"
+        android:width="16dp"
+        android:height="16dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#4FC3F7"
+                android:endColor="#03A9F4"
+                android:type="radial"
+                android:gradientRadius="8dp" />
+        </shape>
+    </item>
+    <item
+        android:top="120dp"
+        android:left="11dp"
+        android:width="7dp"
+        android:height="7dp">
+        <shape android:shape="oval">
+            <solid android:color="#80FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- 右下角 - 绿色叶子效果 -->
+    <item
+        android:top="123dp"
+        android:right="8dp"
+        android:width="18dp"
+        android:height="18dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#81C784"
+                android:endColor="#66BB6A"
+                android:type="radial"
+                android:gradientRadius="9dp" />
+        </shape>
+    </item>
+    <item
+        android:top="126dp"
+        android:right="11dp"
+        android:width="8dp"
+        android:height="8dp">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- 左侧 - 紫色魔法效果 -->
+    <item
+        android:top="67dp"
+        android:left="2dp"
+        android:width="14dp"
+        android:height="14dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#BA68C8"
+                android:endColor="#9C27B0"
+                android:type="radial"
+                android:gradientRadius="7dp" />
+        </shape>
+    </item>
+    <item
+        android:top="70dp"
+        android:left="5dp"
+        android:width="6dp"
+        android:height="6dp">
+        <shape android:shape="oval">
+            <solid android:color="#80FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- 右侧 - 橙色太阳效果 -->
+    <item
+        android:top="73dp"
+        android:right="2dp"
+        android:width="14dp"
+        android:height="14dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#FFB74D"
+                android:endColor="#FF9800"
+                android:type="radial"
+                android:gradientRadius="7dp" />
+        </shape>
+    </item>
+    <item
+        android:top="76dp"
+        android:right="5dp"
+        android:width="6dp"
+        android:height="6dp">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- 额外装饰 - 顶部小星星 -->
+    <item
+        android:top="8dp"
+        android:gravity="center_horizontal"
+        android:width="10dp"
+        android:height="10dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#FFEB3B"
+                android:endColor="#FDD835"
+                android:type="radial"
+                android:gradientRadius="5dp" />
+        </shape>
+    </item>
+    
+    <!-- 额外装饰 - 底部小星星 -->
+    <item
+        android:bottom="8dp"
+        android:gravity="center_horizontal"
+        android:width="10dp"
+        android:height="10dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#FF7043"
+                android:endColor="#F4511E"
+                android:type="radial"
+                android:gradientRadius="5dp" />
+        </shape>
+    </item>
+    
+</layer-list>

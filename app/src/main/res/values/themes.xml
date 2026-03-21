@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 启动主题 - 立即显示启动页面背景 -->
+    <style name="Theme.FunLife.Splash" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_screen_layer</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">#FFF8E1</item>
+        <item name="android:navigationBarColor">#FFCA28</item>
+    </style>
+    
+    <!-- 主题 -->
     <style name="Theme.FunLife" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- Splash Screen 配置 (Android 12+) -->
-        <item name="android:windowSplashScreenBackground">@drawable/splash_background</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/animated_dog</item>
-        <item name="android:windowSplashScreenAnimationDuration">1000</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">#00000000</item>
-        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding</item>
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>

@@ -211,7 +211,7 @@ fun SpinWheel(
         
         // 转盘容器 - 简洁设计
         Box(
-            modifier = Modifier.size(320.dp),
+            modifier = Modifier.size(280.dp), // 从320dp减小到280dp，适配小屏幕
             contentAlignment = Alignment.Center
         ) {
             // 转盘画布（会旋转）

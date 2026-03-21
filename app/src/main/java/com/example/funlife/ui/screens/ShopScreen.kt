@@ -26,6 +26,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.funlife.data.model.ShopItem
 import com.example.funlife.viewmodel.ShopViewModel
 import com.example.funlife.viewmodel.HabitViewModel
+import com.example.funlife.ui.components.PageHeader
+import com.example.funlife.ui.components.PageHeaderGradients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,61 +45,50 @@ fun ShopScreen(
     var showPurchaseSuccess by remember { mutableStateOf(false) }
     var purchasedItemName by remember { mutableStateOf("") }
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
+    Scaffold { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // 美化的页面头部
+            Box {
+                PageHeader(
+                    title = "商城",
+                    emoji = "🛒",
+                    gradientColors = PageHeaderGradients.Shop,
+                    subtitle = "金币兑换奖品",
+                    showBackButton = true,
+                    onBackClick = onNavigateBack
+                )
+                
+                // 金币显示 - 悬浮在右上角
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFFFD700).copy(alpha = 0.25f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 20.dp, end = 20.dp)
+                ) {
                     Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("🛒", fontSize = 24.sp)
+                        Text("💰", fontSize = 20.sp)
                         Text(
-                            "商城",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
+                            "${userCoins?.coins ?: 0}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.Default.ArrowBack, 
-                            contentDescription = "返回",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                actions = {
-                    // 金币显示
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFFFFD700).copy(alpha = 0.2f),
-                        modifier = Modifier.padding(end = 16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("💰", fontSize = 20.sp)
-                            Text(
-                                "${userCoins?.coins ?: 0}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFD700)
-                            )
-                        }
                     }
                 }
-            )
-        }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+            }
+            
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -174,6 +165,7 @@ fun ShopScreen(
             }
         }
     }
+}
     
     // 选择习惯对话框
     if (selectedItem != null && selectedItem!!.type == "makeup_card") {

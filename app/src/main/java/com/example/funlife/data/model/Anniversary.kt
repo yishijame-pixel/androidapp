@@ -28,7 +28,8 @@ data class Anniversary(
     val type: String = AnniversaryType.CUSTOM.name,  // 纪念日类型
     val isYearly: Boolean = true,  // 是否每年重复
     val note: String? = null,  // 备注
-    val importance: Int = 3  // 重要程度 1-5星
+    val importance: Int = 3,  // 重要程度 1-5星
+    val customOrder: Int = 0  // 自定义排序顺序
 ) {
     // 获取类型枚举
     fun getTypeEnum(): AnniversaryType {

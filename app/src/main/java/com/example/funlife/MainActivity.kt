@@ -48,6 +48,10 @@ import com.example.funlife.ui.theme.FunLifeTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 切换到正常主题
+        setTheme(R.style.Theme_FunLife)
+        
         setContent {
             FunLifeTheme {
                 var showSplash by remember { mutableStateOf(true) }
@@ -107,11 +111,8 @@ fun MainScreen() {
     
     Scaffold(
         topBar = {
-            // 只在首页和底部导航的页面显示全局TopAppBar
+            // 只在个人中心显示全局TopAppBar，其他页面使用自己的 PageHeader 或自定义头部
             val showTopBar = currentDestination?.route in listOf(
-                Screen.Home.route,
-                Screen.Habit.route,
-                Screen.Mood.route,
                 Screen.Profile.route
             )
             
