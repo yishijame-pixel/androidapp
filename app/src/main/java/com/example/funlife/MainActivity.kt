@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,6 +22,9 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Casino
 import androidx.compose.material3.*
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -78,26 +82,30 @@ fun MainScreen() {
     // 创建 AuthViewModel
     val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     
-    // 底部导航项
+    // 底部导航项 - 使用自定义图标
     val bottomNavItems = listOf(
         BottomNavItem(
             screen = Screen.Home,
             icon = Icons.Default.Home,
+            iconRes = R.drawable.nav_icon_1,
             label = "首页"
         ),
         BottomNavItem(
             screen = Screen.Habit,
             icon = Icons.Default.CheckCircle,
+            iconRes = R.drawable.nav_icon_2,
             label = "习惯"
         ),
         BottomNavItem(
             screen = Screen.Mood,
             icon = Icons.Default.FavoriteBorder,
+            iconRes = R.drawable.nav_icon_3,
             label = "心情"
         ),
         BottomNavItem(
             screen = Screen.Profile,
             icon = Icons.Default.Person,
+            iconRes = R.drawable.nav_icon_4,
             label = "我的"
         )
     )
@@ -110,6 +118,7 @@ fun MainScreen() {
     )
     
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             // 只在个人中心显示全局TopAppBar，其他页面使用自己的 PageHeader 或自定义头部
             val showTopBar = currentDestination?.route in listOf(
@@ -239,48 +248,63 @@ fun MainScreen() {
         bottomBar = {
             // 只在主要页面显示底部导航栏
             if (showBottomBar) {
-                // 美化的底部导航栏 - 无背景，图标发光效果
-                Surface(
-                    tonalElevation = 0.dp,
-                    shadowElevation = 8.dp,
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                Row(
+                // 使用自定义背景图片的底部导航栏 - 宽度拉满
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(88.dp)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(90.dp)
                 ) {
-                    bottomNavItems.forEach { item ->
-                        val selected = currentDestination?.hierarchy?.any {
-                            it.route == item.screen.route
-                        } == true
-                        
-                        BottomNavItem(
-                            item = item,
-                            selected = selected,
-                            onClick = {
-                                // 只有当前已经在目标页面时才不导航
-                                if (currentDestination?.route == item.screen.route) {
-                                    return@BottomNavItem
-                                }
-                                
-                                navController.navigate(item.screen.route) {
-                                    // 清除导航栈，但保留首页
-                                    popUpTo(Screen.Home.route) {
-                                        inclusive = false
+                    // 粉色背景层 - 填充透明区域
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFFCE4EC))
+                    )
+                    
+                    // 背景图片 - 覆盖在粉色背景上
+                    Image(
+                        painter = painterResource(id = R.drawable.nav_bg),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.FillBounds
+                    )
+                    
+                    // 导航项 - 无边距，完全拉满
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        bottomNavItems.forEach { item ->
+                            val selected = currentDestination?.hierarchy?.any {
+                                it.route == item.screen.route
+                            } == true
+                            
+                            BottomNavItem(
+                                item = item,
+                                selected = selected,
+                                onClick = {
+                                    // 只有当前已经在目标页面时才不导航
+                                    if (currentDestination?.route == item.screen.route) {
+                                        return@BottomNavItem
                                     }
-                                    // 避免重复导航到同一目的地
-                                    launchSingleTop = true
-                                    // 恢复状态
-                                    restoreState = true
+                                    
+                                    navController.navigate(item.screen.route) {
+                                        // 清除导航栏，但保留首页
+                                        popUpTo(Screen.Home.route) {
+                                            inclusive = false
+                                        }
+                                        // 避免重复导航到同一目的地
+                                        launchSingleTop = true
+                                        // 恢复状态
+                                        restoreState = true
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
-                }
                 }
             }
         }
@@ -305,21 +329,14 @@ private fun BottomNavItem(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    // 缩放动画
+    // 缩放动画 - 增强选中效果
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.08f else 1f,
+        targetValue = if (selected) 1.2f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "scale"
-    )
-    
-    // 透明度动画
-    val alpha by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.7f,
-        animationSpec = tween(durationMillis = 200),
-        label = "alpha"
     )
     
     Column(
@@ -329,33 +346,25 @@ private fun BottomNavItem(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             )
-            .padding(horizontal = 2.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            }
             .wrapContentWidth()
-            .height(64.dp),
+            .fillMaxHeight(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.Center
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(56.dp)
         ) {
-            // 发光效果（仅选中时显示）
+            // 选中时的背景圆圈
             if (selected) {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .graphicsLayer {
-                            this.alpha = 0.3f
-                        }
+                        .size(60.dp)
                         .background(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                    Color.White.copy(alpha = 0.3f),
+                                    Color.White.copy(alpha = 0.1f),
                                     Color.Transparent
                                 )
                             ),
@@ -364,45 +373,34 @@ private fun BottomNavItem(
                 )
             }
             
-            // 图标
-            Icon(
-                imageVector = item.icon,
+            // 使用自定义图标 - 大幅增加尺寸，移除透明度
+            Image(
+                painter = painterResource(id = item.iconRes),
                 contentDescription = item.label,
-                modifier = Modifier.size(if (selected) 28.dp else 24.dp),
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                modifier = Modifier
+                    .size(if (selected) 52.dp else 48.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                contentScale = ContentScale.Fit
             )
         }
         
-        // 文字 - 确保完整显示
+        Spacer(modifier = Modifier.height(2.dp))
+        
+        // 文字 - 增大字号，增强对比
         Text(
             text = item.label,
             style = MaterialTheme.typography.labelMedium.copy(
-                fontSize = 12.sp,
+                fontSize = if (selected) 13.sp else 12.sp,
                 letterSpacing = 0.sp,
                 lineHeight = 14.sp
             ),
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) Color.Black else Color.Black.copy(alpha = 0.7f),
             maxLines = 1
         )
-        
-        // 选中指示器（小圆点）
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = CircleShape
-                    )
-            )
-        } else {
-            Spacer(modifier = Modifier.height(4.dp))
-        }
     }
 }
 
@@ -410,5 +408,6 @@ private fun BottomNavItem(
 data class BottomNavItem(
     val screen: Screen,
     val icon: ImageVector,
+    val iconRes: Int,
     val label: String
 )

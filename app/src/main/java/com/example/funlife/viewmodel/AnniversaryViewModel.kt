@@ -31,13 +31,19 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
     
-    val anniversaries: StateFlow<List<Anniversary>>
-    val pinnedAnniversary: StateFlow<Anniversary?>
+    // 🔥 改用 MutableStateFlow 直接管理数据，完全控制更新时机
+    private val _anniversaries = MutableStateFlow<List<Anniversary>>(emptyList())
+    val anniversaries: StateFlow<List<Anniversary>> = _anniversaries
     
-    // 🔥 获取当前用户ID
+    private val _pinnedAnniversary = MutableStateFlow<Anniversary?>(null)
+    val pinnedAnniversary: StateFlow<Anniversary?> = _pinnedAnniversary
+    
+    // 🔥 改用实时获取userId，而不是在init时缓存
     private fun getCurrentUserId(): Long {
         val sessionManager = com.example.funlife.utils.UserSessionManager(context)
-        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+        val userId = sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+        android.util.Log.d("AnniversaryViewModel", "实时获取userId: $userId")
+        return userId
     }
     
     init {
@@ -45,72 +51,95 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
         val anniversaryDao = database.anniversaryDao()
         repository = AnniversaryRepository(anniversaryDao)
         
-        // 组合筛选、搜索和排序
-        anniversaries = combine(
-            _selectedType,
-            _sortOrder,
-            _searchQuery
-        ) { type, sort, query ->
-            Triple(type, sort, query)
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Triple(null, SortOrder.DEFAULT, "")
-        ).let { filterState ->
-            combine(
-                filterState,
-                repository.getAllAnniversaries(getCurrentUserId())
-            ) { (type, sort, query), allAnniversaries ->
-                var filtered = allAnniversaries
-                
-                // 类型筛选
-                if (type != null) {
-                    filtered = filtered.filter { it.type == type }
-                }
-                
-                // 搜索
-                if (query.isNotBlank()) {
-                    filtered = filtered.filter { 
-                        it.name.contains(query, ignoreCase = true) || 
-                        it.note?.contains(query, ignoreCase = true) == true
-                    }
-                }
-                
-                // 排序
-                when (sort) {
-                    SortOrder.DEFAULT -> filtered.sortedWith(
-                        compareByDescending<Anniversary> { it.isPinned }
-                            .thenBy { it.getDaysRemaining() }
-                    )
-                    SortOrder.NEAREST -> filtered.sortedBy { it.getDaysRemaining() }
-                    SortOrder.FARTHEST -> filtered.sortedByDescending { it.getDaysRemaining() }
-                    SortOrder.IMPORTANCE -> filtered.sortedWith(
-                        compareByDescending<Anniversary> { it.importance }
-                            .thenBy { it.getDaysRemaining() }
-                    )
-                    SortOrder.NAME -> filtered.sortedBy { it.name }
-                    SortOrder.CUSTOM -> filtered.sortedBy { it.customOrder }
-                }
-            }.catch { e ->
-                android.util.Log.e("AnniversaryViewModel", "Error loading anniversaries", e)
-                emit(emptyList())
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
-        }
+        // 🔥 启动时立即加载数据
+        loadAnniversaries()
         
-        pinnedAnniversary = repository.getPinnedAnniversary(getCurrentUserId())
-            .catch { e ->
-                android.util.Log.e("AnniversaryViewModel", "Error loading pinned anniversary", e)
-                emit(null)
+        // 🔥 监听筛选和排序变化，重新加载
+        viewModelScope.launch {
+            combine(_selectedType, _sortOrder, _searchQuery) { type, sort, query ->
+                Triple(type, sort, query)
+            }.collect {
+                loadAnniversaries()
             }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = null
-            )
+        }
+    }
+    
+    // 🔥 新增：主动加载纪念日数据的方法 - 每次都实时获取userId
+    private fun loadAnniversaries() {
+        viewModelScope.launch {
+            try {
+                // 🔥 每次加载都重新获取userId，确保使用最新的登录用户
+                val userId = getCurrentUserId()
+                android.util.Log.d("AnniversaryViewModel", "=== 加载纪念日数据 ===")
+                android.util.Log.d("AnniversaryViewModel", "当前userId: $userId")
+                
+                if (userId == 0L) {
+                    android.util.Log.w("AnniversaryViewModel", "用户未登录，清空数据")
+                    _anniversaries.value = emptyList()
+                    _pinnedAnniversary.value = null
+                    return@launch
+                }
+                
+                // 🔥 直接从数据库查询最新数据
+                repository.getAllAnniversaries(userId).collect { allAnniversaries ->
+                    android.util.Log.d("AnniversaryViewModel", "从数据库获取到 ${allAnniversaries.size} 条纪念日")
+                    
+                    var filtered = allAnniversaries
+                    
+                    // 类型筛选
+                    val type = _selectedType.value
+                    if (type != null) {
+                        filtered = filtered.filter { it.type == type }
+                    }
+                    
+                    // 搜索
+                    val query = _searchQuery.value
+                    if (query.isNotBlank()) {
+                        filtered = filtered.filter { 
+                            it.name.contains(query, ignoreCase = true) || 
+                            it.note?.contains(query, ignoreCase = true) == true
+                        }
+                    }
+                    
+                    // 排序
+                    val sorted = when (_sortOrder.value) {
+                        SortOrder.DEFAULT -> filtered.sortedWith(
+                            compareByDescending<Anniversary> { it.isPinned }
+                                .thenBy { it.getDaysRemaining() }
+                        )
+                        SortOrder.NEAREST -> filtered.sortedBy { it.getDaysRemaining() }
+                        SortOrder.FARTHEST -> filtered.sortedByDescending { it.getDaysRemaining() }
+                        SortOrder.IMPORTANCE -> filtered.sortedWith(
+                            compareByDescending<Anniversary> { it.importance }
+                                .thenBy { it.getDaysRemaining() }
+                        )
+                        SortOrder.NAME -> filtered.sortedBy { it.name }
+                        SortOrder.CUSTOM -> filtered.sortedBy { it.customOrder }
+                    }
+                    
+                    android.util.Log.d("AnniversaryViewModel", "过滤排序后 ${sorted.size} 条")
+                    sorted.forEach {
+                        android.util.Log.d("AnniversaryViewModel", "  - ${it.name} (ID: ${it.id}, userId: ${it.userId})")
+                    }
+                    
+                    // 🔥 直接更新 StateFlow
+                    _anniversaries.value = sorted
+                    
+                    // 更新置顶纪念日
+                    _pinnedAnniversary.value = sorted.firstOrNull { it.isPinned }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AnniversaryViewModel", "加载纪念日失败", e)
+                _anniversaries.value = emptyList()
+                _pinnedAnniversary.value = null
+            }
+        }
+    }
+    
+    // 🔥 新增：公开方法，供UI层在用户切换时调用
+    fun refreshForNewUser() {
+        android.util.Log.d("AnniversaryViewModel", "用户切换，刷新数据")
+        loadAnniversaries()
     }
     
     // 添加纪念日
@@ -128,13 +157,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             try {
                 android.util.Log.d("AnniversaryViewModel", "=== 开始添加纪念日 ===")
-                android.util.Log.d("AnniversaryViewModel", "name: $name")
-                android.util.Log.d("AnniversaryViewModel", "date: $date")
-                android.util.Log.d("AnniversaryViewModel", "type: $type")
-                android.util.Log.d("AnniversaryViewModel", "imageUri: $imageUri")
-                android.util.Log.d("AnniversaryViewModel", "isYearly: $isYearly")
-                android.util.Log.d("AnniversaryViewModel", "note: $note")
-                android.util.Log.d("AnniversaryViewModel", "importance: $importance")
+                android.util.Log.d("AnniversaryViewModel", "name: $name, date: $date, type: $type")
                 
                 // 检查用户ID
                 val userId = getCurrentUserId()
@@ -171,8 +194,6 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                     null
                 }
                 
-                android.util.Log.d("AnniversaryViewModel", "保存的图片URI: $savedImageUri")
-                
                 val anniversary = Anniversary(
                     userId = userId,
                     name = name, 
@@ -185,11 +206,25 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 )
                 
                 android.util.Log.d("AnniversaryViewModel", "准备插入数据库: $anniversary")
-                repository.insert(anniversary)
-                android.util.Log.d("AnniversaryViewModel", "✅ 纪念日添加成功")
                 
-                // 延迟一下确保数据库操作完成
-                kotlinx.coroutines.delay(100)
+                // 🔥 在IO线程执行数据库操作
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repository.insert(anniversary)
+                }
+                
+                android.util.Log.d("AnniversaryViewModel", "✅ 数据库插入完成")
+                
+                // 🔥 等待数据库事务提交
+                kotlinx.coroutines.delay(300)
+                
+                // 🔥 主动重新加载数据 - 这是关键！
+                android.util.Log.d("AnniversaryViewModel", "主动重新加载数据...")
+                loadAnniversaries()
+                
+                // 🔥 再等待一下确保UI更新
+                kotlinx.coroutines.delay(200)
+                
+                android.util.Log.d("AnniversaryViewModel", "✅ 纪念日添加成功，当前列表数量: ${_anniversaries.value.size}")
                 onSuccess()
             } catch (e: Exception) {
                 android.util.Log.e("AnniversaryViewModel", "❌ 添加纪念日失败", e)
@@ -209,6 +244,8 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 com.example.funlife.utils.ImageHelper.deleteImage(anniversary.imageUri)
             }
             repository.delete(anniversary)
+            // 🔥 主动重新加载
+            loadAnniversaries()
         }
     }
     
@@ -216,6 +253,8 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
     fun pinAnniversary(anniversary: Anniversary) {
         viewModelScope.launch {
             repository.pinAnniversary(getCurrentUserId(), anniversary)
+            // 🔥 主动重新加载
+            loadAnniversaries()
         }
     }
     
@@ -223,6 +262,8 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
     fun unpinAnniversary(anniversary: Anniversary) {
         viewModelScope.launch {
             repository.unpinAnniversary(anniversary)
+            // 🔥 主动重新加载
+            loadAnniversaries()
         }
     }
     
@@ -272,31 +313,37 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 importance = importance
             )
             repository.update(updatedAnniversary)
+            // 🔥 主动重新加载
+            loadAnniversaries()
         }
     }
     
     // 筛选和排序方法
     fun setTypeFilter(type: String?) {
         _selectedType.value = type
+        // 🔥 筛选变化会自动触发loadAnniversaries（在init中监听）
     }
     
     fun setSortOrder(order: SortOrder) {
         _sortOrder.value = order
+        // 🔥 排序变化会自动触发loadAnniversaries（在init中监听）
     }
     
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+        // 🔥 搜索变化会自动触发loadAnniversaries（在init中监听）
     }
     
     fun clearFilters() {
         _selectedType.value = null
         _sortOrder.value = SortOrder.DEFAULT
         _searchQuery.value = ""
+        // 🔥 会自动触发loadAnniversaries
     }
     
     // 统计分析方法
     fun getMonthlyStatistics(): StateFlow<Map<String, Int>> {
-        return anniversaries.map { list ->
+        return _anniversaries.map { list ->
             val currentMonth = java.time.LocalDate.now().monthValue
             list.filter { anniversary ->
                 val date = java.time.LocalDate.parse(anniversary.date)
@@ -311,7 +358,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
     }
     
     fun getYearlyStatistics(): StateFlow<Map<String, Int>> {
-        return anniversaries.map { list ->
+        return _anniversaries.map { list ->
             list.groupBy { it.type }
                 .mapValues { it.value.size }
         }.stateIn(
@@ -322,7 +369,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
     }
     
     fun getTopImportantAnniversaries(limit: Int = 5): StateFlow<List<Anniversary>> {
-        return anniversaries.map { list ->
+        return _anniversaries.map { list ->
             list.sortedWith(
                 compareByDescending<Anniversary> { it.importance }
                     .thenBy { it.getDaysRemaining() }
@@ -335,7 +382,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
     }
     
     fun getUpcomingAnniversaries(days: Int = 30): StateFlow<List<Anniversary>> {
-        return anniversaries.map { list ->
+        return _anniversaries.map { list ->
             list.filter { it.getDaysRemaining() in 0..days.toLong() }
                 .sortedBy { it.getDaysRemaining() }
         }.stateIn(
@@ -352,6 +399,8 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 anniversary.copy(customOrder = index)
             }
             repository.updateAnniversariesOrder(updatedList)
+            // 🔥 主动重新加载
+            loadAnniversaries()
         }
     }
 }

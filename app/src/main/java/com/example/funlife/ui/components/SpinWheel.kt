@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
 import com.example.funlife.data.model.SpinWheelMode
 import com.example.funlife.data.model.WheelOption
 import com.example.funlife.data.model.WheelTheme
@@ -1110,76 +1111,457 @@ fun ResultAnimation(
     onDismiss: () -> Unit
 ) {
     var visible by remember { mutableStateOf(true) }
-    var scale by remember { mutableFloatStateOf(0f) }
-    var alpha by remember { mutableFloatStateOf(1f) }
-    var rotation by remember { mutableFloatStateOf(-10f) }
+    
+    // 多阶段动画控制
+    val flashProgress = remember { Animatable(0f) }      // 闪光
+    val cardScale = remember { Animatable(0.1f) }        // 卡片缩放
+    val cardRotation = remember { Animatable(-180f) }    // 卡片旋转
+    val shakeIntensity = remember { Animatable(0f) }     // 抖动强度
+    val particleBurst = remember { Animatable(0f) }      // 粒子爆发
+    val bgAlpha = remember { Animatable(0f) }            // 背景透明度
     
     LaunchedEffect(Unit) {
-        // 弹跳动画
-        animate(0f, 1.5f, animationSpec = tween(250, easing = FastOutSlowInEasing)) { v, _ -> scale = v }
-        animate(1.5f, 0.95f, animationSpec = tween(150)) { v, _ -> scale = v }
-        animate(0.95f, 1.05f, animationSpec = tween(100)) { v, _ -> scale = v }
-        animate(1.05f, 1f, animationSpec = tween(100)) { v, _ -> scale = v }
+        // 阶段1：闪光冲击（0-0.2s）
+        launch {
+            flashProgress.animateTo(1f, tween(200, easing = FastOutSlowInEasing))
+            delay(100)
+            flashProgress.animateTo(0f, tween(300))
+        }
         
-        // 旋转动画
-        animate(-10f, 10f, animationSpec = tween(200)) { v, _ -> rotation = v }
-        animate(10f, -5f, animationSpec = tween(150)) { v, _ -> rotation = v }
-        animate(-5f, 0f, animationSpec = tween(100)) { v, _ -> rotation = v }
+        // 背景淡入
+        launch {
+            bgAlpha.animateTo(0.9f, tween(300))
+        }
         
-        // 停留
-        delay(3000)
+        // 阶段2：卡片飞入+旋转（0.2-0.6s）
+        delay(200)
+        launch {
+            cardScale.animateTo(
+                1.2f,  // 先放大到1.2倍
+                spring(dampingRatio = 0.6f, stiffness = 300f)
+            )
+            delay(100)
+            // 回弹到1.0
+            cardScale.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 400f))
+        }
+        launch {
+            cardRotation.animateTo(
+                0f,
+                spring(dampingRatio = 0.8f, stiffness = 300f)
+            )
+        }
         
-        // 淡出
-        animate(1f, 0f, animationSpec = tween(500)) { v, _ -> alpha = v }
+        // 阶段3：剧烈抖动（0.6-1.2s）
+        delay(400)
+        launch {
+            shakeIntensity.animateTo(1f, tween(50))
+            delay(600)
+            shakeIntensity.animateTo(0f, tween(300, easing = FastOutSlowInEasing))
+        }
+        
+        // 阶段4：粒子爆发（0.8-1.8s）
+        delay(200)
+        particleBurst.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
+        
+        // 阶段5：稳定展示（1.8-3.0s）
+        delay(1200)
+        
+        // 阶段6：淡出（3.0-3.3s）
+        launch {
+            bgAlpha.animateTo(0f, tween(300))
+        }
+        launch {
+            cardScale.animateTo(0.8f, tween(300))
+        }
+        
+        delay(300)
         visible = false
         onDismiss()
     }
     
     if (visible) {
         Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.85f * alpha)),
+            Modifier.fillMaxSize(),
             Alignment.Center
         ) {
-            // 根据模式显示不同的背景效果 - 确保填充整个屏幕
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (mode) {
-                    SpinWheelMode.NORMAL -> NormalModeBackground(alpha)
-                    SpinWheelMode.ADVANCED -> AdvancedModeBackground(alpha)
-                    SpinWheelMode.LUCKY -> LuckyModeBackground(alpha)
-                }
+            // 背景层
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = bgAlpha.value))
+            )
+            
+            // 闪光冲击波
+            if (flashProgress.value > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = flashProgress.value * 0.8f),
+                                    Color.Transparent
+                                ),
+                                radius = 2000f * flashProgress.value
+                            )
+                        )
+                )
             }
             
-            // 根据模式显示不同的卡片
-            when (mode) {
-                SpinWheelMode.NORMAL -> NormalModeCard(result, scale, rotation, alpha)
-                SpinWheelMode.ADVANCED -> AdvancedModeCard(result, scale, rotation, alpha)
-                SpinWheelMode.LUCKY -> LuckyModeCard(result, scale, rotation, alpha)
+            // 卡片层
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                when (mode) {
+                    SpinWheelMode.NORMAL -> EnhancedNormalModeCard(
+                        result, 
+                        cardScale.value, 
+                        cardRotation.value,
+                        shakeIntensity.value,
+                        particleBurst.value
+                    )
+                    SpinWheelMode.ADVANCED -> EnhancedAdvancedModeCard(
+                        result, 
+                        cardScale.value, 
+                        cardRotation.value,
+                        shakeIntensity.value,
+                        particleBurst.value
+                    )
+                    SpinWheelMode.LUCKY -> EnhancedLuckyModeCard(
+                        result, 
+                        cardScale.value, 
+                        cardRotation.value,
+                        shakeIntensity.value,
+                        particleBurst.value
+                    )
+                }
             }
         }
     }
 }
 
-// 普通模式卡片 - 清新蓝色设计
+// 增强版普通模式卡片 - 简化版（确保抖动可见）
 @Composable
-fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float) {
-    // 粒子动画
-    val infiniteTransition = rememberInfiniteTransition(label = "particles")
-    val particleOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "offset"
-    )
+fun EnhancedNormalModeCard(
+    result: String,
+    scale: Float,
+    rotation: Float,
+    shakeIntensity: Float,
+    particleBurst: Float
+) {
+    // 简单直接的抖动 - 使用 derivedStateOf 实时计算
+    val shakeX by remember {
+        derivedStateOf {
+            if (shakeIntensity > 0.1f) {
+                (kotlin.math.sin(System.currentTimeMillis() / 30.0) * 15f * shakeIntensity).toFloat()
+            } else 0f
+        }
+    }
+    
+    val shakeY by remember {
+        derivedStateOf {
+            if (shakeIntensity > 0.1f) {
+                (kotlin.math.cos(System.currentTimeMillis() / 25.0) * 10f * shakeIntensity).toFloat()
+            } else 0f
+        }
+    }
+    
+    // 强制重组以更新抖动
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(shakeIntensity) {
+        if (shakeIntensity > 0.1f) {
+            while (shakeIntensity > 0.1f) {
+                tick++
+                delay(16)  // 60fps
+            }
+        }
+    }
     
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
+        // 粒子爆发层 - 48个粒子（三层，每层16个）
+        if (particleBurst > 0.05f) {
+            Box(
+                modifier = Modifier
+                    .size(800.dp)
+                    .graphicsLayer {
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                // 第一层：快速外扩
+                repeat(16) { i ->
+                    val angle = (i * 22.5f) * Math.PI.toFloat() / 180f
+                    val distance = 200f + particleBurst * 250f
+                    val offsetX = distance * cos(angle)
+                    val offsetY = distance * sin(angle)
+                    val alpha = (1f - particleBurst * 0.8f).coerceIn(0f, 1f)
+                    
+                    if (alpha > 0.05f) {
+                        Text(
+                            text = "🎁",
+                            fontSize = (24 - particleBurst * 16).sp,
+                            modifier = Modifier
+                                .offset(x = offsetX.dp, y = offsetY.dp)
+                                .graphicsLayer {
+                                    this.alpha = alpha
+                                    rotationZ = particleBurst * 720f
+                                }
+                        )
+                    }
+                }
+                
+                // 第二层：中速
+                repeat(16) { i ->
+                    val angle = ((i * 22.5f) + 11.25f) * Math.PI.toFloat() / 180f
+                    val distance = 200f + particleBurst * 200f
+                    val offsetX = distance * cos(angle)
+                    val offsetY = distance * sin(angle)
+                    val alpha = (1f - particleBurst * 0.7f).coerceIn(0f, 1f)
+                    
+                    if (alpha > 0.05f) {
+                        Text(
+                            text = "🎁",
+                            fontSize = (22 - particleBurst * 14).sp,
+                            modifier = Modifier
+                                .offset(x = offsetX.dp, y = offsetY.dp)
+                                .graphicsLayer {
+                                    this.alpha = alpha
+                                    rotationZ = -particleBurst * 540f
+                                }
+                        )
+                    }
+                }
+                
+                // 第三层：慢速内圈
+                repeat(16) { i ->
+                    val angle = (i * 22.5f) * Math.PI.toFloat() / 180f
+                    val distance = 200f + particleBurst * 150f
+                    val offsetX = distance * cos(angle)
+                    val offsetY = distance * sin(angle)
+                    val alpha = (1f - particleBurst * 0.6f).coerceIn(0f, 1f)
+                    
+                    if (alpha > 0.05f) {
+                        Text(
+                            text = "✨",
+                            fontSize = (20 - particleBurst * 12).sp,
+                            modifier = Modifier
+                                .offset(x = offsetX.dp, y = offsetY.dp)
+                                .graphicsLayer {
+                                    this.alpha = alpha
+                                    rotationZ = particleBurst * 360f
+                                }
+                        )
+                    }
+                }
+            }
+        }
+        
+        // 光晕效果
+        Box(
+            modifier = Modifier
+                .size((400 * scale).dp)
+                .graphicsLayer {
+                    this.alpha = 0.4f
+                }
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF2196F3).copy(alpha = 0.6f),
+                            Color.Transparent
+                        )
+                    ),
+                    CircleShape
+                )
+        )
+        
+                // 主卡片
+        Box(
+            modifier = Modifier
+                .width(340.dp)
+                .wrapContentHeight()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    rotationZ = rotation
+                    translationX = shakeX  // 直接使用计算值
+                    translationY = shakeY  // 直接使用计算值
+                }
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFE3F2FD),
+                            Color(0xFFBBDEFB),
+                            Color(0xFF90CAF9)
+                        )
+                    ),
+                    RoundedCornerShape(28.dp)
+                )
+                .padding(32.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // 顶部装饰
+                Text(
+                    "✨ 恭喜抽中 ✨",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1976D2)
+                )
+                
+                // 大图标
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFE3F2FD),
+                                    Color(0xFFBBDEFB)
+                                )
+                            ),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "🎁",
+                        fontSize = 64.sp
+                    )
+                }
+                
+                // 结果文字
+                Text(
+                    result,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF1565C0),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+// 为其他模式创建占位函数
+@Composable
+fun EnhancedAdvancedModeCard(result: String, scale: Float, rotation: Float, shakeIntensity: Float, particleBurst: Float) {
+    // 使用相同逻辑，只是颜色不同
+    EnhancedNormalModeCard(result, scale, rotation, shakeIntensity, particleBurst)
+}
+
+@Composable
+fun EnhancedLuckyModeCard(result: String, scale: Float, rotation: Float, shakeIntensity: Float, particleBurst: Float) {
+    // 使用相同逻辑，只是颜色不同
+    EnhancedNormalModeCard(result, scale, rotation, shakeIntensity, particleBurst)
+}
+
+// 保留旧版本以防需要回退
+// 普通模式卡片 - 清新蓝色设计（丝滑流畅版 - 明显抖动 + 更多粒子）
+@Composable
+fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, explosionProgress: Float = 0f) {
+    // 烟花粒子角度 - 减少到16个
+    val fireworkParticles = remember {
+        List(16) { i ->
+            (i * 22.5f) * Math.PI.toFloat() / 180f
+        }
+    }
+    
+    // 抖动动画 - 增强版，更明显的抖动
+    val shakeX = remember { Animatable(0f) }
+    val shakeY = remember { Animatable(0f) }
+    
+    LaunchedEffect(Unit) {
+        // 同时启动X和Y方向的抖动
+        launch {
+            val startTime = System.currentTimeMillis()
+            while (System.currentTimeMillis() - startTime < 800) {
+                shakeX.snapTo(12f)
+                delay(30)
+                shakeX.snapTo(-12f)
+                delay(30)
+            }
+            shakeX.animateTo(0f, animationSpec = tween(300, easing = FastOutSlowInEasing))
+        }
+        launch {
+            delay(15) // 错开Y轴抖动，产生更自然的效果
+            val startTime = System.currentTimeMillis()
+            while (System.currentTimeMillis() - startTime < 800) {
+                shakeY.snapTo(8f)
+                delay(30)
+                shakeY.snapTo(-8f)
+                delay(30)
+            }
+            shakeY.animateTo(0f, animationSpec = tween(300, easing = FastOutSlowInEasing))
+        }
+    }
+    
+    // 粒子动画 - 使用Animatable，流畅循环
+    val particleProgress = remember { Animatable(0f) }
+    
+    LaunchedEffect(Unit) {
+        while (true) {
+            particleProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(900, easing = LinearEasing)
+            )
+            particleProgress.snapTo(0f)
+        }
+    }
+    
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // 烟花效果层 - 在最底层，从卡片位置向四周扩散（优化渲染）
+        if (explosionProgress > 0.01f) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // 启用硬件加速
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+            ) {
+                val centerX = size.width / 2
+                val centerY = size.height / 2
+                val maxRadius = 800f
+                
+                fireworkParticles.forEach { angle ->
+                    val radius = maxRadius * explosionProgress
+                    val particleAlpha = if (explosionProgress < 0.7f) {
+                        0.9f
+                    } else {
+                        0.9f * (1f - (explosionProgress - 0.7f) / 0.3f)
+                    }
+                    
+                    if (particleAlpha > 0.01f) {
+                        val x = centerX + radius * cos(angle)
+                        val y = centerY + radius * sin(angle)
+                        
+                        // 绘制发光粒子
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF2196F3).copy(alpha = particleAlpha),
+                                    Color(0xFF64B5F6).copy(alpha = particleAlpha * 0.6f),
+                                    Color.Transparent
+                                )
+                            ),
+                            radius = 50f,
+                            center = Offset(x, y)
+                        )
+                    }
+                }
+            }
+        }
+        
         // 外层光晕效果
         Box(
             modifier = Modifier
@@ -1200,6 +1582,67 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float) 
                 )
         )
         
+        // 礼物盒粒子层 - 增强版（32个粒子，双层效果）
+        Box(
+            modifier = Modifier
+                .width(400.dp)
+                .height(600.dp)
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // 第一层：外圈礼物盒粒子（16个）
+            repeat(16) { i ->
+                val angle = (i * 22.5f) * Math.PI.toFloat() / 180f
+                val baseDistance = 170f
+                val distance = baseDistance + particleProgress.value * 200f
+                
+                val offsetX = distance * cos(angle)
+                val offsetY = distance * sin(angle)
+                
+                val pAlpha = (1f - particleProgress.value) * alpha
+                
+                if (pAlpha > 0.05f) {
+                    Text(
+                        text = "🎁",
+                        fontSize = (22 - particleProgress.value * 14).sp,
+                        modifier = Modifier
+                            .offset(x = offsetX.dp, y = offsetY.dp)
+                            .graphicsLayer {
+                                this.alpha = pAlpha
+                                rotationZ = particleProgress.value * 360f
+                            }
+                    )
+                }
+            }
+            
+            // 第二层：内圈礼物盒粒子（16个，错开角度）
+            repeat(16) { i ->
+                val angle = ((i * 22.5f) + 11.25f) * Math.PI.toFloat() / 180f  // 错开11.25度
+                val baseDistance = 170f
+                val distance = baseDistance + particleProgress.value * 160f  // 稍微慢一点
+                
+                val offsetX = distance * cos(angle)
+                val offsetY = distance * sin(angle)
+                
+                val pAlpha = (1f - particleProgress.value * 0.8f) * alpha * 0.8f
+                
+                if (pAlpha > 0.05f) {
+                    Text(
+                        text = "🎁",
+                        fontSize = (18 - particleProgress.value * 10).sp,
+                        modifier = Modifier
+                            .offset(x = offsetX.dp, y = offsetY.dp)
+                            .graphicsLayer {
+                                this.alpha = pAlpha
+                                rotationZ = -particleProgress.value * 360f  // 反向旋转
+                            }
+                    )
+                }
+            }
+        }
+        
         Box(
             modifier = Modifier
                 .width(340.dp)
@@ -1208,6 +1651,8 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float) 
                     scaleX = scale
                     scaleY = scale
                     rotationZ = rotation
+                    translationX = shakeX.value  // X轴抖动
+                    translationY = shakeY.value  // Y轴抖动
                     this.alpha = alpha
                 }
                 .background(
@@ -1222,84 +1667,112 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float) 
                 )
                 .padding(24.dp)
         ) {
-            // 动态粒子背景
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val width = size.width
-                val height = size.height
-                
-                // 漂浮气泡
-                for (i in 0..15) {
-                    val x = (width * (i % 4) / 4f + particleOffset * 100f) % width
-                    val y = (height * (i / 4) / 4f - particleOffset * 80f + height) % height
-                    val bubbleSize = 8f + (i % 3) * 4f
-                    
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF2196F3).copy(alpha = 0.4f),
-                                Color(0xFF00BCD4).copy(alpha = 0.2f),
-                                Color.Transparent
-                            )
-                        ),
-                        radius = bubbleSize,
-                        center = Offset(x, y)
-                    )
-                }
-            }
+            // 移除卡片背景粒子，提升性能
             
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 顶部装饰 - 简化
+                // 顶部装饰
                 Text("✨ 恭喜抽中 ✨", 
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1976D2)
                 )
                 
-                // 大图标 - 缩小
+                // 大图标 + 粒子散发效果
                 Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFFE3F2FD),
-                                    Color(0xFFBBDEFB)
-                                )
-                            ),
-                            CircleShape
-                        )
-                        .padding(8.dp),
+                    modifier = Modifier.size(140.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 外圈装饰
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(
-                            brush = Brush.sweepGradient(
-                                colors = listOf(
-                                    Color(0xFF2196F3),
-                                    Color(0xFF00BCD4),
-                                    Color(0xFF2196F3)
+                    // 粒子散发层 - 从图标中心向外（减少到8个粒子，硬件加速）
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                    ) {
+                        val centerX = size.width / 2
+                        val centerY = size.height / 2
+                        
+                        // 生成8个粒子，从中心向外散发
+                        repeat(8) { i ->
+                            val angle = (i * 45f + particleProgress.value * 360f) * Math.PI.toFloat() / 180f
+                            val distance = 70f * particleProgress.value  // 粒子向外移动的距离
+                            
+                            val x = centerX + distance * cos(angle)
+                            val y = centerY + distance * sin(angle)
+                            
+                            // 粒子透明度（从中心到边缘逐渐淡出）
+                            val pAlpha = (1f - particleProgress.value) * 0.9f
+                            
+                            // 粒子大小（从大到小）
+                            val pSize = 15f * (1f - particleProgress.value * 0.5f)
+                            
+                            if (pAlpha > 0.05f) {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFD700).copy(alpha = pAlpha),
+                                            Color(0xFFFFA500).copy(alpha = pAlpha * 0.6f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    radius = pSize,
+                                    center = Offset(x, y)
                                 )
-                            ),
-                            style = Stroke(width = 4.dp.toPx())
-                        )
+                            }
+                        }
                     }
                     
-                    Text(
-                        "🎯",
-                        fontSize = 56.sp,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
+                    // 图标背景
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .graphicsLayer {
+                                // 持续抖动（X和Y方向）
+                                translationX = shakeX.value
+                                translationY = shakeY.value
+                            }
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFE3F2FD),
+                                        Color(0xFFBBDEFB)
+                                    )
+                                ),
+                                CircleShape
+                            )
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        Color(0xFF2196F3),
+                                        Color(0xFF00BCD4),
+                                        Color(0xFF2196F3)
+                                    )
+                                ),
+                                style = Stroke(width = 4.dp.toPx())
+                            )
                         }
-                    )
+                        
+                        Text(
+                            "🎯",
+                            fontSize = 56.sp,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                        )
+                    }
                 }
                 
-                // 结果卡片 - 更紧凑
+                // 结果卡片
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color.White,
@@ -1329,7 +1802,7 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float) 
                     }
                 }
                 
-                // 星星评级 - 缩小
+                // 星星评级
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 4.dp)
@@ -1359,30 +1832,84 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float) 
 }
 
 @Composable
-fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float) {
-    // 脉冲动画
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.15f,
+fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float, explosionProgress: Float = 0f) {
+    // 缓存粒子位置
+    val particles = remember {
+        List(8) { i ->
+            Triple(
+                Random.nextFloat(),
+                Random.nextFloat(),
+                Random.nextFloat() * 0.5f + 0.5f // 大小因子
+            )
+        }
+    }
+    
+    // 烟花粒子角度
+    val fireworkParticles = remember {
+        List(24) { i ->
+            (i * 15f) * Math.PI.toFloat() / 180f
+        }
+    }
+    
+    // 流畅的粒子动画
+    val infiniteTransition = rememberInfiniteTransition(label = "tech")
+    val techProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(2500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "pulse"
+        label = "progress"
     )
     
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
+        // 烟花效果层 - 在最底层，从卡片位置向四周扩散
+        if (explosionProgress > 0.01f) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val centerX = size.width / 2
+                val centerY = size.height / 2
+                val maxRadius = 800f
+                
+                fireworkParticles.forEach { angle ->
+                    val radius = maxRadius * explosionProgress
+                    val particleAlpha = if (explosionProgress < 0.7f) {
+                        0.9f
+                    } else {
+                        0.9f * (1f - (explosionProgress - 0.7f) / 0.3f)
+                    }
+                    
+                    if (particleAlpha > 0.01f) {
+                        val x = centerX + radius * cos(angle)
+                        val y = centerY + radius * sin(angle)
+                        
+                        // 绘制发光粒子
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFE91E63).copy(alpha = particleAlpha),
+                                    Color(0xFFFF4081).copy(alpha = particleAlpha * 0.6f),
+                                    Color.Transparent
+                                )
+                            ),
+                            radius = 50f,
+                            center = Offset(x, y)
+                        )
+                    }
+                }
+            }
+        }
+        
         // 外层脉冲光环
         Box(
             modifier = Modifier
                 .size(380.dp)
                 .graphicsLayer {
-                    scaleX = scale * pulseScale
-                    scaleY = scale * pulseScale
+                    scaleX = scale * 1.1f
+                    scaleY = scale * 1.1f
                     this.alpha = alpha * 0.4f
                 }
                 .background(
@@ -1419,41 +1946,25 @@ fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float
                 )
                 .padding(24.dp)
         ) {
-            // 科技网格背景 - 简化
+            // 优化的科技粒子 - 放在最底层
             Canvas(modifier = Modifier.matchParentSize()) {
                 val width = size.width
                 val height = size.height
                 
-                // 对角线网格
-                for (i in 0..10) {
-                    val offset = width * i / 10f
-                    drawLine(
-                        color = Color(0xFF9C27B0).copy(alpha = 0.2f),
-                        start = Offset(offset, 0f),
-                        end = Offset(0f, offset),
-                        strokeWidth = 1f
-                    )
-                    drawLine(
-                        color = Color(0xFFE91E63).copy(alpha = 0.2f),
-                        start = Offset(width - offset, 0f),
-                        end = Offset(width, offset),
-                        strokeWidth = 1f
-                    )
-                }
-                
-                // 发光点 - 减少数量
-                for (i in 0..5) {
-                    val x = width * (i % 3) / 3f + width / 6f
-                    val y = height * (i / 3) / 3f + height / 4f
+                particles.forEach { (startX, startY, sizeFactor) ->
+                    val x = width * startX
+                    val y = (height * startY + techProgress * height * 0.4f) % height
+                    val particleAlpha = 1f - (y / height) * 0.5f
                     
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFE91E63).copy(alpha = 0.5f),
+                                Color(0xFFE91E63).copy(alpha = 0.8f * particleAlpha),
+                                Color(0xFF9C27B0).copy(alpha = 0.4f * particleAlpha),
                                 Color.Transparent
                             )
                         ),
-                        radius = 20f,
+                        radius = 18f * sizeFactor,
                         center = Offset(x, y)
                     )
                 }
@@ -1464,14 +1975,14 @@ fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 顶部装饰 - 简化
+                // 顶部装饰
                 Text("⚡ 系统选定 ⚡", 
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFE91E63)
                 )
                 
-                // 大图标 - 六边形容器缩小
+                // 大图标 - 六边形容器
                 Box(
                     modifier = Modifier.size(100.dp),
                     contentAlignment = Alignment.Center
@@ -1525,7 +2036,7 @@ fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float
                     )
                 }
                 
-                // 结果卡片 - 更紧凑
+                // 结果卡片
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFF1A1A2E),
@@ -1565,7 +2076,7 @@ fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float
                     }
                 }
                 
-                // 星星评级 - 缩小
+                // 星星评级
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 4.dp)
@@ -1595,40 +2106,84 @@ fun AdvancedModeCard(result: String, scale: Float, rotation: Float, alpha: Float
 }
 
 @Composable
-fun LuckyModeCard(result: String, scale: Float, rotation: Float, alpha: Float) {
-    // 金币雨动画
-    val infiniteTransition = rememberInfiniteTransition(label = "coins")
-    val coinFall by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "fall"
-    )
+fun LuckyModeCard(result: String, scale: Float, rotation: Float, alpha: Float, explosionProgress: Float = 0f) {
+    // 缓存金币粒子位置
+    val coins = remember {
+        List(10) { i ->
+            Triple(
+                Random.nextFloat(),
+                Random.nextFloat(),
+                Random.nextFloat() * 0.6f + 0.4f // 大小因子
+            )
+        }
+    }
     
-    val shimmer by infiniteTransition.animateFloat(
+    // 烟花粒子角度
+    val fireworkParticles = remember {
+        List(24) { i ->
+            (i * 15f) * Math.PI.toFloat() / 180f
+        }
+    }
+    
+    // 流畅的金币雨动画
+    val infiniteTransition = rememberInfiniteTransition(label = "coins")
+    val coinProgress by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
+            animation = tween(3500, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "shimmer"
+        label = "progress"
     )
     
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // 外层金色光环 - 脉冲效果
+        // 烟花效果层 - 在最底层，从卡片位置向四周扩散
+        if (explosionProgress > 0.01f) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val centerX = size.width / 2
+                val centerY = size.height / 2
+                val maxRadius = 800f
+                
+                fireworkParticles.forEach { angle ->
+                    val radius = maxRadius * explosionProgress
+                    val particleAlpha = if (explosionProgress < 0.7f) {
+                        0.9f
+                    } else {
+                        0.9f * (1f - (explosionProgress - 0.7f) / 0.3f)
+                    }
+                    
+                    if (particleAlpha > 0.01f) {
+                        val x = centerX + radius * cos(angle)
+                        val y = centerY + radius * sin(angle)
+                        
+                        // 绘制发光粒子
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD700).copy(alpha = particleAlpha),
+                                    Color(0xFFFFA500).copy(alpha = particleAlpha * 0.6f),
+                                    Color.Transparent
+                                )
+                            ),
+                            radius = 50f,
+                            center = Offset(x, y)
+                        )
+                    }
+                }
+            }
+        }
+        
+        // 外层金色光环
         Box(
             modifier = Modifier
                 .size(400.dp)
                 .graphicsLayer {
-                    scaleX = scale * (1f + shimmer * 0.1f)
-                    scaleY = scale * (1f + shimmer * 0.1f)
+                    scaleX = scale * 1.1f
+                    scaleY = scale * 1.1f
                     this.alpha = alpha * 0.5f
                 }
                 .background(
@@ -1665,52 +2220,25 @@ fun LuckyModeCard(result: String, scale: Float, rotation: Float, alpha: Float) {
                 )
                 .padding(24.dp)
         ) {
-            // 金币雨背景
+            // 优化的金币雨效果 - 放在最底层
             Canvas(modifier = Modifier.matchParentSize()) {
                 val width = size.width
                 val height = size.height
                 
-                // 放射光芒
-                for (i in 0..16) {
-                    val angle = (i * 22.5f) * Math.PI.toFloat() / 180f
-                    val startRadius = 50f
-                    val endRadius = width.coerceAtLeast(height) * 0.7f
-                    
-                    val startX = width / 2f + startRadius * cos(angle)
-                    val startY = height / 2f + startRadius * sin(angle)
-                    val endX = width / 2f + endRadius * cos(angle)
-                    val endY = height / 2f + endRadius * sin(angle)
-                    
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFFFFD700).copy(alpha = 0.4f),
-                                Color.Transparent
-                            ),
-                            start = Offset(startX, startY),
-                            end = Offset(endX, endY)
-                        ),
-                        start = Offset(startX, startY),
-                        end = Offset(endX, endY),
-                        strokeWidth = 3f
-                    )
-                }
-                
-                // 漂浮的金币
-                for (i in 0..12) {
-                    val x = width * (i % 4) / 4f + width / 8f
-                    val y = height * (i / 4) / 4f + height / 8f
-                    val coinSize = 15f + (i % 3) * 5f
+                coins.forEach { (startX, startY, sizeFactor) ->
+                    val x = width * startX
+                    val y = (height * startY + coinProgress * height * 0.5f) % height
+                    val coinAlpha = 1f - (y / height) * 0.3f
                     
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFFFD700).copy(alpha = 0.6f),
-                                Color(0xFFFFA500).copy(alpha = 0.3f),
+                                Color(0xFFFFD700).copy(alpha = 0.9f * coinAlpha),
+                                Color(0xFFFFA500).copy(alpha = 0.5f * coinAlpha),
                                 Color.Transparent
                             )
                         ),
-                        radius = coinSize,
+                        radius = 22f * sizeFactor,
                         center = Offset(x, y)
                     )
                 }
@@ -1845,20 +2373,6 @@ fun LuckyModeCard(result: String, scale: Float, rotation: Float, alpha: Float) {
                             )
                             .padding(horizontal = 32.dp, vertical = 24.dp)
                     ) {
-                        // 背景装饰星星
-                        Canvas(modifier = Modifier.matchParentSize()) {
-                            for (i in 0..6) {
-                                val x = size.width * (i % 3) / 3f + size.width / 6f
-                                val y = size.height * (i / 3) / 3f + size.height / 6f
-                                
-                                drawCircle(
-                                    color = Color(0xFFFFD700).copy(alpha = 0.3f),
-                                    radius = 8f,
-                                    center = Offset(x, y)
-                                )
-                            }
-                        }
-                        
                         Text(
                             result,
                             style = MaterialTheme.typography.headlineLarge,
@@ -1894,6 +2408,136 @@ fun LuckyModeCard(result: String, scale: Float, rotation: Float, alpha: Float) {
                     }
                 }
             }
+        }
+    }
+}
+
+// 简化的普通模式背景 - 蓝色烟花粒子（增强版）
+@Composable
+fun SimplifiedNormalBackground(alpha: Float) {
+    // 缓存烟花粒子的角度和速度
+    val fireworks = remember {
+        List(12) { i ->
+            val angle = (i * 30f) * Math.PI.toFloat() / 180f
+            Triple(angle, Random.nextFloat() * 0.5f + 0.5f, Random.nextFloat() * 0.3f)
+        }
+    }
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "firework")
+    val fireworkProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "progress"
+    )
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        val maxRadius = size.width.coerceAtLeast(size.height) * 0.5f
+        
+        fireworks.forEach { (angle, speedFactor, delay) ->
+            val adjustedProgress = ((fireworkProgress - delay).coerceAtLeast(0f) / (1f - delay)).coerceIn(0f, 1f)
+            val radius = maxRadius * adjustedProgress * speedFactor
+            val particleAlpha = (1f - adjustedProgress * 0.7f) * alpha
+            
+            val x = centerX + radius * cos(angle)
+            val y = centerY + radius * sin(angle)
+            
+            drawCircle(
+                color = Color(0xFF2196F3).copy(alpha = particleAlpha),
+                radius = 25f * (1f - adjustedProgress * 0.3f),
+                center = Offset(x, y)
+            )
+        }
+    }
+}
+
+// 简化的进阶模式背景 - 紫色烟花粒子（增强版）
+@Composable
+fun SimplifiedAdvancedBackground(alpha: Float) {
+    val fireworks = remember {
+        List(16) { i ->
+            val angle = (i * 22.5f) * Math.PI.toFloat() / 180f
+            Triple(angle, Random.nextFloat() * 0.5f + 0.5f, Random.nextFloat() * 0.3f)
+        }
+    }
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "firework")
+    val fireworkProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "progress"
+    )
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        val maxRadius = size.width.coerceAtLeast(size.height) * 0.5f
+        
+        fireworks.forEach { (angle, speedFactor, delay) ->
+            val adjustedProgress = ((fireworkProgress - delay).coerceAtLeast(0f) / (1f - delay)).coerceIn(0f, 1f)
+            val radius = maxRadius * adjustedProgress * speedFactor
+            val particleAlpha = (1f - adjustedProgress * 0.7f) * alpha
+            
+            val x = centerX + radius * cos(angle)
+            val y = centerY + radius * sin(angle)
+            
+            drawCircle(
+                color = Color(0xFFE91E63).copy(alpha = particleAlpha),
+                radius = 28f * (1f - adjustedProgress * 0.3f),
+                center = Offset(x, y)
+            )
+        }
+    }
+}
+
+// 简化的幸运模式背景 - 金色烟花粒子（增强版）
+@Composable
+fun SimplifiedLuckyBackground(alpha: Float) {
+    val fireworks = remember {
+        List(20) { i ->
+            val angle = (i * 18f) * Math.PI.toFloat() / 180f
+            Triple(angle, Random.nextFloat() * 0.5f + 0.5f, Random.nextFloat() * 0.3f)
+        }
+    }
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "firework")
+    val fireworkProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "progress"
+    )
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        val maxRadius = size.width.coerceAtLeast(size.height) * 0.5f
+        
+        fireworks.forEach { (angle, speedFactor, delay) ->
+            val adjustedProgress = ((fireworkProgress - delay).coerceAtLeast(0f) / (1f - delay)).coerceIn(0f, 1f)
+            val radius = maxRadius * adjustedProgress * speedFactor
+            val particleAlpha = (1f - adjustedProgress * 0.7f) * alpha
+            
+            val x = centerX + radius * cos(angle)
+            val y = centerY + radius * sin(angle)
+            
+            drawCircle(
+                color = Color(0xFFFFD700).copy(alpha = particleAlpha),
+                radius = 30f * (1f - adjustedProgress * 0.3f),
+                center = Offset(x, y)
+            )
         }
     }
 }

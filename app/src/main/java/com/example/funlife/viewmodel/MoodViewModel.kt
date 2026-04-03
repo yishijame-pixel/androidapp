@@ -15,29 +15,54 @@ import java.time.LocalDateTime
 class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: MoodRepository
     private val context = application.applicationContext
-    val moods: StateFlow<List<MoodEntry>>
     
-    // 🔥 获取当前用户ID
+    // 🔥 改用 MutableStateFlow 直接管理数据
+    private val _moods = MutableStateFlow<List<MoodEntry>>(emptyList())
+    val moods: StateFlow<List<MoodEntry>> = _moods
+    
+    // 🔥 改用实时获取userId，而不是在init时缓存
     private fun getCurrentUserId(): Long {
         val sessionManager = com.example.funlife.utils.UserSessionManager(context)
-        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+        val userId = sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+        android.util.Log.d("MoodViewModel", "实时获取userId: $userId")
+        return userId
     }
     
     init {
         val database = AppDatabase.getDatabase(application)
         repository = MoodRepository(database.moodDao())
         
-        // 🔥 修复：添加异常处理和用户过滤
-        moods = repository.getAllMoods(getCurrentUserId())
-            .catch { e ->
-                android.util.Log.e("MoodViewModel", "Error loading moods", e)
-                emit(emptyList())
+        // 🔥 启动时立即加载数据
+        loadMoods()
+    }
+    
+    // 🔥 新增：主动加载心情数据
+    private fun loadMoods() {
+        viewModelScope.launch {
+            try {
+                val userId = getCurrentUserId()
+                android.util.Log.d("MoodViewModel", "加载心情，userId: $userId")
+                
+                if (userId == 0L) {
+                    _moods.value = emptyList()
+                    return@launch
+                }
+                
+                repository.getAllMoods(userId).collect { moods ->
+                    android.util.Log.d("MoodViewModel", "获取到 ${moods.size} 条心情")
+                    _moods.value = moods
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MoodViewModel", "加载心情失败", e)
+                _moods.value = emptyList()
             }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+        }
+    }
+    
+    // 🔥 新增：公开方法，供UI层在用户切换时调用
+    fun refreshForNewUser() {
+        android.util.Log.d("MoodViewModel", "用户切换，刷新数据")
+        loadMoods()
     }
     
     fun addMood(mood: String, level: Int, note: String) {

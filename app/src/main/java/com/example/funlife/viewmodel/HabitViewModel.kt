@@ -35,7 +35,10 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: HabitRepository
     private val coinRepository: CoinRepository
     private val context = application.applicationContext
-    val habits: StateFlow<List<Habit>>
+    
+    // 🔥 改用 MutableStateFlow 直接管理数据
+    private val _habits = MutableStateFlow<List<Habit>>(emptyList())
+    val habits: StateFlow<List<Habit>> = _habits
     
     private val _habitsWithStats = MutableStateFlow<List<HabitWithStats>>(emptyList())
     val habitsWithStats: StateFlow<List<HabitWithStats>> = _habitsWithStats.asStateFlow()
@@ -43,10 +46,12 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     // 刷新触发器
     private val _refreshTrigger = MutableStateFlow(0)
     
-    // 🔥 获取当前用户ID
+    // 🔥 改用实时获取userId，而不是在init时缓存
     private fun getCurrentUserId(): Long {
         val sessionManager = com.example.funlife.utils.UserSessionManager(context)
-        return sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+        val userId = sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
+        android.util.Log.d("HabitViewModel", "实时获取userId: $userId")
+        return userId
     }
     
     init {
@@ -54,21 +59,12 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
         repository = HabitRepository(database.habitDao())
         coinRepository = CoinRepository(database.coinDao())
         
-        // 🔥 修复：添加异常处理和用户过滤
-        habits = repository.getAllHabits(getCurrentUserId())
-            .catch { e ->
-                android.util.Log.e("HabitViewModel", "Error loading habits", e)
-                emit(emptyList())  // 发送空列表作为降级方案
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+        // 🔥 启动时立即加载数据
+        loadHabits()
         
         // 监听习惯变化和刷新触发器，计算统计数据
         viewModelScope.launch {
-            combine(habits, _refreshTrigger) { habitList, _ -> habitList }
+            combine(_habits, _refreshTrigger) { habitList, _ -> habitList }
                 .collect { habitList ->
                     val statsMap = habitList.map { habit ->
                         calculateHabitStats(habit)
@@ -80,8 +76,39 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
         // 初始化金币系统
         viewModelScope.launch {
             val userId = getCurrentUserId()
-            coinRepository.initializeCoins(userId)
+            if (userId > 0) {
+                coinRepository.initializeCoins(userId)
+            }
         }
+    }
+    
+    // 🔥 新增：主动加载习惯数据
+    private fun loadHabits() {
+        viewModelScope.launch {
+            try {
+                val userId = getCurrentUserId()
+                android.util.Log.d("HabitViewModel", "加载习惯，userId: $userId")
+                
+                if (userId == 0L) {
+                    _habits.value = emptyList()
+                    return@launch
+                }
+                
+                repository.getAllHabits(userId).collect { habits ->
+                    android.util.Log.d("HabitViewModel", "获取到 ${habits.size} 个习惯")
+                    _habits.value = habits
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HabitViewModel", "加载习惯失败", e)
+                _habits.value = emptyList()
+            }
+        }
+    }
+    
+    // 🔥 新增：公开方法，供UI层在用户切换时调用
+    fun refreshForNewUser() {
+        android.util.Log.d("HabitViewModel", "用户切换，刷新数据")
+        loadHabits()
     }
     
     private fun refreshStats() {

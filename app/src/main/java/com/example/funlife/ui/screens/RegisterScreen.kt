@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.AuthState
 import com.example.funlife.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.ExperimentalFoundationApi
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun RegisterScreen(
     viewModel: AuthViewModel,
@@ -287,12 +289,14 @@ fun RegisterScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Text,
-                                    imeAction = ImeAction.Next
+                                    imeAction = ImeAction.Next,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         
@@ -346,12 +350,14 @@ fun RegisterScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Text,
-                                    imeAction = ImeAction.Next
+                                    imeAction = ImeAction.Next,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         
@@ -420,12 +426,14 @@ fun RegisterScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Password,
-                                    imeAction = ImeAction.Next
+                                    imeAction = ImeAction.Next,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         
@@ -494,12 +502,14 @@ fun RegisterScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Password,
-                                    imeAction = ImeAction.Next
+                                    imeAction = ImeAction.Next,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         
@@ -553,12 +563,16 @@ fun RegisterScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Number,
-                                    imeAction = ImeAction.Done
+                                    imeAction = ImeAction.Done,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
-                                    onDone = { focusManager.clearFocus() }
+                                    onDone = { 
+                                        focusManager.clearFocus() 
+                                    }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         

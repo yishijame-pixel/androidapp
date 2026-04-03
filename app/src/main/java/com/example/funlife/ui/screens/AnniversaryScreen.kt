@@ -53,6 +53,15 @@ fun AnniversaryScreen(
     val sortOrder by viewModel.sortOrder.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     
+    // 🔥 监听用户变化，刷新数据
+    val sessionManager = remember { com.example.funlife.utils.UserSessionManager(context) }
+    val currentUserId = sessionManager.getCurrentUserId()
+    
+    LaunchedEffect(currentUserId) {
+        android.util.Log.d("AnniversaryScreen", "用户ID变化: $currentUserId，刷新数据")
+        viewModel.refreshForNewUser()
+    }
+    
     var showDialog by remember { mutableStateOf(false) }
     var editingAnniversary by remember { mutableStateOf<Anniversary?>(null) }
     var showFilterMenu by remember { mutableStateOf(false) }

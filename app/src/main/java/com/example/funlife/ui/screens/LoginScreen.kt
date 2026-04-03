@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.AuthState
 import com.example.funlife.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.ExperimentalFoundationApi
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel,
@@ -276,12 +278,14 @@ fun LoginScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Text,
-                                    imeAction = ImeAction.Next
+                                    imeAction = ImeAction.Next,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         
@@ -347,7 +351,8 @@ fun LoginScreen(
                                 ),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Password,
-                                    imeAction = ImeAction.Done
+                                    imeAction = ImeAction.Done,
+                                    autoCorrect = false
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onDone = {
@@ -357,7 +362,8 @@ fun LoginScreen(
                                         }
                                     }
                                 ),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                         

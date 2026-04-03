@@ -127,49 +127,92 @@ fun EnhancedSpinWheelScreen(
     }
     
     Scaffold(
+        containerColor = Color.Transparent, // 设置为透明，让背景渐变显示
         topBar = {
-            TopAppBar(
-                title = { 
-                    Column {
-                        Text("幸运转盘", fontWeight = FontWeight.Bold)
-                        Text(
-                            "${currentMode.emoji} ${currentMode.displayName}",
-                            style = MaterialTheme.typography.bodySmall
+            // 自定义头部导航栏 - 透明背景，融入整体渐变
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Transparent, // 透明背景
+                shadowElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .padding(end = 8.dp), // 移除所有左侧padding
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 返回按钮 - 移除默认padding
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.offset(x = (-8).dp) // 向左偏移
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "返回",
+                            tint = Color(0xFF6A1B9A)
                         )
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "返回")
+                    
+                    // 幸运转盘图片，文字叠加在图片上 - 向左靠近返回按钮
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.offset(x = (-16).dp) // 向左偏移，靠近返回按钮
+                    ) {
+                        // 幸运转盘图片
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(
+                                id = com.example.funlife.R.drawable.spin_wheel_logo
+                            ),
+                            contentDescription = "幸运转盘",
+                            modifier = Modifier.height(56.dp)
+                        )
+                        
+                        // 模式文字 - 叠加在图片的文字区域，居中偏左
+                        Text(
+                            text = currentMode.displayName,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 6.dp)
+                                .offset(x = (-10).dp)
+                        )
                     }
-                },
-                actions = {
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+                    
                     // 设置按钮
                     IconButton(onClick = { showSettingsSheet = true }) {
-                        Icon(Icons.Default.Settings, "设置")
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "设置",
+                            tint = Color(0xFF6A1B9A)
+                        )
                     }
                     
                     // 金币显示
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.7f)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text("💰", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 "$userCoins",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF6A1B9A)
                             )
                         }
                     }
-                    Spacer(Modifier.width(8.dp))
                 }
-            )
+            }
         },
         snackbarHost = { 
             Box(
@@ -192,7 +235,17 @@ fun EnhancedSpinWheelScreen(
         }
     ) { padding ->
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFE1BEE7), // 顶部浅紫色
+                            Color(0xFFF3E5F5), // 中间更浅的紫色
+                            Color(0xFFFCE4EC)  // 底部粉色
+                        )
+                    )
+                )
         ) {
             // 加载状态
             if (isLoading) {
@@ -216,10 +269,6 @@ fun EnhancedSpinWheelScreen(
                     }
                 }
             } else {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = currentTheme.backgroundColor
-            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1303,7 +1352,6 @@ fun EnhancedSpinWheelScreen(
                 Spacer(Modifier.height(32.dp))
             }
         }
-    }
     }
 }
 
