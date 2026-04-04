@@ -717,7 +717,7 @@ fun FunctionCardsSection(navController: NavController) {
             )
         }
         
-        // 第三行：历史记录 + 设置
+        // 第三行：历史记录 + 商城
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)

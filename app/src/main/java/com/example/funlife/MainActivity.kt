@@ -245,23 +245,35 @@ fun MainScreen() {
                 }
             }
         },
-        bottomBar = {
-            // 只在主要页面显示底部导航栏
+        bottomBar = {}
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            // 主内容区域
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(innerPadding)
+            ) {
+                NavGraph(
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize(),
+                    authViewModel = authViewModel
+                )
+            }
+            
+            // 底部导航栏 - 覆盖在内容上方
             if (showBottomBar) {
-                // 使用自定义背景图片的底部导航栏 - 宽度拉满
                 Box(
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(90.dp)
                 ) {
-                    // 粉色背景层 - 填充透明区域
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFFFCE4EC))
-                    )
-                    
-                    // 背景图片 - 覆盖在粉色背景上
+                    // 背景图片
                     Image(
                         painter = painterResource(id = R.drawable.nav_bg),
                         contentDescription = null,
@@ -269,7 +281,7 @@ fun MainScreen() {
                         contentScale = ContentScale.FillBounds
                     )
                     
-                    // 导航项 - 无边距，完全拉满
+                    // 导航项
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
@@ -286,19 +298,15 @@ fun MainScreen() {
                                 item = item,
                                 selected = selected,
                                 onClick = {
-                                    // 只有当前已经在目标页面时才不导航
                                     if (currentDestination?.route == item.screen.route) {
                                         return@BottomNavItem
                                     }
                                     
                                     navController.navigate(item.screen.route) {
-                                        // 清除导航栏，但保留首页
                                         popUpTo(Screen.Home.route) {
                                             inclusive = false
                                         }
-                                        // 避免重复导航到同一目的地
                                         launchSingleTop = true
-                                        // 恢复状态
                                         restoreState = true
                                     }
                                 }
@@ -307,18 +315,6 @@ fun MainScreen() {
                     }
                 }
             }
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            NavGraph(
-                navController = navController,
-                modifier = Modifier.padding(innerPadding),
-                authViewModel = authViewModel
-            )
         }
     }
 }

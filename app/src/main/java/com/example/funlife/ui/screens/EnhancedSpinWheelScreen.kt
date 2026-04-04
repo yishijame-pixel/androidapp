@@ -28,6 +28,7 @@ import com.example.funlife.data.model.SpinWheelMode
 import com.example.funlife.data.model.SpinWheelTemplate
 import com.example.funlife.data.model.WheelOption
 import com.example.funlife.ui.components.SpinWheel
+import com.example.funlife.ui.components.ImageBasedSpinWheel
 import com.example.funlife.viewmodel.SpinWheelViewModel
 import kotlinx.coroutines.launch
 import com.example.funlife.viewmodel.SpinResult
@@ -278,12 +279,14 @@ fun EnhancedSpinWheelScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                 
-                // 幸运值系统 - 紧凑版
-                com.example.funlife.ui.components.LuckyValueSystem(
-                    luckyValue = luckyValue,
-                    onLuckyValueChange = { value ->
-                        luckyValue = value
-                        android.util.Log.d("EnhancedSpinWheel", "Lucky value changed: $value")
+                // 幸运值进度条 - 使用原型图图片
+                com.example.funlife.ui.components.LuckyValueImageBar(
+                    currentValue = luckyValue,
+                    maxValue = 100,
+                    onDiceClick = {
+                        val increment = kotlin.random.Random.nextInt(1, 11)
+                        luckyValue = (luckyValue + increment).coerceAtMost(100)
+                        android.util.Log.d("EnhancedSpinWheel", "Lucky value changed: $luckyValue")
                     }
                 )
                 
@@ -426,32 +429,18 @@ fun EnhancedSpinWheelScreen(
                 // 使用key强制重组SpinWheel，确保权重可视化生效
                 // 🔥 修复：移除 currentMode 避免切换模式时触发重组导致转盘旋转
                 key(currentOptions.hashCode(), currentTheme, multiSpinMode, showWeightVisualization, triggerSpin) {
-                    SpinWheel(
+                    ImageBasedSpinWheel(
                         options = currentOptions.filter { !it.isExcluded }.map { it.text },
-                        mode = currentMode.name,
                         canSpin = true,
-                        weights = currentOptions.filter { !it.isExcluded }.map { it.weight },
-                        showWeightVisualization = showWeightVisualization,
-                        theme = null,
-                        multiSpinMode = multiSpinMode,
                         autoSpinTrigger = triggerSpin,
                         forceResult = currentForceResult,
-                        showButton = false,
                         onSpinStart = {
-                            // 在旋转开始前计算forceResult
-                            android.util.Log.d("EnhancedSpinWheel", "=== onSpinStart (inside SpinWheel) ===")
-                            android.util.Log.d("EnhancedSpinWheel", "currentForceResult at onSpinStart: $currentForceResult")
-                        },
-                        onAutoSpinStart = {
-                            // 不再使用
+                            android.util.Log.d("EnhancedSpinWheel", "=== onSpinStart (ImageBasedSpinWheel) ===")
                         },
                         onResult = { result ->
                             scope.launch {
                                 android.util.Log.d("EnhancedSpinWheel", "=== onResult called ===")
                                 android.util.Log.d("EnhancedSpinWheel", "result: $result")
-                                android.util.Log.d("EnhancedSpinWheel", "multiSpinMode: $multiSpinMode")
-                                android.util.Log.d("EnhancedSpinWheel", "currentSpinIndex: $currentSpinIndex")
-                                android.util.Log.d("EnhancedSpinWheel", "multiSpinCount: $multiSpinCount")
                                 
                                 // 重置forceResult
                                 currentForceResult = null
@@ -465,17 +454,11 @@ fun EnhancedSpinWheelScreen(
                                 val spinResult = viewModel.processSpinResult(result)
                                 
                                 if (multiSpinMode) {
-                                    // 先增加计数和进度
                                     currentSpinIndex++
                                     viewModel.incrementMultiSpinProgress()
                                     viewModel.recordMultiSpinResult(result)
                                     
-                                    android.util.Log.d("EnhancedSpinWheel", "Recorded result, currentSpinIndex: $currentSpinIndex, multiSpinCount: $multiSpinCount")
-                                    
-                                    // 判断是否完成所有抽取
                                     if (currentSpinIndex >= multiSpinCount) {
-                                        // 连抽完成（已经完成了 multiSpinCount 次抽取）
-                                        android.util.Log.d("EnhancedSpinWheel", "=== Multi-spin COMPLETE ===")
                                         kotlinx.coroutines.delay(500)
                                         val results = viewModel.multiSpinResults.value
                                         val summary = results.groupingBy { it }.eachCount()
@@ -484,44 +467,33 @@ fun EnhancedSpinWheelScreen(
                                         multiSpinAnimationResult = summary
                                         showMultiSpinResultAnimation = true
                                         
-                                        // 延迟足够长的时间，确保 onShowResult 已经被调用并判断完成
                                         kotlinx.coroutines.delay(2000)
                                         viewModel.resetMultiSpinState()
                                         currentSpinIndex = 0
-                                        hasUserClicked = false  // 重置用户点击标志
+                                        hasUserClicked = false
                                         
-                                        // 清零幸运值
                                         if (selectedTargetOption != null) {
                                             luckyValue = 0
                                             selectedTargetOption = null
                                         }
                                     } else {
-                                        // 继续下一次抽取 - 优化延迟时间，让连抽更丝滑
-                                        android.util.Log.d("EnhancedSpinWheel", "=== Continuing multi-spin ===")
-                                        android.util.Log.d("EnhancedSpinWheel", "Waiting 600ms before next spin...")
-                                        kotlinx.coroutines.delay(600)  // 从800ms减少到600ms，更流畅
-                                        
-                                        // 触发下一次旋转
+                                        kotlinx.coroutines.delay(600)
                                         triggerSpin++
-                                        android.util.Log.d("EnhancedSpinWheel", "Auto-triggered next spin, triggerSpin: $triggerSpin, currentSpinIndex: $currentSpinIndex")
                                     }
                                 } else {
-                                    // 🔥 单次抽取完成，重置用户点击标志
                                     hasUserClicked = false
-                                    android.util.Log.d("EnhancedSpinWheel", "Single spin complete, hasUserClicked reset to false")
+                                }
+                                
+                                // 显示结果动画
+                                if (!multiSpinMode && !showMultiSpinResultAnimation) {
+                                    animationResult = result
+                                    showResultAnimation = true
                                 }
                             }
                         },
-                        onMultiSpinComplete = {
-                            // 不再使用
-                        },
-                        onShowResult = { result ->
-                            // 双重保险：只有在非连抽模式且没有显示连抽结算动画时才显示单次动画
-                            if (!multiSpinMode && !showMultiSpinResultAnimation) {
-                                animationResult = result
-                                showResultAnimation = true
-                            }
-                        }
+                        modifier = Modifier
+                            .fillMaxWidth(0.95f)
+                            .padding(vertical = 16.dp)
                     )
                     
                     // 自定义旋转按钮 - 超级加强版设计
@@ -555,7 +527,7 @@ fun EnhancedSpinWheelScreen(
                     
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.85f)
+                            .fillMaxWidth(0.95f)
                             .height(75.dp)
                             .scale(buttonScale),
                         contentAlignment = Alignment.Center
