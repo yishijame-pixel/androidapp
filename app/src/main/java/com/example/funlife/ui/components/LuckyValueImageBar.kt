@@ -306,29 +306,29 @@ fun LuckyValueImageBar(
         ) {
             Text(
                 text = "幸运值",
-                fontSize = 15.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                style = MaterialTheme.typography.bodyLarge.copy(
+                style = MaterialTheme.typography.bodyMedium.copy(
                     shadow = Shadow(
                         color = Color.Black.copy(alpha = 0.6f),
-                        offset = Offset(1.2f, 1.2f),
-                        blurRadius = 3f
+                        offset = Offset(1f, 1f),
+                        blurRadius = 2f
                     ),
-                    letterSpacing = 1.sp
+                    letterSpacing = 0.8.sp
                 )
             )
             
             Text(
                 text = currentValue.toString(),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Black,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
-                style = MaterialTheme.typography.headlineMedium.copy(
+                style = MaterialTheme.typography.titleLarge.copy(
                     shadow = Shadow(
                         color = Color.Black.copy(alpha = 0.7f),
-                        offset = Offset(2f, 2f),
-                        blurRadius = 4f
+                        offset = Offset(1.5f, 1.5f),
+                        blurRadius = 3f
                     )
                 ),
                 modifier = Modifier.offset(y = (-1).dp)

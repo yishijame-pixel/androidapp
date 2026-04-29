@@ -29,5 +29,14 @@ data class UserPreferences(
     val lastTemplateId: Int? = null,                   // 最后使用的模板ID
     val lastCustomOptions: String = "",                // 最后自定义的选项（JSON格式）
     val lastSpinMode: String = "NORMAL",               // 最后使用的转盘模式（基础模式）
-    val lastCustomModeId: Int? = null                  // 🔥 新增：最后使用的自定义模式ID
+    val lastCustomModeId: Int? = null,                 // 🔥 新增：最后使用的自定义模式ID
+    
+    // 🔥 新增：每个模式独立的选项配置
+    val normalModeOptions: String = "",                // 普通模式的选项（JSON格式，6个）
+    val advancedModeOptions: String = "",              // 进阶模式的选项（JSON格式，8个）
+    val luckyModeOptions: String = "",                 // 幸运模式的选项（JSON格式，8个）
+    
+    // 🔥 新增：首页少女心面板自定义文字
+    val homePanelText: String = "少女心面板",           // 首页面板中间的自定义文字
+    val homePanelTextStyle: String = "pink"             // 艺术字颜色主题：pink, purple, blue, gold, rainbow
 )

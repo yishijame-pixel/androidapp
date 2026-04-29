@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,13 +44,22 @@ fun MoodScreen(
     
     Scaffold(
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            FloatingActionButton(
                 onClick = { showDialog = true },
-                icon = { Icon(Icons.Default.Add, "添加") },
-                text = { Text("记录心情") },
-                containerColor = MaterialTheme.colorScheme.primary
-            )
-        }
+                containerColor = Color(0xFFFF6FAE),
+                contentColor = Color.White,
+                modifier = Modifier
+                    .padding(bottom = 80.dp) // 避免被底部导航栏遮挡
+                    .size(64.dp)
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "添加心情",
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End
     ) { padding ->
         Column(
             modifier = Modifier
@@ -234,31 +244,75 @@ fun MoodStatItem(icon: String, label: String, value: String) {
 
 @Composable
 fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
-    // 根据心情选择颜色
-    val moodColor = when (mood.mood) {
-        "😊", "😃" -> Color(0xFF4ECDC4)
-        "😐" -> Color(0xFFFFD700)
-        "😢" -> Color(0xFF3498DB)
-        "😡" -> Color(0xFFE74C3C)
-        else -> Color(0xFF4ECDC4)
+    // 根据心情选择颜色和装饰
+    val (moodColor, decorEmoji) = when (mood.mood) {
+        "😊", "😃" -> Color(0xFF4ECDC4) to listOf("✨", "💫", "⭐")
+        "😐" -> Color(0xFFFFD700) to listOf("☁️", "🌤️", "💭")
+        "😢" -> Color(0xFF3498DB) to listOf("💧", "🌧️", "💙")
+        "😡" -> Color(0xFFE74C3C) to listOf("💢", "⚡", "🔥")
+        else -> Color(0xFF4ECDC4) to listOf("✨", "💫", "⭐")
     }
     
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    )
+    
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.White
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth()
         ) {
-            // 背景装饰
+            // 可爱的渐变背景
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 30.dp, y = (-20).dp)
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                moodColor.copy(alpha = 0.08f),
+                                moodColor.copy(alpha = 0.15f),
+                                moodColor.copy(alpha = 0.08f)
+                            )
+                        )
+                    )
+            )
+            
+            // 装饰圆圈 - 左上角
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (-30).dp, y = (-30).dp)
+                    .size(100.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                moodColor.copy(alpha = 0.2f),
+                                Color.Transparent
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+            )
+            
+            // 装饰圆圈 - 右下角
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 40.dp, y = 40.dp)
                     .size(120.dp)
                     .background(
                         brush = Brush.radialGradient(
@@ -271,6 +325,37 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
                     )
             )
             
+            // 装饰emoji - 随机分布
+            decorEmoji.forEachIndexed { index, emoji ->
+                Text(
+                    text = emoji,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .align(
+                            when (index) {
+                                0 -> Alignment.TopEnd
+                                1 -> Alignment.BottomStart
+                                else -> Alignment.CenterEnd
+                            }
+                        )
+                        .offset(
+                            x = when (index) {
+                                0 -> (-20).dp
+                                1 -> 20.dp
+                                else -> (-15).dp
+                            },
+                            y = when (index) {
+                                0 -> 15.dp
+                                1 -> (-15).dp
+                                else -> 0.dp
+                            }
+                        )
+                        .graphicsLayer {
+                            alpha = 0.4f
+                        }
+                )
+            }
+            
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -279,31 +364,61 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    // 心情图标
+                    // 超可爱的心情图标容器
                     Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        moodColor,
-                                        moodColor.copy(alpha = 0.8f)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier.size(72.dp)
                     ) {
-                        Text(mood.mood, fontSize = 32.sp)
+                        // 外层光晕
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            moodColor.copy(alpha = 0.3f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    shape = CircleShape
+                                )
+                        )
+                        
+                        // 内层圆形背景
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .align(Alignment.Center)
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            moodColor.copy(alpha = 0.9f),
+                                            moodColor.copy(alpha = 0.7f)
+                                        )
+                                    ),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(mood.mood, fontSize = 36.sp)
+                        }
+                        
+                        // 小星星装饰
+                        Text(
+                            "✨",
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 4.dp, y = (-4).dp)
+                        )
                     }
                     
                     // 日期和备注
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 格式化日期显示
                         val date = try {
@@ -318,36 +433,42 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
                             date,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color(0xFF2D3748),
+                            fontSize = 17.sp
                         )
                         
                         if (mood.note.isNotEmpty()) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = moodColor.copy(alpha = 0.15f)
+                                shape = RoundedCornerShape(14.dp),
+                                color = moodColor.copy(alpha = 0.12f)
                             ) {
                                 Text(
                                     mood.note,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    maxLines = 2
+                                    color = Color(0xFF4A5568),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    maxLines = 2,
+                                    fontSize = 14.sp
                                 )
                             }
                         }
                     }
                 }
                 
-                // 删除按钮
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(40.dp)
+                // 可爱的删除按钮
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFF5F5))
+                        .clickable { onDelete() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        "删除",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
-                        modifier = Modifier.size(24.dp)
+                        contentDescription = "删除",
+                        tint = Color(0xFFFF6B6B),
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }

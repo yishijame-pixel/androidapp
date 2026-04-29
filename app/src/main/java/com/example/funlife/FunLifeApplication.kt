@@ -10,6 +10,12 @@ import coil.util.DebugLogger
 import com.example.funlife.utils.AuditLogger
 
 class FunLifeApplication : Application(), ImageLoaderFactory {
+    
+    // 数据库实例
+    val database: com.example.funlife.data.database.AppDatabase by lazy {
+        com.example.funlife.data.database.AppDatabase.getDatabase(this)
+    }
+    
     override fun onCreate() {
         super.onCreate()
         

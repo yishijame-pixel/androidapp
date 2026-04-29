@@ -1,8 +1,11 @@
-// LoginScreen.kt - 创意登录页
+// LoginScreen.kt - 可爱小狗主题登录页
 package com.example.funlife.ui.screens
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,25 +21,31 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.AuthState
 import com.example.funlife.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.ExperimentalFoundationApi
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel,
@@ -45,18 +54,34 @@ fun LoginScreen(
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) } // 密码可见性状态
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    var errorShakeKey by remember { mutableStateOf(0) }  // 🔥 新增：用于触发震动动画
+    var errorShakeKey by remember { mutableStateOf(0) }
     
     val authState by viewModel.authState.collectAsState()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
     
     var visible by remember { mutableStateOf(false) }
     
-    // 🔥 新增：进入页面时重置状态
+    // 加载背景图片 - 使用高质量设置
+    val backgroundBitmap = remember {
+        try {
+            context.assets.open("login/login_1.png").use { inputStream ->
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                    inScaled = false
+                    inDither = false
+                }
+                BitmapFactory.decodeStream(inputStream, null, options)?.asImageBitmap()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
     LaunchedEffect(Unit) {
         viewModel.resetAuthState()
         delay(100)
@@ -74,8 +99,7 @@ fun LoginScreen(
                 isLoading = false
                 errorMessage = (authState as AuthState.Error).message
                 showError = true
-                errorShakeKey++  // 🔥 触发震动动画
-                // 🔥 立即重置状态，允许下次点击
+                errorShakeKey++
                 viewModel.resetAuthState()
             }
             is AuthState.Loading -> {
@@ -89,291 +113,388 @@ fun LoginScreen(
         }
     }
     
-    val infiniteTransition = rememberInfiniteTransition(label = "bg")
-    val rotate by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(30000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotate"
-    )
-    
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1A1A2E),
-                        Color(0xFF16213E)
-                    )
-                )
-            )
     ) {
-        // 创意几何装饰
-        Box(
-            modifier = Modifier
-                .size(250.dp)
-                .offset(x = (-80).dp, y = 50.dp)
-                .rotate(rotate)
-                .alpha(0.1f)
-                .background(
-                    Color(0xFFE94560),
-                    RoundedCornerShape(50.dp)
-                )
-        )
+        // 背景图片 - 高质量显示
+        backgroundBitmap?.let { bitmap ->
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High
+            )
+        }
         
-        Box(
-            modifier = Modifier
-                .size(180.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 60.dp, y = (-40).dp)
-                .rotate(-rotate * 0.7f)
-                .alpha(0.08f)
-                .background(
-                    Color(0xFF00D9FF),
-                    CircleShape
-                )
-        )
-        
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // 内容区域 - 使用BoxWithConstraints获取屏幕高度
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Spacer(Modifier.height(30.dp))
+            val screenHeight = maxHeight
             
-            // 创意标题区
-            AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600)) + slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = tween(600)
-                )
+            // 登录表单 - 定位在白色区域中心
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 40.dp)
+                    .offset(y = screenHeight * 0.54f), // 稍微往上调整
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        "欢迎",
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                    
-                    Text(
-                        "回来",
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFFE94560)
-                    )
-                    
-                    Spacer(Modifier.height(12.dp))
-                    
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(3.dp)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFFE94560),
-                                            Color.Transparent
-                                        )
-                                    )
-                                )
-                        )
-                        Text(
-                            "登录继续你的旅程",
-                            fontSize = 14.sp,
-                            color = Color(0xFF00D9FF)
-                        )
-                    }
-                }
-            }
-            
-            Spacer(Modifier.height(35.dp))
-            
-            // 登录表单 - 创意卡片
-            AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600, delayMillis = 200)) + slideInVertically(
-                    initialOffsetY = { it / 3 },
-                    animationSpec = tween(600, delayMillis = 200)
-                )
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(
-                        topStart = 40.dp,
-                        topEnd = 10.dp,
-                        bottomStart = 10.dp,
-                        bottomEnd = 40.dp
-                    ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF0F3460).copy(alpha = 0.6f)
-                    ),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 0.dp
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(tween(600)) + slideInVertically(
+                        initialOffsetY = { it / 3 },
+                        animationSpec = tween(600)
                     )
                 ) {
                     Column(
-                        modifier = Modifier.padding(28.dp),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp) // 增加间距
                     ) {
-                        // 用户名
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(4.dp)
-                                        .background(Color(0xFFE94560), CircleShape)
-                                )
+                        // 用户名输入框
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            placeholder = { 
                                 Text(
                                     "用户名",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White.copy(alpha = 0.9f)
-                                )
-                            }
-                            
-                            TextField(
-                                value = username,
-                                onValueChange = { username = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { 
-                                    Text(
-                                        "输入你的用户名",
-                                        color = Color.White.copy(alpha = 0.4f)
-                                    ) 
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = Color(0xFFE94560)
-                                    )
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.White.copy(alpha = 0.1f),
-                                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    cursorColor = Color(0xFFE94560)
-                                ),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Text,
-                                    imeAction = ImeAction.Next,
-                                    autoCorrect = false
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                                ),
-                                singleLine = true,
-                                maxLines = 1
-                            )
-                        }
-                        
-                        // 密码
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
+                                    color = Color.Gray.copy(alpha = 0.6f),
+                                    fontSize = 15.sp
+                                ) 
+                            },
+                            leadingIcon = {
+                                // 可爱的狗爪图标 - 美化版
+                                Canvas(
                                     modifier = Modifier
-                                        .size(4.dp)
-                                        .background(Color(0xFF00D9FF), CircleShape)
-                                )
+                                        .size(26.dp)
+                                        .padding(start = 2.dp)
+                                ) {
+                                    val pawColor1 = Color(0xFFFFB74D) // 浅橙色
+                                    val pawColor2 = Color(0xFFFF9E80) // 深橙色
+                                    
+                                    // 主爪垫 - 带渐变
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2),
+                                            center = Offset(size.width * 0.5f, size.height * 0.65f),
+                                            radius = size.minDimension * 0.28f
+                                        ),
+                                        radius = size.minDimension * 0.28f,
+                                        center = Offset(size.width * 0.5f, size.height * 0.68f)
+                                    )
+                                    
+                                    // 四个小爪垫 - 更圆润
+                                    // 左上
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.14f,
+                                        center = Offset(size.width * 0.22f, size.height * 0.28f)
+                                    )
+                                    // 中上
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.15f,
+                                        center = Offset(size.width * 0.5f, size.height * 0.18f)
+                                    )
+                                    // 右上
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.14f,
+                                        center = Offset(size.width * 0.78f, size.height * 0.28f)
+                                    )
+                                    // 右侧
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.11f,
+                                        center = Offset(size.width * 0.88f, size.height * 0.48f)
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(25.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedBorderColor = Color(0xFFE0E0E0),
+                                unfocusedBorderColor = Color(0xFFE0E0E0),
+                                focusedTextColor = Color(0xFF333333),
+                                unfocusedTextColor = Color(0xFF333333),
+                                cursorColor = Color(0xFFFF9E80)
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Next,
+                                autoCorrect = false
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                            ),
+                            singleLine = true,
+                            maxLines = 1
+                        )
+                        
+                        // 密码输入框
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            placeholder = { 
                                 Text(
                                     "密码",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White.copy(alpha = 0.9f)
-                                )
-                            }
-                            
-                            TextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { 
-                                    Text(
-                                        "输入你的密码",
-                                        color = Color.White.copy(alpha = 0.4f)
-                                    ) 
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = Color(0xFF00D9FF)
+                                    color = Color.Gray.copy(alpha = 0.6f),
+                                    fontSize = 15.sp
+                                ) 
+                            },
+                            leadingIcon = {
+                                // 可爱的狗爪图标 - 和用户名框一样
+                                Canvas(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .padding(start = 2.dp)
+                                ) {
+                                    val pawColor1 = Color(0xFFFFB74D) // 浅橙色
+                                    val pawColor2 = Color(0xFFFF9E80) // 深橙色
+                                    
+                                    // 主爪垫 - 带渐变
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2),
+                                            center = Offset(size.width * 0.5f, size.height * 0.65f),
+                                            radius = size.minDimension * 0.28f
+                                        ),
+                                        radius = size.minDimension * 0.28f,
+                                        center = Offset(size.width * 0.5f, size.height * 0.68f)
                                     )
-                                },
-                                trailingIcon = {
-                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                        Icon(
-                                            if (passwordVisible) Icons.Default.Visibility 
-                                            else Icons.Default.VisibilityOff,
-                                            contentDescription = null,
-                                            tint = Color.White.copy(alpha = 0.6f)
+                                    
+                                    // 四个小爪垫 - 更圆润
+                                    // 左上
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.14f,
+                                        center = Offset(size.width * 0.22f, size.height * 0.28f)
+                                    )
+                                    // 中上
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.15f,
+                                        center = Offset(size.width * 0.5f, size.height * 0.18f)
+                                    )
+                                    // 右上
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.14f,
+                                        center = Offset(size.width * 0.78f, size.height * 0.28f)
+                                    )
+                                    // 右侧
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(pawColor1, pawColor2)
+                                        ),
+                                        radius = size.minDimension * 0.11f,
+                                        center = Offset(size.width * 0.88f, size.height * 0.48f)
+                                    )
+                                }
+                            },
+                            trailingIcon = {
+                                // 可爱的小狗头图标
+                                IconButton(
+                                    onClick = { passwordVisible = !passwordVisible }
+                                ) {
+                                    Canvas(
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        val dogColor = Color(0xFFFFB74D)
+                                        val darkColor = Color(0xFFFF9E80)
+                                        
+                                        // 狗头（圆形）
+                                        drawCircle(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(dogColor, darkColor)
+                                            ),
+                                            radius = size.minDimension * 0.4f,
+                                            center = Offset(size.width * 0.5f, size.height * 0.5f)
+                                        )
+                                        
+                                        // 左耳
+                                        drawCircle(
+                                            color = darkColor,
+                                            radius = size.minDimension * 0.15f,
+                                            center = Offset(size.width * 0.25f, size.height * 0.25f)
+                                        )
+                                        
+                                        // 右耳
+                                        drawCircle(
+                                            color = darkColor,
+                                            radius = size.minDimension * 0.15f,
+                                            center = Offset(size.width * 0.75f, size.height * 0.25f)
+                                        )
+                                        
+                                        if (passwordVisible) {
+                                            // 睁开眼睛 - 密码可见
+                                            // 左眼
+                                            drawCircle(
+                                                color = Color(0xFF333333),
+                                                radius = size.minDimension * 0.08f,
+                                                center = Offset(size.width * 0.35f, size.height * 0.45f)
+                                            )
+                                            drawCircle(
+                                                color = Color.White,
+                                                radius = size.minDimension * 0.03f,
+                                                center = Offset(size.width * 0.37f, size.height * 0.43f)
+                                            )
+                                            
+                                            // 右眼
+                                            drawCircle(
+                                                color = Color(0xFF333333),
+                                                radius = size.minDimension * 0.08f,
+                                                center = Offset(size.width * 0.65f, size.height * 0.45f)
+                                            )
+                                            drawCircle(
+                                                color = Color.White,
+                                                radius = size.minDimension * 0.03f,
+                                                center = Offset(size.width * 0.67f, size.height * 0.43f)
+                                            )
+                                        } else {
+                                            // 用爪子捂眼睛 - 密码隐藏
+                                            // 闭着的眼睛
+                                            drawLine(
+                                                color = Color(0xFF333333),
+                                                start = Offset(size.width * 0.28f, size.height * 0.45f),
+                                                end = Offset(size.width * 0.42f, size.height * 0.45f),
+                                                strokeWidth = 3.dp.toPx(),
+                                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                            )
+                                            drawLine(
+                                                color = Color(0xFF333333),
+                                                start = Offset(size.width * 0.58f, size.height * 0.45f),
+                                                end = Offset(size.width * 0.72f, size.height * 0.45f),
+                                                strokeWidth = 3.dp.toPx(),
+                                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                            )
+                                            
+                                            // 小爪子（捂在眼睛上）
+                                            // 左爪子
+                                            drawCircle(
+                                                color = darkColor.copy(alpha = 0.8f),
+                                                radius = size.minDimension * 0.12f,
+                                                center = Offset(size.width * 0.35f, size.height * 0.42f)
+                                            )
+                                            // 爪子的小肉垫
+                                            drawCircle(
+                                                color = Color(0xFFFF8A65),
+                                                radius = size.minDimension * 0.03f,
+                                                center = Offset(size.width * 0.32f, size.height * 0.38f)
+                                            )
+                                            drawCircle(
+                                                color = Color(0xFFFF8A65),
+                                                radius = size.minDimension * 0.03f,
+                                                center = Offset(size.width * 0.38f, size.height * 0.38f)
+                                            )
+                                            
+                                            // 右爪子
+                                            drawCircle(
+                                                color = darkColor.copy(alpha = 0.8f),
+                                                radius = size.minDimension * 0.12f,
+                                                center = Offset(size.width * 0.65f, size.height * 0.42f)
+                                            )
+                                            // 爪子的小肉垫
+                                            drawCircle(
+                                                color = Color(0xFFFF8A65),
+                                                radius = size.minDimension * 0.03f,
+                                                center = Offset(size.width * 0.62f, size.height * 0.38f)
+                                            )
+                                            drawCircle(
+                                                color = Color(0xFFFF8A65),
+                                                radius = size.minDimension * 0.03f,
+                                                center = Offset(size.width * 0.68f, size.height * 0.38f)
+                                            )
+                                        }
+                                        
+                                        // 鼻子
+                                        drawCircle(
+                                            color = Color(0xFF333333),
+                                            radius = size.minDimension * 0.06f,
+                                            center = Offset(size.width * 0.5f, size.height * 0.58f)
+                                        )
+                                        
+                                        // 嘴巴（微笑）
+                                        val mouthPath = Path().apply {
+                                            moveTo(size.width * 0.5f, size.height * 0.58f)
+                                            quadraticBezierTo(
+                                                size.width * 0.45f, size.height * 0.68f,
+                                                size.width * 0.38f, size.height * 0.65f
+                                            )
+                                            moveTo(size.width * 0.5f, size.height * 0.58f)
+                                            quadraticBezierTo(
+                                                size.width * 0.55f, size.height * 0.68f,
+                                                size.width * 0.62f, size.height * 0.65f
+                                            )
+                                        }
+                                        drawPath(
+                                            path = mouthPath,
+                                            color = Color(0xFF333333),
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                                width = 2.dp.toPx(),
+                                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                            )
                                         )
                                     }
-                                },
-                                visualTransformation = if (passwordVisible) 
-                                    VisualTransformation.None 
-                                else 
-                                    PasswordVisualTransformation(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.White.copy(alpha = 0.1f),
-                                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    cursorColor = Color(0xFF00D9FF)
-                                ),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Password,
-                                    imeAction = ImeAction.Done,
-                                    autoCorrect = false
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        focusManager.clearFocus()
-                                        if (username.isNotEmpty() && password.isNotEmpty()) {
-                                            viewModel.login(username, password)
-                                        }
+                                }
+                            },
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            shape = RoundedCornerShape(25.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                focusedBorderColor = Color(0xFFE0E0E0),
+                                unfocusedBorderColor = Color(0xFFE0E0E0),
+                                focusedTextColor = Color(0xFF333333),
+                                unfocusedTextColor = Color(0xFF333333),
+                                cursorColor = Color(0xFFFF9E80)
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                                autoCorrect = false
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    focusManager.clearFocus()
+                                    if (username.isNotEmpty() && password.isNotEmpty()) {
+                                        viewModel.login(username, password)
                                     }
-                                ),
-                                singleLine = true,
-                                maxLines = 1
-                            )
-                        }
+                                }
+                            ),
+                            singleLine = true,
+                            maxLines = 1
+                        )
                         
-                        // 错误提示 - 带震动动画
+                        // 错误提示
                         AnimatedVisibility(
                             visible = showError,
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
-                            // 🔥 震动动画效果 - 使用 Animatable 确保每次都触发
                             val shakeOffset = remember { Animatable(0f) }
                             
                             LaunchedEffect(errorShakeKey) {
@@ -401,31 +522,30 @@ fun LoginScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .offset(x = shakeOffset.value.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color(0xFFE94560).copy(alpha = 0.2f)
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color(0xFFFFCDD2)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         Icons.Default.Error,
                                         contentDescription = null,
-                                        tint = Color(0xFFFF6B9D),
-                                        modifier = Modifier.size(20.dp)
+                                        tint = Color(0xFFD32F2F),
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Text(
                                         errorMessage,
                                         fontSize = 13.sp,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Medium
+                                        color = Color(0xFFD32F2F)
                                     )
                                 }
                             }
                         }
                         
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         
                         // 登录按钮
                         Button(
@@ -435,12 +555,12 @@ fun LoginScreen(
                                     username.isEmpty() -> {
                                         errorMessage = "请输入用户名"
                                         showError = true
-                                        errorShakeKey++  // 🔥 触发震动
+                                        errorShakeKey++
                                     }
                                     password.isEmpty() -> {
                                         errorMessage = "请输入密码"
                                         showError = true
-                                        errorShakeKey++  // 🔥 触发震动
+                                        errorShakeKey++
                                     }
                                     else -> viewModel.login(username, password)
                                 }
@@ -461,8 +581,8 @@ fun LoginScreen(
                                     .background(
                                         Brush.horizontalGradient(
                                             colors = listOf(
-                                                Color(0xFFE94560),
-                                                Color(0xFFFF6B9D)
+                                                Color(0xFFFFB74D),
+                                                Color(0xFFFF9E80)
                                             )
                                         ),
                                         RoundedCornerShape(28.dp)
@@ -476,42 +596,60 @@ fun LoginScreen(
                                         strokeWidth = 2.5.dp
                                     )
                                 } else {
-                                    Text(
-                                        "登录",
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "🐾",
+                                            fontSize = 20.sp
+                                        )
+                                        Text(
+                                            "登录",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                }
-            }
-            
-            Spacer(Modifier.height(20.dp))
-            
-            // 注册提示
-            AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600, delayMillis = 400))
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "还没有账号？",
-                        fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                    TextButton(onClick = onNavigateToRegister) {
-                        Text(
-                            "立即注册",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00D9FF)
-                        )
+                        
+                        Spacer(Modifier.height(8.dp)) // 减小间距
+                        
+                        // 注册提示
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = Color(0xFF64B5F6),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "还没有账号？",
+                                fontSize = 14.sp,
+                                color = Color(0xFF666666)
+                            )
+                            TextButton(onClick = onNavigateToRegister) {
+                                Text(
+                                    "立即注册",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF64B5F6)
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "注册",
+                                fontSize = 14.sp,
+                                color = Color(0xFF666666)
+                            )
+                        }
                     }
                 }
             }

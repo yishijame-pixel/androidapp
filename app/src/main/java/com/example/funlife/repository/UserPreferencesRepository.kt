@@ -90,4 +90,27 @@ class UserPreferencesRepository(private val userPreferencesDao: UserPreferencesD
     suspend fun updateLastCustomModeId(userId: Long, modeId: Int?) {
         userPreferencesDao.updateLastCustomModeId(userId, modeId)
     }
+    
+    // 🔥 新增：更新三个模式的独立选项配置
+    suspend fun updateNormalModeOptions(userId: Long, options: String) {
+        userPreferencesDao.updateNormalModeOptions(userId, options)
+    }
+    
+    suspend fun updateAdvancedModeOptions(userId: Long, options: String) {
+        userPreferencesDao.updateAdvancedModeOptions(userId, options)
+    }
+    
+    suspend fun updateLuckyModeOptions(userId: Long, options: String) {
+        userPreferencesDao.updateLuckyModeOptions(userId, options)
+    }
+    
+    // 🔥 新增：更新首页面板自定义文字
+    suspend fun updateHomePanelText(userId: Long, text: String) {
+        userPreferencesDao.updateHomePanelText(userId, text)
+    }
+    
+    // 🔥 新增：更新艺术字颜色主题
+    suspend fun updateHomePanelTextStyle(userId: Long, style: String) {
+        userPreferencesDao.updateHomePanelTextStyle(userId, style)
+    }
 }

@@ -1,0 +1,1269 @@
+// PetScreen.kt - 宠物主页
+package com.example.funlife.ui.screens
+
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.funlife.data.model.*
+import com.example.funlife.ui.components.FrameAnimation
+import com.example.funlife.ui.components.PetAnimationFrames
+import com.example.funlife.ui.components.PetWalkingAnimation
+import com.example.funlife.utils.PetImageLoader
+import com.example.funlife.utils.rememberAssetImage
+import com.example.funlife.viewmodel.PetViewModel
+import com.example.funlife.viewmodel.AnimationState
+import kotlinx.coroutines.delay
+
+@Composable
+fun PetScreen(
+    navController: NavController,
+    viewModel: PetViewModel
+) {
+    val pet by viewModel.pet.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+    val animationState by viewModel.animationState.collectAsState()
+    
+    when {
+        pet == null -> {
+            // 没有宠物，显示领养界面
+            AdoptPetScreen(
+                onAdopt = { name, type ->
+                    viewModel.createPet(name, type)
+                }
+            )
+        }
+        else -> {
+            // 显示宠物主页
+            PetHomeScreen(
+                pet = pet!!,
+                animationState = animationState,
+                onFeed = { viewModel.feedPet(PetItems.BASIC_FOOD.id) },
+                onClean = { viewModel.cleanPet() },
+                onPlay = { viewModel.playWithPet() },
+                onPet = { viewModel.petPet() },
+                onShop = { /* TODO: 打开商店 */ },
+                onBack = { navController.popBackStack() }
+            )
+        }
+    }
+}
+
+@Composable
+fun PetHomeScreen(
+    pet: Pet,
+    animationState: AnimationState,
+    onFeed: () -> Unit,
+    onClean: () -> Unit,
+    onPlay: () -> Unit,
+    onPet: () -> Unit,
+    onShop: () -> Unit,
+    onBack: () -> Unit
+) {
+    // 加载背景图片
+    val backgroundImage = rememberAssetImage(PetImageLoader.getBackgroundPath("home"))
+    
+    // 获取背景音乐管理器并播放音乐
+    val context = LocalContext.current
+    val musicManager = remember { com.example.funlife.utils.BackgroundMusicManager.getInstance(context) }
+    
+    // 进入页面时播放背景音乐，离开时停止
+    DisposableEffect(Unit) {
+        musicManager.playPetMusic()
+        onDispose {
+            musicManager.stop()
+        }
+    }
+    
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 背景图片
+        if (backgroundImage != null) {
+            Image(
+                bitmap = backgroundImage,
+                contentDescription = "背景",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            // 备用渐变背景
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFE4E1),
+                                Color(0xFFE0F7FA),
+                                Color(0xFFFFF0F5)
+                            )
+                        )
+                    )
+            )
+        }
+        
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // 顶部栏
+            PetTopBar(
+                petName = pet.name,
+                onBack = onBack
+            )
+            
+            // 状态栏
+            PetStatusBar(pet = pet)
+            
+            // 宠物展示区
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                // 宠物形象
+                PetCharacter(
+                    pet = pet,
+                    animationState = animationState,
+                    onPet = onPet
+                )
+            }
+            
+            // 等级信息
+            PetLevelInfo(pet = pet)
+            
+            // 操作按钮
+            PetActionButtons(
+                onFeed = onFeed,
+                onClean = onClean,
+                onPlay = onPlay,
+                onShop = onShop
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PetTopBar(
+    petName: String,
+    onBack: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Text(
+                text = petName,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, "返回")
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent
+        )
+    )
+}
+
+@Composable
+fun PetStatusBar(pet: Pet) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        StatusIndicator(
+            icon = "🍖",
+            value = pet.hungerValue,
+            color = Color(0xFFFF6B9D),
+            label = "饥饿"
+        )
+        StatusIndicator(
+            icon = "💧",
+            value = pet.cleanValue,
+            color = Color(0xFF4ECDC4),
+            label = "清洁"
+        )
+        StatusIndicator(
+            icon = "😊",
+            value = pet.moodValue,
+            color = Color(0xFFFFD700),
+            label = "心情"
+        )
+        StatusIndicator(
+            icon = "🏥",
+            value = pet.healthValue,
+            color = Color(0xFF4CAF50),
+            label = "健康"
+        )
+    }
+}
+
+@Composable
+fun StatusIndicator(
+    icon: String,
+    value: Int,
+    color: Color,
+    label: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(70.dp)
+    ) {
+        Text(
+            text = icon,
+            fontSize = 24.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        // 圆形进度条
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(50.dp)
+        ) {
+            CircularProgressIndicator(
+                progress = value / 100f,
+                modifier = Modifier.fillMaxSize(),
+                color = color,
+                strokeWidth = 4.dp,
+                trackColor = color.copy(alpha = 0.2f)
+            )
+            Text(
+                text = "$value",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = Color.Gray
+        )
+    }
+}
+
+// 待机动作类型
+enum class IdleAction {
+    WALKING,      // 行走
+    BREATHING,    // 呼吸+摇摆
+    LICKING,      // 舔爪子
+    HAPPY         // 开心动作
+}
+
+// 加权随机选择待机动作（行走权重更高）
+fun getRandomIdleAction(): IdleAction {
+    val random = (1..10).random()
+    return when (random) {
+        in 1..5 -> IdleAction.WALKING      // 50% 概率行走
+        in 6..7 -> IdleAction.BREATHING    // 20% 概率呼吸
+        in 8..9 -> IdleAction.LICKING      // 20% 概率舔爪子
+        else -> IdleAction.HAPPY           // 10% 概率开心
+    }
+}
+
+@Composable
+fun PetCharacter(
+    pet: Pet,
+    animationState: AnimationState,
+    onPet: () -> Unit
+) {
+    val context = LocalContext.current
+    
+    // 当前待机动作 - 初始加权随机选择（行走概率更高）
+    var currentIdleAction by remember { mutableStateOf(getRandomIdleAction()) }
+    
+    // 待机状态下随机切换动作
+    LaunchedEffect(animationState) {
+        if (animationState == AnimationState.Idle) {
+            while (true) {
+                // 每个动作持续2-5秒
+                val duration = (2000L..5000L).random()
+                delay(duration)
+                
+                // 加权随机选择下一个动作（行走概率50%）
+                currentIdleAction = getRandomIdleAction()
+            }
+        } else {
+            // 非待机状态时，重置为随机动作，以便下次进入待机时有变化
+            currentIdleAction = getRandomIdleAction()
+        }
+    }
+    
+    // 判断是否应该显示行走动画（待机状态且当前动作是行走）
+    val shouldWalk = animationState == AnimationState.Idle && currentIdleAction == IdleAction.WALKING
+    
+    // 判断是否应该显示帧动画（待机状态且当前动作是舔爪子或开心）
+    val shouldPlayIdleFrameAnimation = animationState == AnimationState.Idle && 
+        (currentIdleAction == IdleAction.LICKING || currentIdleAction == IdleAction.HAPPY)
+    
+    when {
+        shouldWalk -> {
+            // 显示行走动画
+            PetWalkingAnimation(
+                size = 200.dp,
+                autoWalk = true,
+                walkSpeed = 0.3f,
+                idleTime = 3000L
+            )
+        }
+        shouldPlayIdleFrameAnimation -> {
+            // 显示待机帧动画（舔爪子或开心）
+            PetIdleFrameAnimation(
+                pet = pet,
+                idleAction = currentIdleAction,
+                onPet = onPet
+            )
+        }
+        else -> {
+            // 显示其他动画状态（包括呼吸+摇摆的待机状态）
+            PetStaticCharacter(
+                pet = pet,
+                animationState = animationState,
+                onPet = onPet
+            )
+        }
+    }
+}
+
+// 待机帧动画（舔爪子、开心等）
+@Composable
+fun PetIdleFrameAnimation(
+    pet: Pet,
+    idleAction: IdleAction,
+    onPet: () -> Unit
+) {
+    // 呼吸动画
+    val breathScale by rememberInfiniteTransition(label = "breath").animateFloat(
+        initialValue = 1f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathScale"
+    )
+    
+    // 获取帧动画序列
+    val animationFrames = remember(idleAction) {
+        when (idleAction) {
+            IdleAction.LICKING -> PetAnimationFrames.getLickingFrames()
+            IdleAction.HAPPY -> PetAnimationFrames.getHappyFrames()
+            else -> emptyList()
+        }
+    }
+    
+    Box(
+        modifier = Modifier
+            .size(250.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // 宠物阴影
+        Box(
+            modifier = Modifier
+                .size(120.dp, 20.dp)
+                .offset(y = 100.dp)
+                .scale(breathScale * 0.8f)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.2f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+        
+        // 宠物形象
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .scale(breathScale)
+                .clickable(
+                    onClick = onPet,
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (animationFrames.isNotEmpty()) {
+                FrameAnimation(
+                    frames = animationFrames,
+                    frameDuration = when (idleAction) {
+                        IdleAction.LICKING -> 150
+                        IdleAction.HAPPY -> 300
+                        else -> 100
+                    },
+                    loop = true,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PetStaticCharacter(
+    pet: Pet,
+    animationState: AnimationState,
+    onPet: () -> Unit
+) {
+    val context = LocalContext.current
+    
+    // 呼吸动画
+    val breathScale by rememberInfiniteTransition(label = "breath").animateFloat(
+        initialValue = 1f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathScale"
+    )
+    
+    // 轻微摇摆动画
+    val swingRotation by rememberInfiniteTransition(label = "swing").animateFloat(
+        initialValue = -3f,
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "swingRotation"
+    )
+    
+    // 根据动画状态调整缩放
+    val actionScale by animateFloatAsState(
+        targetValue = when (animationState) {
+            AnimationState.Feeding -> 1.15f
+            AnimationState.Cleaning -> 1.08f
+            AnimationState.Playing -> 1.2f
+            AnimationState.Petting -> 1.1f
+            AnimationState.LevelUp -> 1.3f
+            else -> 1f
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "actionScale"
+    )
+    
+    // 弹跳动画（开心时）
+    val bounceOffset by animateFloatAsState(
+        targetValue = when (animationState) {
+            AnimationState.Playing -> -30f
+            AnimationState.LevelUp -> -40f
+            else -> 0f
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "bounceOffset"
+    )
+    
+    // 判断是否需要播放帧动画
+    val shouldPlayFrameAnimation = remember(animationState) {
+        PetImageLoader.shouldPlayFrameAnimation(animationState)
+    }
+    
+    // 获取帧动画序列
+    val animationFrames = remember(animationState) {
+        when (animationState) {
+            AnimationState.Feeding -> PetAnimationFrames.getEatingFrames()
+            AnimationState.Petting -> PetAnimationFrames.getLickingFrames()
+            AnimationState.Playing -> PetAnimationFrames.getHappyFrames()
+            else -> emptyList()
+        }
+    }
+    
+    // 获取静态宠物图片路径
+    val petImagePath = remember(pet.type, pet.getGrowthStage(), animationState) {
+        PetImageLoader.getPetImagePath(pet.type, pet.getGrowthStage(), animationState)
+    }
+    
+    // 加载静态图片
+    val petImage = rememberAssetImage(petImagePath)
+    
+    Box(
+        modifier = Modifier
+            .size(250.dp)
+            .offset(y = bounceOffset.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // 宠物阴影
+        Box(
+            modifier = Modifier
+                .size(120.dp, 20.dp)
+                .offset(y = 100.dp)
+                .scale(breathScale * 0.8f)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.2f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+        
+        // 宠物形象
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .scale(breathScale * actionScale)  // 始终保持呼吸动画
+                .rotate(if (shouldPlayFrameAnimation && animationState != AnimationState.Idle) 0f else swingRotation * 0.5f)  // 待机时保持摇摆
+                .clickable(
+                    onClick = onPet,
+                    indication = null,  // 移除点击波纹效果
+                    interactionSource = remember { MutableInteractionSource() }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (shouldPlayFrameAnimation && animationFrames.isNotEmpty()) {
+                // 播放帧动画
+                FrameAnimation(
+                    frames = animationFrames,
+                    frameDuration = when (animationState) {
+                        AnimationState.Idle -> 5000     // 睡觉动画5秒一帧
+                        AnimationState.Feeding -> 80    // 吃东西快一点
+                        AnimationState.Petting -> 150   // 舔爪子慢一点
+                        AnimationState.Playing -> 300   // 开心动画慢一点
+                        else -> 100
+                    },
+                    loop = true,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // 显示静态图片
+                if (petImage != null) {
+                    Image(
+                        bitmap = petImage,
+                        contentDescription = "宠物",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    // 加载失败时显示占位符
+                    Text(
+                        text = when (pet.type) {
+                            PetType.CAT -> "🐱"
+                            PetType.DOG -> "🐶"
+                            PetType.RABBIT -> "🐰"
+                            PetType.HAMSTER -> "🐹"
+                        },
+                        fontSize = 120.sp
+                    )
+                }
+            }
+        }
+        
+        // 显示动画特效
+        AnimatedVisibility(
+            visible = animationState != AnimationState.Idle,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut()
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                // 粒子特效和玩具
+                when (animationState) {
+                    AnimationState.Feeding -> FloatingHearts()
+                    AnimationState.Cleaning -> WaterDropEffect()
+                    AnimationState.Playing -> {
+                        // 玩耍时显示球玩具和星星特效
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            PlayingWithBall()
+                            FloatingStarsWithAnimation()
+                        }
+                    }
+                    AnimationState.Petting -> FloatingLoveHearts()
+                    AnimationState.LevelUp -> LevelUpEffect()
+                    else -> {}
+                }
+            }
+        }
+    }
+}
+
+// 漂浮星星特效（使用帧动画）
+@Composable
+fun FloatingStarsWithAnimation() {
+    val stars = remember { List(3) { it } }
+    stars.forEach { index ->
+        FloatingParticleWithFrames(
+            frames = PetAnimationFrames.getStarFrames(),
+            delay = index * 200,
+            offsetX = (index - 1) * 40f
+        )
+    }
+}
+
+// 玩耍动画 - 显示球玩具
+@Composable
+fun PlayingWithBall() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .offset(y = 80.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        // 弹跳的球
+        BouncingBall()
+    }
+}
+
+// 弹跳的球动画
+@Composable
+fun BouncingBall() {
+    val infiniteTransition = rememberInfiniteTransition(label = "ball")
+    
+    // 上下弹跳
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -60f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ballBounce"
+    )
+    
+    // 旋转
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ballRotation"
+    )
+    
+    Box(
+        modifier = Modifier
+            .size(50.dp)
+            .offset(y = offsetY.dp)
+            .rotate(rotation)
+    ) {
+        FrameAnimation(
+            frames = PetAnimationFrames.getBallFrames(),
+            frameDuration = 150,
+            loop = true,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+// 通用漂浮粒子（帧动画版本）
+@Composable
+fun FloatingParticleWithFrames(
+    frames: List<String>,
+    delay: Int = 0,
+    offsetX: Float = 0f
+) {
+    var visible by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(delay.toLong())
+        visible = true
+    }
+    
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) -150f else 0f,
+        animationSpec = tween(1500, easing = EaseOut),
+        label = "offsetY"
+    )
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 0f else 1f,
+        animationSpec = tween(1500),
+        label = "alpha"
+    )
+    
+    if (visible) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .offset(x = offsetX.dp, y = offsetY.dp)
+                .alpha(alpha)
+        ) {
+            FrameAnimation(
+                frames = frames,
+                frameDuration = 150,
+                loop = true,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+// 漂浮爱心特效
+@Composable
+fun FloatingHearts() {
+    val hearts = remember { List(5) { it } }
+    hearts.forEach { index ->
+        FloatingParticle(
+            emoji = "❤️",
+            delay = index * 200,
+            offsetX = (index - 2) * 20f
+        )
+    }
+}
+
+// 漂浮星星特效
+@Composable
+fun FloatingStars() {
+    val stars = remember { List(6) { it } }
+    stars.forEach { index ->
+        FloatingParticle(
+            emoji = "⭐",
+            delay = index * 150,
+            offsetX = (index - 3) * 25f
+        )
+    }
+}
+
+// 漂浮闪光特效
+@Composable
+fun FloatingSparkles() {
+    val sparkles = remember { List(8) { it } }
+    sparkles.forEach { index ->
+        FloatingParticle(
+            emoji = "✨",
+            delay = index * 100,
+            offsetX = (index - 4) * 20f
+        )
+    }
+}
+
+// 水滴下落特效（洗澡时）
+@Composable
+fun WaterDropEffect() {
+    val drops = remember { List(12) { it } }
+    drops.forEach { index ->
+        WaterDrop(
+            delay = index * 80,
+            offsetX = (index - 6) * 15f
+        )
+    }
+}
+
+// 单个水滴
+@Composable
+fun WaterDrop(
+    delay: Int = 0,
+    offsetX: Float = 0f
+) {
+    var visible by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(delay.toLong())
+        visible = true
+    }
+    
+    // 下落动画
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) 200f else -50f,
+        animationSpec = tween(800, easing = EaseIn),
+        label = "dropOffsetY"
+    )
+    
+    // 透明度动画（落到底部时消失）
+    val alpha by animateFloatAsState(
+        targetValue = if (visible && offsetY < 150f) 1f else 0f,
+        animationSpec = tween(400),
+        label = "dropAlpha"
+    )
+    
+    // 大小变化（落下时变大）
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1.2f else 0.8f,
+        animationSpec = tween(800),
+        label = "dropScale"
+    )
+    
+    if (visible) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .offset(x = offsetX.dp, y = offsetY.dp)
+                .scale(scale)
+                .alpha(alpha),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "💧",
+                fontSize = 24.sp
+            )
+        }
+    }
+    
+    // 循环播放
+    LaunchedEffect(offsetY) {
+        if (offsetY >= 200f) {
+            kotlinx.coroutines.delay(100)
+            visible = false
+            kotlinx.coroutines.delay(delay.toLong())
+            visible = true
+        }
+    }
+}
+
+// 漂浮爱心（抚摸）
+@Composable
+fun FloatingLoveHearts() {
+    val hearts = remember { List(3) { it } }
+    hearts.forEach { index ->
+        FloatingParticle(
+            emoji = "💕",
+            delay = index * 250,
+            offsetX = (index - 1) * 30f
+        )
+    }
+}
+
+// 升级特效
+@Composable
+fun LevelUpEffect() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // 光芒效果
+        val infiniteTransition = rememberInfiniteTransition(label = "levelup")
+        val rotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        )
+        
+        Text(
+            text = "✨",
+            fontSize = 60.sp,
+            modifier = Modifier.rotate(rotation)
+        )
+        
+        // 漂浮星星
+        FloatingStars()
+    }
+}
+
+// 通用漂浮粒子
+@Composable
+fun FloatingParticle(
+    emoji: String,
+    delay: Int = 0,
+    offsetX: Float = 0f
+) {
+    var visible by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(delay.toLong())
+        visible = true
+    }
+    
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) -150f else 0f,
+        animationSpec = tween(1500, easing = EaseOut),
+        label = "offsetY"
+    )
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 0f else 1f,
+        animationSpec = tween(1500),
+        label = "alpha"
+    )
+    
+    if (visible) {
+        Text(
+            text = emoji,
+            fontSize = 30.sp,
+            modifier = Modifier
+                .offset(x = offsetX.dp, y = offsetY.dp)
+                .alpha(alpha)
+        )
+    }
+}
+
+@Composable
+fun PetLevelInfo(pet: Pet) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.8f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // 等级徽章
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFFFD700),
+                modifier = Modifier.size(50.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Lv.${pet.level}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            
+            // 经验进度条
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "${pet.experience} / ${pet.getExpForNextLevel()}",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = pet.experience.toFloat() / pet.getExpForNextLevel(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = Color(0xFFFFD700),
+                    trackColor = Color(0xFFFFD700).copy(alpha = 0.2f)
+                )
+            }
+            
+            // 成长阶段
+            Text(
+                text = when (pet.getGrowthStage()) {
+                    GrowthStage.BABY -> "幼年期"
+                    GrowthStage.CHILD -> "少年期"
+                    GrowthStage.ADULT -> "成年期"
+                    GrowthStage.PERFECT -> "完全体"
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFF6B9D)
+            )
+        }
+    }
+}
+
+@Composable
+fun PetActionButtons(
+    onFeed: () -> Unit,
+    onClean: () -> Unit,
+    onPlay: () -> Unit,
+    onShop: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp)
+            .padding(bottom = 80.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        ActionButton(
+            icon = Icons.Default.Restaurant,
+            label = "喂食",
+            color = Color(0xFFFF6B9D),
+            onClick = onFeed
+        )
+        ActionButton(
+            icon = Icons.Default.Shower,
+            label = "洗澡",
+            color = Color(0xFF4ECDC4),
+            onClick = onClean
+        )
+        ActionButton(
+            icon = Icons.Default.SportsEsports,
+            label = "玩耍",
+            color = Color(0xFFFFD700),
+            onClick = onPlay
+        )
+        ActionButton(
+            icon = Icons.Default.ShoppingCart,
+            label = "商店",
+            color = Color(0xFF9C27B0),
+            onClick = onShop
+        )
+    }
+}
+
+@Composable
+fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy
+        ),
+        label = "buttonScale"
+    )
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .scale(scale)
+            .clickable(
+                onClick = {
+                    pressed = true
+                    onClick()
+                },
+                indication = null,  // 移除点击波纹效果
+                interactionSource = remember { MutableInteractionSource() }
+            )
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = color,
+            modifier = Modifier.size(60.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = Color.White,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+    
+    LaunchedEffect(pressed) {
+        if (pressed) {
+            kotlinx.coroutines.delay(100)
+            pressed = false
+        }
+    }
+}
+
+@Composable
+fun AdoptPetScreen(
+    onAdopt: (String, PetType) -> Unit
+) {
+    var petName by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf<PetType?>(null) }
+    var showDialog by remember { mutableStateOf(false) }
+    
+    // 加载背景图片
+    val backgroundImage = rememberAssetImage(PetImageLoader.getBackgroundPath("garden"))
+    
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // 背景图片
+        if (backgroundImage != null) {
+            Image(
+                bitmap = backgroundImage,
+                contentDescription = "背景",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = 0.7f
+            )
+        } else {
+            // 备用渐变背景
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFE4E1),
+                                Color(0xFFE0F7FA),
+                                Color(0xFFFFF0F5)
+                            )
+                        )
+                    )
+            )
+        }
+        
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White.copy(alpha = 0.95f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "领养你的宠物",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = "选择一只宠物开始你的养成之旅！",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                // 宠物选择
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    PetTypeButton(
+                        emoji = "🐱",
+                        type = PetType.CAT,
+                        selected = selectedType == PetType.CAT,
+                        onClick = { selectedType = PetType.CAT }
+                    )
+                    PetTypeButton(
+                        emoji = "🐶",
+                        type = PetType.DOG,
+                        selected = selectedType == PetType.DOG,
+                        onClick = { selectedType = PetType.DOG }
+                    )
+                    PetTypeButton(
+                        emoji = "🐰",
+                        type = PetType.RABBIT,
+                        selected = selectedType == PetType.RABBIT,
+                        onClick = { selectedType = PetType.RABBIT }
+                    )
+                    PetTypeButton(
+                        emoji = "🐹",
+                        type = PetType.HAMSTER,
+                        selected = selectedType == PetType.HAMSTER,
+                        onClick = { selectedType = PetType.HAMSTER }
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                Button(
+                    onClick = { showDialog = true },
+                    enabled = selectedType != null,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("领养", modifier = Modifier.padding(8.dp))
+                }
+            }
+        }
+    }
+    
+    if (showDialog && selectedType != null) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("给宠物起个名字") },
+            text = {
+                OutlinedTextField(
+                    value = petName,
+                    onValueChange = { petName = it },
+                    label = { Text("宠物名字") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (petName.isNotBlank()) {
+                            onAdopt(petName, selectedType!!)
+                            showDialog = false
+                        }
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun PetTypeButton(
+    emoji: String,
+    type: PetType,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) Color(0xFFFF6B9D) else Color.LightGray.copy(alpha = 0.3f),
+        modifier = Modifier
+            .size(70.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = emoji,
+                fontSize = 40.sp
+            )
+        }
+    }
+}

@@ -1381,7 +1381,7 @@ fun EnhancedNormalModeCard(
                 // 主卡片
         Box(
             modifier = Modifier
-                .width(340.dp)
+                .width(280.dp)
                 .wrapContentHeight()
                 .graphicsLayer {
                     scaleX = scale
@@ -1398,19 +1398,19 @@ fun EnhancedNormalModeCard(
                             Color(0xFF90CAF9)
                         )
                     ),
-                    RoundedCornerShape(28.dp)
+                    RoundedCornerShape(24.dp)
                 )
-                .padding(32.dp)
+                .padding(24.dp)
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 顶部装饰
                 Text(
                     "✨ 恭喜抽中 ✨",
-                    fontSize = 22.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1976D2)
                 )
@@ -1418,7 +1418,7 @@ fun EnhancedNormalModeCard(
                 // 大图标
                 Box(
                     modifier = Modifier
-                        .size(120.dp)
+                        .size(90.dp)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
@@ -1432,14 +1432,14 @@ fun EnhancedNormalModeCard(
                 ) {
                     Text(
                         "🎁",
-                        fontSize = 64.sp
+                        fontSize = 48.sp
                     )
                 }
                 
                 // 结果文字
                 Text(
                     result,
-                    fontSize = 28.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFF1565C0),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -1645,7 +1645,7 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
         
         Box(
             modifier = Modifier
-                .width(340.dp)
+                .width(280.dp)
                 .wrapContentHeight()
                 .graphicsLayer {
                     scaleX = scale
@@ -1663,27 +1663,27 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                             Color(0xFF90CAF9)
                         )
                     ),
-                    RoundedCornerShape(28.dp)
+                    RoundedCornerShape(24.dp)
                 )
-                .padding(24.dp)
+                .padding(20.dp)
         ) {
             // 移除卡片背景粒子，提升性能
             
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // 顶部装饰
                 Text("✨ 恭喜抽中 ✨", 
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1976D2)
                 )
                 
                 // 大图标 + 粒子散发效果
                 Box(
-                    modifier = Modifier.size(140.dp),
+                    modifier = Modifier.size(110.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // 粒子散发层 - 从图标中心向外（减少到8个粒子，硬件加速）
@@ -1700,7 +1700,7 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                         // 生成8个粒子，从中心向外散发
                         repeat(8) { i ->
                             val angle = (i * 45f + particleProgress.value * 360f) * Math.PI.toFloat() / 180f
-                            val distance = 70f * particleProgress.value  // 粒子向外移动的距离
+                            val distance = 55f * particleProgress.value  // 粒子向外移动的距离
                             
                             val x = centerX + distance * cos(angle)
                             val y = centerY + distance * sin(angle)
@@ -1709,7 +1709,7 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                             val pAlpha = (1f - particleProgress.value) * 0.9f
                             
                             // 粒子大小（从大到小）
-                            val pSize = 15f * (1f - particleProgress.value * 0.5f)
+                            val pSize = 12f * (1f - particleProgress.value * 0.5f)
                             
                             if (pAlpha > 0.05f) {
                                 drawCircle(
@@ -1730,7 +1730,7 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                     // 图标背景
                     Box(
                         modifier = Modifier
-                            .size(100.dp)
+                            .size(80.dp)
                             .graphicsLayer {
                                 // 持续抖动（X和Y方向）
                                 translationX = shakeX.value
@@ -1757,13 +1757,13 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                                         Color(0xFF2196F3)
                                     )
                                 ),
-                                style = Stroke(width = 4.dp.toPx())
+                                style = Stroke(width = 3.dp.toPx())
                             )
                         }
                         
                         Text(
                             "🎯",
-                            fontSize = 56.sp,
+                            fontSize = 42.sp,
                             modifier = Modifier.graphicsLayer {
                                 scaleX = scale
                                 scaleY = scale
@@ -1777,7 +1777,7 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                     shape = RoundedCornerShape(20.dp),
                     color = Color.White,
                     shadowElevation = 12.dp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -1790,13 +1790,13 @@ fun NormalModeCard(result: String, scale: Float, rotation: Float, alpha: Float, 
                                     )
                                 )
                             )
-                            .padding(horizontal = 28.dp, vertical = 16.dp)
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
                     ) {
                         Text(
                             result,
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 36.sp,
+                            fontSize = 28.sp,
                             color = Color(0xFF1565C0)
                         )
                     }

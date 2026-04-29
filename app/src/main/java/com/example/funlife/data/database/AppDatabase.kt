@@ -22,6 +22,7 @@ import com.example.funlife.data.dao.ShopDao
 import com.example.funlife.data.dao.GuaranteeCounterDao
 import com.example.funlife.data.dao.CustomSpinModeDao
 import com.example.funlife.data.dao.OperationLogDao
+import com.example.funlife.data.dao.DailyRewardDao
 import com.example.funlife.data.model.Anniversary
 import com.example.funlife.data.model.AnniversaryReminder
 import com.example.funlife.data.model.Player
@@ -40,6 +41,7 @@ import com.example.funlife.data.model.PurchaseHistory
 import com.example.funlife.data.model.GuaranteeCounter
 import com.example.funlife.data.model.CustomSpinMode
 import com.example.funlife.data.model.OperationLog
+import com.example.funlife.data.model.DailyReward
 
 @Database(
     entities = [
@@ -61,9 +63,15 @@ import com.example.funlife.data.model.OperationLog
         GuaranteeCounter::class,
         CustomSpinMode::class,
         com.example.funlife.data.model.User::class,
-        OperationLog::class
+        OperationLog::class,
+        com.example.funlife.data.model.Pet::class,
+        com.example.funlife.data.model.PetItem::class,
+        DailyReward::class,
+        com.example.funlife.data.model.Riddle::class,
+        com.example.funlife.data.model.RiddleProgress::class,
+        com.example.funlife.data.model.RiddleStats::class
     ],
-    version = 18,  // 🔥 升级到版本18
+    version = 24,  // 🔥 升级到版本24 - 添加猜谜游戏系统
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -84,6 +92,12 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun guaranteeCounterDao(): GuaranteeCounterDao
     abstract fun customSpinModeDao(): CustomSpinModeDao
     abstract fun operationLogDao(): OperationLogDao
+    abstract fun petDao(): com.example.funlife.data.dao.PetDao
+    abstract fun petItemDao(): com.example.funlife.data.dao.PetItemDao
+    abstract fun dailyRewardDao(): DailyRewardDao
+    abstract fun riddleDao(): com.example.funlife.data.dao.RiddleDao
+    abstract fun riddleProgressDao(): com.example.funlife.data.dao.RiddleProgressDao
+    abstract fun riddleStatsDao(): com.example.funlife.data.dao.RiddleStatsDao
     
     companion object {
         @Volatile
@@ -620,6 +634,157 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        // 🔥 新增：版本18到19 - 添加模式独立选项配置
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 添加三个模式各自的选项存储字段
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN normalModeOptions TEXT NOT NULL DEFAULT ''
+                """)
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN advancedModeOptions TEXT NOT NULL DEFAULT ''
+                """)
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN luckyModeOptions TEXT NOT NULL DEFAULT ''
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本19到20 - 添加首页面板自定义文字
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN homePanelText TEXT NOT NULL DEFAULT '少女心面板'
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本20到21 - 添加艺术字颜色主题
+        private val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN homePanelTextStyle TEXT NOT NULL DEFAULT 'pink'
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本21到22 - 添加宠物系统
+        private val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建宠物表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS pets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        level INTEGER NOT NULL DEFAULT 1,
+                        experience INTEGER NOT NULL DEFAULT 0,
+                        hungerValue INTEGER NOT NULL DEFAULT 100,
+                        cleanValue INTEGER NOT NULL DEFAULT 100,
+                        moodValue INTEGER NOT NULL DEFAULT 100,
+                        healthValue INTEGER NOT NULL DEFAULT 100,
+                        intimacy INTEGER NOT NULL DEFAULT 0,
+                        birthday INTEGER NOT NULL,
+                        lastFeedTime INTEGER NOT NULL,
+                        lastCleanTime INTEGER NOT NULL,
+                        lastPlayTime INTEGER NOT NULL,
+                        lastUpdateTime INTEGER NOT NULL,
+                        appearance TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                """)
+                
+                // 创建宠物物品表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS pet_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        itemId INTEGER NOT NULL,
+                        itemType TEXT NOT NULL,
+                        itemName TEXT NOT NULL,
+                        quantity INTEGER NOT NULL DEFAULT 1,
+                        acquiredAt INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本22到23 - 添加每日奖励系统
+        private val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建每日奖励表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS daily_rewards (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        rewardType TEXT NOT NULL,
+                        lastClaimDate TEXT NOT NULL,
+                        claimCount INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                
+                // 创建索引
+                database.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_daily_rewards_userId_rewardType 
+                    ON daily_rewards(userId, rewardType)
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本23到24 - 添加猜谜游戏系统
+        private val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建谜题表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS riddles (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        question TEXT NOT NULL,
+                        answer TEXT NOT NULL,
+                        category TEXT NOT NULL DEFAULT '脑筋急转弯',
+                        difficulty INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                
+                // 创建谜题进度表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS riddle_progress (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        riddleId INTEGER NOT NULL,
+                        isAnswered INTEGER NOT NULL DEFAULT 0,
+                        isCorrect INTEGER NOT NULL DEFAULT 0,
+                        attempts INTEGER NOT NULL DEFAULT 0,
+                        lastAttemptTime INTEGER NOT NULL
+                    )
+                """)
+                
+                // 创建谜题统计表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS riddle_stats (
+                        userId INTEGER PRIMARY KEY NOT NULL,
+                        totalAnswered INTEGER NOT NULL DEFAULT 0,
+                        totalCorrect INTEGER NOT NULL DEFAULT 0,
+                        currentStreak INTEGER NOT NULL DEFAULT 0,
+                        maxStreak INTEGER NOT NULL DEFAULT 0,
+                        totalScore INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                
+                // 创建索引
+                database.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_riddle_progress_userId_riddleId 
+                    ON riddle_progress(userId, riddleId)
+                """)
+            }
+        }
+        
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -644,7 +809,13 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_14_15,
                     MIGRATION_15_16,
                     MIGRATION_16_17,
-                    MIGRATION_17_18   // 🔥 新增
+                    MIGRATION_17_18,  // 🔥 新增
+                    MIGRATION_18_19,  // 🔥 新增：模式独立选项
+                    MIGRATION_19_20,  // 🔥 新增：首页面板自定义文字
+                    MIGRATION_20_21,  // 🔥 新增：艺术字颜色主题
+                    MIGRATION_21_22,  // 🔥 新增：宠物系统
+                    MIGRATION_22_23,  // 🔥 新增：每日奖励系统
+                    MIGRATION_23_24   // 🔥 新增：猜谜游戏系统
                 )
                 // 🔥 修复：移除破坏性降级，保护用户数据
                 // .fallbackToDestructiveMigration()  // 已移除！

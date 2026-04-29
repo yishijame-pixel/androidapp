@@ -298,14 +298,13 @@ fun AnniversaryScreen(
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars)
                 .offset { 
                     androidx.compose.ui.unit.IntOffset(
                         fabOffsetX.toInt(), 
                         fabOffsetY.toInt()
                     ) 
                 }
-                .padding(16.dp)
+                .padding(bottom = 96.dp, end = 16.dp) // 增加底部padding，避免被导航栏遮挡
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
@@ -315,7 +314,7 @@ fun AnniversaryScreen(
                         )
                         fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(
                             -(screenHeightPx - 400f), // 上边界，留出更多空间
-                            0f // 下边界，0表示在导航栏上方
+                            -200f // 下边界，确保在导航栏上方
                         )
                     }
                 }

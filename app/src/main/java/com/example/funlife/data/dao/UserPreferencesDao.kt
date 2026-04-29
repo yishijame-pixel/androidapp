@@ -79,4 +79,22 @@ interface UserPreferencesDao {
     // 🔥 新增：保存最后使用的自定义模式ID
     @Query("UPDATE user_preferences SET lastCustomModeId = :modeId WHERE userId = :userId")
     suspend fun updateLastCustomModeId(userId: Long, modeId: Int?)
+    
+    // 🔥 新增：更新三个模式的独立选项配置
+    @Query("UPDATE user_preferences SET normalModeOptions = :options WHERE userId = :userId")
+    suspend fun updateNormalModeOptions(userId: Long, options: String)
+    
+    @Query("UPDATE user_preferences SET advancedModeOptions = :options WHERE userId = :userId")
+    suspend fun updateAdvancedModeOptions(userId: Long, options: String)
+    
+    @Query("UPDATE user_preferences SET luckyModeOptions = :options WHERE userId = :userId")
+    suspend fun updateLuckyModeOptions(userId: Long, options: String)
+    
+    // 🔥 新增：更新首页面板自定义文字
+    @Query("UPDATE user_preferences SET homePanelText = :text WHERE userId = :userId")
+    suspend fun updateHomePanelText(userId: Long, text: String)
+    
+    // 🔥 新增：更新艺术字颜色主题
+    @Query("UPDATE user_preferences SET homePanelTextStyle = :style WHERE userId = :userId")
+    suspend fun updateHomePanelTextStyle(userId: Long, style: String)
 }

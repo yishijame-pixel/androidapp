@@ -41,4 +41,111 @@
     <string name="anniversary_confirm">确定</string>
     <string name="anniversary_save">保存</string>
     <string name="anniversary_cancel">取消</string>
+    
+    <!-- Shop Screen -->
+    <string name="shop_title">趣味商城</string>
+    <string name="shop_back">返回</string>
+    
+    <!-- Shop Categories -->
+    <string name="shop_category_all">全部</string>
+    <string name="shop_category_props">道具</string>
+    <string name="shop_category_skins">皮肤</string>
+    <string name="shop_category_decorations">装饰</string>
+    <string name="shop_category_effects">特效</string>
+    
+    <!-- Product Rarity -->
+    <string name="shop_rarity_common">普通</string>
+    <string name="shop_rarity_rare">稀有</string>
+    <string name="shop_rarity_epic">史诗</string>
+    <string name="shop_rarity_legendary">传说</string>
+    
+    <!-- Product Names -->
+    <string name="shop_product_coin_pack">金币礼包</string>
+    <string name="shop_product_lucky_star">幸运星</string>
+    <string name="shop_product_double_card">双倍卡</string>
+    <string name="shop_product_guarantee_ticket">保底券</string>
+    <string name="shop_product_lucky_box">幸运宝箱</string>
+    <string name="shop_product_rainbow_skin">彩虹皮肤</string>
+    <string name="shop_product_sakura_skin">樱花皮肤</string>
+    <string name="shop_product_starry_skin">星空皮肤</string>
+    <string name="shop_product_ocean_skin">海洋皮肤</string>
+    <string name="shop_product_fire_skin">火焰皮肤</string>
+    <string name="shop_product_ice_skin">冰雪皮肤</string>
+    <string name="shop_product_achievement_badge">成就徽章</string>
+    <string name="shop_product_crown">皇冠装饰</string>
+    <string name="shop_product_wings">翅膀装饰</string>
+    <string name="shop_product_halo">光环装饰</string>
+    <string name="shop_product_effect_pack">特效礼包</string>
+    <string name="shop_product_firework">烟花特效</string>
+    <string name="shop_product_star_effect">星星特效</string>
+    <string name="shop_product_ribbon">彩带特效</string>
+    <string name="shop_product_magic">魔法特效</string>
+    
+    <!-- Product Descriptions -->
+    <string name="shop_desc_coin_pack">免费领取100金币</string>
+    <string name="shop_desc_lucky_star">增加转盘幸运值+10</string>
+    <string name="shop_desc_double_card">下次转盘奖励翻倍</string>
+    <string name="shop_desc_guarantee_ticket">保证获得稀有奖励</string>
+    <string name="shop_desc_lucky_box">随机获得道具</string>
+    <string name="shop_desc_rainbow_skin">转盘彩虹主题</string>
+    <string name="shop_desc_sakura_skin">转盘樱花主题</string>
+    <string name="shop_desc_starry_skin">转盘星空主题</string>
+    <string name="shop_desc_ocean_skin">转盘海洋主题</string>
+    <string name="shop_desc_fire_skin">转盘火焰主题</string>
+    <string name="shop_desc_ice_skin">转盘冰雪主题</string>
+    <string name="shop_desc_achievement_badge">展示你的成就</string>
+    <string name="shop_desc_crown">尊贵的象征</string>
+    <string name="shop_desc_wings">华丽的翅膀</string>
+    <string name="shop_desc_halo">闪耀的光环</string>
+    <string name="shop_desc_effect_pack">华丽特效合集</string>
+    <string name="shop_desc_firework">绚丽烟花效果</string>
+    <string name="shop_desc_star_effect">闪烁星星效果</string>
+    <string name="shop_desc_ribbon">飘舞彩带效果</string>
+    <string name="shop_desc_magic">神秘魔法效果</string>
+    
+    <!-- Shop Labels -->
+    <string name="shop_label_hot">HOT</string>
+    <string name="shop_label_new">NEW</string>
+    <string name="shop_label_discount">-%d%%</string>
+    <string name="shop_label_stock">剩%d</string>
+    <string name="shop_label_locked">锁定</string>
+    <string name="shop_button_free">免费领取</string>
+    
+    <!-- Purchase Dialog -->
+    <string name="shop_dialog_title">确认购买</string>
+    <string name="shop_dialog_price">商品价格:</string>
+    <string name="shop_dialog_current_coins">当前金币:</string>
+    <string name="shop_dialog_after_purchase">购买后:</string>
+    <string name="shop_dialog_limited_warning">限量商品，仅剩 %d 件</string>
+    <string name="shop_dialog_confirm">确认购买</string>
+    <string name="shop_dialog_cancel">取消</string>
+    
+    <!-- Purchase Result -->
+    <string name="shop_purchase_success">✨ 购买成功！</string>
+    <string name="shop_purchase_success_title">购买成功！</string>
+    <string name="shop_purchase_success_message">商品已添加到您的背包</string>
+    <string name="shop_purchase_failed">❌ 金币不足</string>
+    <string name="shop_claimed_today">✅ 今日已领取</string>
+    <string name="shop_claim_success">🎉 领取成功！获得100金币</string>
+
+    <!-- Riddle Game Screen -->
+    <string name="riddle_game_title">猜谜挑战</string>
+    <string name="riddle_back">返回</string>
+    <string name="riddle_rules">规则</string>
+    <string name="riddle_current_question">当前题</string>
+    <string name="riddle_total_questions">总题数</string>
+    <string name="riddle_score">得分</string>
+    <string name="riddle_streak">连胜</string>
+    <string name="riddle_answer_hint">请输入你的答案</string>
+    <string name="riddle_clear">清空</string>
+    <string name="riddle_skip">跳过</string>
+    <string name="riddle_submit">提交答案</string>
+    <string name="riddle_favorite">收藏</string>
+    <string name="riddle_share">分享</string>
+    <string name="riddle_hint">提示</string>
+    <string name="riddle_correct">回答正确！</string>
+    <string name="riddle_wrong">再想想</string>
+    <string name="riddle_correct_answer">正确答案</string>
+    <string name="riddle_next">下一题</string>
+    <string name="riddle_continue">继续挑战</string>
 </resources>

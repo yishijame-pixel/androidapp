@@ -1,16 +1,32 @@
 // NavGraph.kt - 导航图
 package com.example.funlife.navigation
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.funlife.FunLifeApplication
+import com.example.funlife.repository.CoinRepository
+import com.example.funlife.repository.PetRepository
+import com.example.funlife.repository.PetItemRepository
 import com.example.funlife.ui.screens.*
 import com.example.funlife.viewmodel.AnniversaryViewModel
 import com.example.funlife.viewmodel.AuthViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
 import com.example.funlife.viewmodel.GoalViewModel
+import com.example.funlife.viewmodel.PetViewModel
 
 sealed class Screen(val route: String, val title: String) {
     object Welcome : Screen("welcome", "欢迎")
@@ -169,6 +185,48 @@ fun NavGraph(
             ShopScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+        
+        composable("pet") {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            
+            if (userSession != null) {
+                val petViewModel = remember {
+                    PetViewModel(
+                        petRepository = PetRepository(application.database.petDao()),
+                        petItemRepository = PetItemRepository(application.database.petItemDao()),
+                        coinRepository = CoinRepository(application.database.coinDao()),
+                        userId = userSession.userId
+                    )
+                }
+                PetScreen(
+                    navController = navController,
+                    viewModel = petViewModel
+                )
+            }
+        }
+        
+        composable("riddle_game") {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            
+            if (userSession != null) {
+                RiddleGameScreen(
+                    userId = userSession.userId,
+                    database = application.database,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                // 如果没有登录，返回登录页
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
         }
         
         composable(Screen.Profile.route) {

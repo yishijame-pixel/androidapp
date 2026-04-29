@@ -48,10 +48,17 @@ import androidx.navigation.compose.rememberNavController
 import com.example.funlife.navigation.NavGraph
 import com.example.funlife.navigation.Screen
 import com.example.funlife.ui.theme.FunLifeTheme
+import com.example.funlife.utils.SoundEffectManager
+import com.example.funlife.utils.SoundEffect
 
 class MainActivity : ComponentActivity() {
+    private lateinit var soundManager: SoundEffectManager
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 初始化音效管理器
+        soundManager = SoundEffectManager.getInstance(this)
         
         // 切换到正常主题
         setTheme(R.style.Theme_FunLife)
@@ -65,16 +72,21 @@ class MainActivity : ComponentActivity() {
                         onTimeout = { showSplash = false }
                     )
                 } else {
-                    MainScreen()
+                    MainScreen(soundManager = soundManager)
                 }
             }
         }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        soundManager.release()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(soundManager: SoundEffectManager) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -110,11 +122,14 @@ fun MainScreen() {
         )
     )
     
-    // 判断是否显示底部导航栏（登录/注册/欢迎页不显示）
+    // 判断是否显示底部导航栏（登录/注册/欢迎页/宠物页/游戏计分页/商城页不显示）
     val showBottomBar = currentDestination?.route !in listOf(
         Screen.Welcome.route,
         Screen.Login.route,
-        Screen.Register.route
+        Screen.Register.route,
+        "pet",
+        Screen.ScoreCounter.route,
+        "shop"
     )
     
     Scaffold(
@@ -289,7 +304,7 @@ fun MainScreen() {
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        bottomNavItems.forEach { item ->
+                        bottomNavItems.forEachIndexed { index, item ->
                             val selected = currentDestination?.hierarchy?.any {
                                 it.route == item.screen.route
                             } == true
@@ -297,6 +312,8 @@ fun MainScreen() {
                             BottomNavItem(
                                 item = item,
                                 selected = selected,
+                                soundManager = soundManager,
+                                navIndex = index,
                                 onClick = {
                                     if (currentDestination?.route == item.screen.route) {
                                         return@BottomNavItem
@@ -323,6 +340,8 @@ fun MainScreen() {
 private fun BottomNavItem(
     item: BottomNavItem,
     selected: Boolean,
+    soundManager: SoundEffectManager,
+    navIndex: Int,
     onClick: () -> Unit
 ) {
     // 缩放动画 - 增强选中效果
@@ -335,10 +354,17 @@ private fun BottomNavItem(
         label = "scale"
     )
     
+    // 所有导航按钮都使用相同的音效
+    val soundEffect = SoundEffect.NAV_HOME
+    
     Column(
         modifier = Modifier
             .clickable(
-                onClick = onClick,
+                onClick = {
+                    // 播放音效
+                    soundManager.play(soundEffect, volume = 0.6f)
+                    onClick()
+                },
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             )
@@ -383,19 +409,20 @@ private fun BottomNavItem(
             )
         }
         
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(1.dp))
         
-        // 文字 - 增大字号，增强对比
+        // 文字 - 优化字号和间距，确保完整显示
         Text(
             text = item.label,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontSize = if (selected) 13.sp else 12.sp,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = if (selected) 11.sp else 10.sp,
                 letterSpacing = 0.sp,
-                lineHeight = 14.sp
+                lineHeight = 12.sp
             ),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = if (selected) Color.Black else Color.Black.copy(alpha = 0.7f),
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Visible
         )
     }
 }

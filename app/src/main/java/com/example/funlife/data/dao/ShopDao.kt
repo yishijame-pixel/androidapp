@@ -12,6 +12,9 @@ interface ShopDao {
     @Query("SELECT * FROM shop_items WHERE isAvailable = 1 ORDER BY price ASC")
     fun getAllShopItems(): Flow<List<ShopItem>>
     
+    @Query("SELECT COUNT(*) FROM shop_items")
+    suspend fun getShopItemCount(): Int
+    
     @Query("SELECT * FROM shop_items WHERE id = :itemId")
     suspend fun getShopItem(itemId: Int): ShopItem?
     

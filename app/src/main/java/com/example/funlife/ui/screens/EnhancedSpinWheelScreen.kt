@@ -5,6 +5,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +35,8 @@ import com.example.funlife.viewmodel.SpinWheelViewModel
 import kotlinx.coroutines.launch
 import com.example.funlife.viewmodel.SpinResult
 import kotlinx.coroutines.launch
+import com.example.funlife.utils.SoundEffectManager
+import com.example.funlife.utils.SoundEffect
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Suppress("DEPRECATION")
@@ -41,6 +45,9 @@ fun EnhancedSpinWheelScreen(
     viewModel: SpinWheelViewModel,
     onNavigateBack: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val soundManager = remember { SoundEffectManager.getInstance(context) }
+    
     val currentMode by viewModel.currentMode.collectAsState()
     val currentOptions by viewModel.currentOptions.collectAsState()
     val userCoins by viewModel.userCoins.collectAsState()
@@ -65,8 +72,6 @@ fun EnhancedSpinWheelScreen(
         com.example.funlife.ui.components.SpinWheelLoadingAnimation()
         return
     }
-    
-    val context = androidx.compose.ui.platform.LocalContext.current
     
     // 显示保存消息
     LaunchedEffect(saveMessage) {
@@ -225,14 +230,6 @@ fun EnhancedSpinWheelScreen(
                     modifier = Modifier.padding(bottom = 140.dp, start = 16.dp, end = 16.dp)
                 )
             }
-        },
-        floatingActionButton = {
-            // 模式切换按钮
-            ExtendedFloatingActionButton(
-                onClick = { showModeDialog = true },
-                icon = { Text(currentMode.emoji) },
-                text = { Text(currentMode.displayName) }
-            )
         }
     ) { padding ->
         Box(
@@ -401,8 +398,10 @@ fun EnhancedSpinWheelScreen(
                 var currentSpinIndex by remember { mutableIntStateOf(0) }
                 var isPreparingToSpin by remember { mutableStateOf(false) }
                 var currentForceResult by remember { mutableStateOf<String?>(null) }
-                var triggerSpin by remember { mutableIntStateOf(0) }
                 var hasUserClicked by remember { mutableStateOf(false) }
+                
+                // 🔥 将 triggerSpin 移到 key() 外面，避免 key 变化时触发旋转
+                var triggerSpin by remember { mutableIntStateOf(0) }
                 
                 // 调试日志 - 权重可视化
                 LaunchedEffect(showWeightVisualization) {
@@ -412,7 +411,9 @@ fun EnhancedSpinWheelScreen(
                 }
                 
                 // 计算是否可以旋转（响应式）
-                val canSpin = remember(userCoins, currentMode, multiSpinMode, multiSpinCount, currentSpinIndex, isPreparingToSpin) {
+                val canSpin = remember(userCoins, currentMode, multiSpinMode, multiSpinCount, currentSpinIndex, isPreparingToSpin, showResultAnimation, showMultiSpinResultAnimation) {
+                    // 如果正在显示结算动画，禁止旋转
+                    if (showResultAnimation || showMultiSpinResultAnimation) return@remember false
                     if (isPreparingToSpin) return@remember false
                     
                     val result = if (multiSpinMode && currentSpinIndex == 0) {
@@ -427,20 +428,43 @@ fun EnhancedSpinWheelScreen(
                 }
                 
                 // 使用key强制重组SpinWheel，确保权重可视化生效
-                // 🔥 修复：移除 currentMode 避免切换模式时触发重组导致转盘旋转
-                key(currentOptions.hashCode(), currentTheme, multiSpinMode, showWeightVisualization, triggerSpin) {
+                // 🔥 修复：移除 triggerSpin 避免每次旋转都重新创建组件
+                key(currentOptions.hashCode(), currentTheme, multiSpinMode, showWeightVisualization) {
+                    // 🔥 强制使用正确的幸运模式选项顺序（不受数据库影响）
+                    val displayOptions = if (currentMode == SpinWheelMode.LUCKY) {
+                        // 根据转盘图片的实际顺序（从顶部开始顺时针）
+                        // 仔细观察图片：顶部=再来一次，右上=大奖，右侧=双倍奖励，右下=幸运星
+                        // 底部=系出，左下=神秘礼物，左侧=中奖，左上=小奖
+                        listOf("再来一次", "大奖", "双倍奖励", "幸运星", "安慰奖", "神秘礼物", "中奖", "小奖")
+                    } else {
+                        currentOptions.filter { !it.isExcluded }.map { it.text }
+                    }
+                    
                     ImageBasedSpinWheel(
-                        options = currentOptions.filter { !it.isExcluded }.map { it.text },
+                        options = displayOptions,
                         canSpin = true,
                         autoSpinTrigger = triggerSpin,
                         forceResult = currentForceResult,
+                        wheelMode = when(currentMode) {
+                            SpinWheelMode.NORMAL -> com.example.funlife.ui.components.WheelMode.NORMAL
+                            SpinWheelMode.ADVANCED -> com.example.funlife.ui.components.WheelMode.ADVANCED
+                            SpinWheelMode.LUCKY -> com.example.funlife.ui.components.WheelMode.LUCKY
+                        },
                         onSpinStart = {
                             android.util.Log.d("EnhancedSpinWheel", "=== onSpinStart (ImageBasedSpinWheel) ===")
+                            // 播放转盘旋转音效（循环播放）
+                            soundManager.play(SoundEffect.SPIN_ROTATING, volume = 0.7f, loop = true)
                         },
                         onResult = { result ->
                             scope.launch {
                                 android.util.Log.d("EnhancedSpinWheel", "=== onResult called ===")
                                 android.util.Log.d("EnhancedSpinWheel", "result: $result")
+                                
+                                // 停止转盘旋转音效
+                                soundManager.stop(SoundEffect.SPIN_ROTATING)
+                                
+                                // 播放结果音效
+                                soundManager.play(SoundEffect.RESULT_NORMAL, volume = 0.8f)
                                 
                                 // 重置forceResult
                                 currentForceResult = null
@@ -600,12 +624,16 @@ fun EnhancedSpinWheelScreen(
                                         android.util.Log.d("EnhancedSpinWheel", "selectedTargetOption: ${selectedTargetOption?.text}")
                                         android.util.Log.d("EnhancedSpinWheel", "luckyValue: $luckyValue")
                                         
-                                        // 计算是否命中目标 - 50%概率
+                                        // 计算是否命中目标 - 幸运值满时50%概率
                                         if (selectedTargetOption != null && luckyValue > 0) {
-                                            val hitProbability = (luckyValue * 0.5f).toInt()
-                                            val random = kotlin.random.Random.nextInt(100)
+                                            // 计算实际命中概率：从基础概率逐渐增加到50%
+                                            val baseProb = 100f / currentOptions.filter { !it.isExcluded }.size
+                                            val maxProb = 50f
+                                            val hitProbability = baseProb + (maxProb - baseProb) * (luckyValue / 100f)
+                                            val random = kotlin.random.Random.nextFloat() * 100f
                                             val hit = random < hitProbability
                                             
+                                            android.util.Log.d("EnhancedSpinWheel", "baseProb: $baseProb%, maxProb: $maxProb%, luckyValue: $luckyValue")
                                             android.util.Log.d("EnhancedSpinWheel", "hitProbability: $hitProbability%, random: $random, hit: $hit")
                                             
                                             // 根据概率决定是否命中
@@ -790,7 +818,7 @@ fun EnhancedSpinWheelScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                if (isPreparingToSpin) "⏳" else "🎯",
+                                                if (isPreparingToSpin) "⏳" else "🐶",
                                                 fontSize = 28.sp
                                             )
                                         }
@@ -1039,6 +1067,65 @@ fun EnhancedSpinWheelScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+            
+            // 🎨 可拖动的浮动模式切换按钮
+            var buttonOffsetX by remember { mutableFloatStateOf(0f) }
+            var buttonOffsetY by remember { mutableFloatStateOf(0f) }
+            
+            // 可拖动的浮动按钮
+            Box(
+                modifier = Modifier
+                    .offset {
+                        androidx.compose.ui.unit.IntOffset(
+                            buttonOffsetX.toInt(),
+                            buttonOffsetY.toInt()
+                        )
+                    }
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 100.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            buttonOffsetX += dragAmount.x
+                            buttonOffsetY += dragAmount.y
+                        }
+                    }
+            ) {
+                // 可爱的圆形按钮
+                FloatingActionButton(
+                    onClick = { showModeDialog = true },
+                    modifier = Modifier.size(64.dp),
+                    containerColor = when(currentMode) {
+                        SpinWheelMode.NORMAL -> Color(0xFFFF6B9D)
+                        SpinWheelMode.ADVANCED -> Color(0xFF4ECDC4)
+                        SpinWheelMode.LUCKY -> Color(0xFFFFB347)
+                    },
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 8.dp,
+                        pressedElevation = 12.dp
+                    )
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = currentMode.emoji,
+                            fontSize = 24.sp
+                        )
+                        Text(
+                            text = when(currentMode) {
+                                SpinWheelMode.NORMAL -> "普通"
+                                SpinWheelMode.ADVANCED -> "进阶"
+                                SpinWheelMode.LUCKY -> "幸运"
+                            },
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
                 }
             }
@@ -1336,9 +1423,53 @@ fun ModeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择转盘模式", fontWeight = FontWeight.Bold) },
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("🎡", fontSize = 28.sp)
+                Text(
+                    "选择转盘模式",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineSmall
+                )
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 提示信息
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFF3E5).copy(alpha = 0.8f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("💰", fontSize = 20.sp)
+                        Text(
+                            "当前金币：$userCoins",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF8C00)
+                        )
+                    }
+                }
+                
+                Spacer(Modifier.height(4.dp))
+                
+                // 三个模式卡片
                 SpinWheelMode.values().forEach { mode ->
                     val canAfford = mode.canAfford(userCoins)
                     val isSelected = mode == currentMode
@@ -1346,63 +1477,194 @@ fun ModeSelectionDialog(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = canAfford) { 
-                                if (canAfford) onModeSelected(mode) 
+                            .clickable(enabled = canAfford) {
+                                onModeSelected(mode)
                             },
+                        shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = when {
-                                isSelected -> MaterialTheme.colorScheme.primaryContainer
-                                !canAfford -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                else -> MaterialTheme.colorScheme.surfaceVariant
+                                isSelected -> when(mode) {
+                                    SpinWheelMode.NORMAL -> Color(0xFFFFE5E5)
+                                    SpinWheelMode.ADVANCED -> Color(0xFFE5F3FF)
+                                    SpinWheelMode.LUCKY -> Color(0xFFFFF3E5)
+                                }
+                                !canAfford -> Color(0xFFF5F5F5)
+                                else -> Color.White
                             }
+                        ),
+                        border = if (isSelected) {
+                            androidx.compose.foundation.BorderStroke(
+                                3.dp,
+                                when(mode) {
+                                    SpinWheelMode.NORMAL -> Color(0xFFFF6B9D)
+                                    SpinWheelMode.ADVANCED -> Color(0xFF4ECDC4)
+                                    SpinWheelMode.LUCKY -> Color(0xFFFFB347)
+                                }
+                            )
+                        } else null,
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = if (isSelected) 8.dp else 2.dp
                         )
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            // 头部：Emoji + 名称 + 金币消耗
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(mode.emoji, style = MaterialTheme.typography.titleLarge)
+                                    // Emoji
                                     Text(
-                                        mode.displayName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                        text = mode.emoji,
+                                        fontSize = 32.sp
                                     )
+                                    
+                                    // 名称
+                                    Column {
+                                        Text(
+                                            text = mode.displayName,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (canAfford) {
+                                                when(mode) {
+                                                    SpinWheelMode.NORMAL -> Color(0xFFFF1493)
+                                                    SpinWheelMode.ADVANCED -> Color(0xFF00CED1)
+                                                    SpinWheelMode.LUCKY -> Color(0xFFFF8C00)
+                                                }
+                                            } else Color.Gray
+                                        )
+                                        
+                                        // 金币消耗
+                                        if (mode.costPerSpin > 0) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("💰", fontSize = 12.sp)
+                                                Text(
+                                                    "${mode.costPerSpin} 金币/次",
+                                                    fontSize = 12.sp,
+                                                    color = if (canAfford) Color(0xFF666666) else Color.Red,
+                                                    fontWeight = if (canAfford) FontWeight.Normal else FontWeight.Bold
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                "完全免费",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF4CAF50),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    mode.description,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                mode.features.forEach { feature ->
-                                    Text(
-                                        "• $feature",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                
+                                // 选中标记
+                                if (isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(
+                                                brush = Brush.radialGradient(
+                                                    colors = listOf(
+                                                        when(mode) {
+                                                            SpinWheelMode.NORMAL -> Color(0xFFFF6B9D)
+                                                            SpinWheelMode.ADVANCED -> Color(0xFF4ECDC4)
+                                                            SpinWheelMode.LUCKY -> Color(0xFFFFB347)
+                                                        },
+                                                        when(mode) {
+                                                            SpinWheelMode.NORMAL -> Color(0xFFFF1493)
+                                                            SpinWheelMode.ADVANCED -> Color(0xFF00CED1)
+                                                            SpinWheelMode.LUCKY -> Color(0xFFFF8C00)
+                                                        }
+                                                    )
+                                                ),
+                                                shape = CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "已选择",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                             
-                            if (isSelected) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    "已选择",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            } else if (!canAfford) {
-                                Icon(
-                                    Icons.Default.Lock,
-                                    "金币不足",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
+                            // 描述
+                            Text(
+                                text = mode.description,
+                                fontSize = 13.sp,
+                                color = if (canAfford) Color(0xFF666666) else Color.Gray,
+                                lineHeight = 18.sp
+                            )
+                            
+                            // 特性列表
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                mode.features.forEach { feature ->
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .background(
+                                                    color = if (canAfford) {
+                                                        when(mode) {
+                                                            SpinWheelMode.NORMAL -> Color(0xFFFF6B9D)
+                                                            SpinWheelMode.ADVANCED -> Color(0xFF4ECDC4)
+                                                            SpinWheelMode.LUCKY -> Color(0xFFFFB347)
+                                                        }
+                                                    } else Color.Gray,
+                                                    shape = CircleShape
+                                                )
+                                        )
+                                        Text(
+                                            text = feature,
+                                            fontSize = 12.sp,
+                                            color = if (canAfford) Color(0xFF666666) else Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 金币不足提示
+                            if (!canAfford) {
+                                Spacer(Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFFFEBEE)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("⚠️", fontSize = 14.sp)
+                                        Text(
+                                            "金币不足，还需 ${mode.costPerSpin - userCoins} 金币",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFFD32F2F),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1411,7 +1673,11 @@ fun ModeSelectionDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭")
+                Text(
+                    "关闭",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     )
