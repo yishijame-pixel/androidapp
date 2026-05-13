@@ -97,4 +97,16 @@ interface UserPreferencesDao {
     // 🔥 新增：更新艺术字颜色主题
     @Query("UPDATE user_preferences SET homePanelTextStyle = :style WHERE userId = :userId")
     suspend fun updateHomePanelTextStyle(userId: Long, style: String)
+    
+    // 🔥 新增：更新转盘结算面板皮肤
+    @Query("UPDATE user_preferences SET spinResultPanelSkin = :skin WHERE userId = :userId")
+    suspend fun updateSpinResultPanelSkin(userId: Long, skin: String)
+    
+    // 🔥 新增：更新转盘按钮皮肤
+    @Query("UPDATE user_preferences SET spinButtonSkin = :skin WHERE userId = :userId")
+    suspend fun updateSpinButtonSkin(userId: Long, skin: String)
+    
+    // 🔥 新增：更新转盘旋转音量
+    @Query("UPDATE user_preferences SET spinRotationVolume = :volume WHERE userId = :userId")
+    suspend fun updateSpinRotationVolume(userId: Long, volume: Float)
 }

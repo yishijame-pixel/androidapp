@@ -3,8 +3,12 @@ package com.example.funlife.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,13 +22,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.funlife.data.model.MoodEntry
 import com.example.funlife.viewmodel.MoodViewModel
@@ -39,74 +56,324 @@ fun MoodScreen(
     viewModel: MoodViewModel = viewModel(),
     onNavigateBack: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val moods by viewModel.moods.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showDialog = true },
-                containerColor = Color(0xFFFF6FAE),
-                contentColor = Color.White,
-                modifier = Modifier
-                    .padding(bottom = 80.dp) // 避免被底部导航栏遮挡
-                    .size(64.dp)
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "添加心情",
-                    modifier = Modifier.size(28.dp)
-                )
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val buttonSize = with(density) { 90.dp.toPx() }
+    val paddingPx = with(density) { 16.dp.toPx() }
+    val bottomPaddingPx = with(density) { 96.dp.toPx() }
+    
+    // 可拖动的3D按钮状态 - 初始位置在右下角
+    var offsetX by remember { mutableStateOf(screenWidthPx - buttonSize - paddingPx) }
+    var offsetY by remember { mutableStateOf(screenHeightPx - buttonSize - bottomPaddingPx) }
+    var isPressed by remember { mutableStateOf(false) }
+    
+    // 加载背景图片
+    val backgroundBitmap = remember {
+        try {
+            context.assets.open("login/xinq_1.png").use { inputStream ->
+                android.graphics.BitmapFactory.decodeStream(inputStream)
             }
-        },
-        floatingActionButtonPosition = FabPosition.End
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // 美化的页面头部
-            PageHeader(
-                title = "心情日记",
-                emoji = "😊",
-                gradientColors = PageHeaderGradients.Mood,
-                subtitle = "记录每一天的情绪"
+        } catch (e: java.io.IOException) {
+            null
+        }
+    }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 背景图片
+        backgroundBitmap?.let { bitmap ->
+            androidx.compose.foundation.Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "心情背景",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
-            
-            if (moods.isEmpty()) {
-                EmptyMoodState(Modifier.fillMaxSize())
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+        }
+        
+        // 内容层
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 顶部简洁按钮（去掉 PageHeader）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onNavigateBack,
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    // 顶部统计卡片
-                    item {
-                        MoodOverviewCard(moods)
-                    }
-                    
-                    // 心情记录列表
-                    items(moods, key = { it.id }) { mood ->
-                        EnhancedMoodCard(
-                            mood = mood,
-                            onDelete = { viewModel.deleteMood(mood) }
-                        )
+                    Icon(
+                        Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            
+            // 添加顶部间距，避免挡住标题
+            Spacer(modifier = Modifier.height(120.dp))
+            
+            // 主内容区域
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (moods.isEmpty()) {
+                    EmptyMoodState(Modifier.fillMaxSize())
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(moods) { mood ->
+                            EnhancedMoodCard(
+                                mood = mood,
+                                onDelete = { viewModel.deleteMood(mood) }
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-    
-    if (showDialog) {
-        AddMoodDialog(
-            onDismiss = { showDialog = false },
-            onConfirm = { mood, level, note ->
-                viewModel.addMood(mood, level, note)
-                showDialog = false
-            }
+        
+        // 可拖动的3D风格按钮
+        val scale by animateFloatAsState(
+            targetValue = if (isPressed) 0.88f else 1f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
         )
+        
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+                .size(90.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            isPressed = true
+                        },
+                        onDragEnd = {
+                            isPressed = false
+                        },
+                        onDragCancel = {
+                            isPressed = false
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            offsetX = (offsetX + dragAmount.x).coerceIn(
+                                0f,
+                                screenWidthPx - buttonSize
+                            )
+                            offsetY = (offsetY + dragAmount.y).coerceIn(
+                                0f,
+                                screenHeightPx - buttonSize
+                            )
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            isPressed = true
+                            tryAwaitRelease()
+                            isPressed = false
+                        },
+                        onTap = {
+                            showDialog = true
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+                // 最外层黄色光晕 - 更柔和
+                Box(
+                    modifier = Modifier
+                        .size(90.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFFFE5B4).copy(alpha = 0.6f),
+                                    Color(0xFFFFE5B4).copy(alpha = 0.3f),
+                                    Color(0xFFFFE5B4).copy(alpha = 0.1f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(0.5f, 0.45f)
+                            ),
+                            shape = CircleShape
+                        )
+                )
+                
+                // 橙色边框圈 - 带光泽
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .drawBehind {
+                            // 边框底部阴影
+                            drawCircle(
+                                color = Color(0xFFFF9966).copy(alpha = 0.3f),
+                                radius = size.width * 0.48f,
+                                center = center.copy(y = center.y + 3.dp.toPx())
+                            )
+                        }
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFE4C4),  // 顶部更浅
+                                    Color(0xFFFFD4A3),
+                                    Color(0xFFFFB380)   // 底部更深
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                        .drawBehind {
+                            // 边框顶部高光
+                            drawArc(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.4f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.5f, size.height * 0.3f)
+                                ),
+                                startAngle = -90f,
+                                sweepAngle = 180f,
+                                useCenter = false,
+                                topLeft = Offset(size.width * 0.1f, size.height * 0.1f),
+                                size = androidx.compose.ui.geometry.Size(size.width * 0.8f, size.height * 0.8f)
+                            )
+                        }
+                )
+                
+                // 粉色主按钮 - 带明显渐变和光泽
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .drawBehind {
+                            // 底部深色阴影 - 更柔和
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF6B9D).copy(alpha = 0.5f),
+                                        Color(0xFFFF6B9D).copy(alpha = 0.2f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                radius = size.width * 0.55f,
+                                center = center.copy(y = center.y + 8.dp.toPx())
+                            )
+                        }
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFE0EC),  // 顶部最浅
+                                    Color(0xFFFFD4E5),  
+                                    Color(0xFFFFB6D9),  
+                                    Color(0xFFFF8FB8)   // 底部最深
+                                )
+                            )
+                        )
+                        .drawBehind {
+                            // 顶部光泽效果
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.5f),
+                                        Color.White.copy(alpha = 0.2f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                radius = size.width * 0.35f,
+                                center = Offset(size.width * 0.5f, size.height * 0.25f)
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    // 白色加号 - 3D凸起效果
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .drawBehind {
+                                val strokeWidth = 8.dp.toPx()
+                                val halfStroke = strokeWidth / 2
+                                
+                                // 加号底部阴影（粉色）- 更明显
+                                val shadowOffset = 4.dp.toPx()
+                                
+                                // 横线底部阴影
+                                drawRoundRect(
+                                    color = Color(0xFFFF8FB8).copy(alpha = 0.7f),
+                                    topLeft = Offset(0f, size.height / 2 - halfStroke + shadowOffset),
+                                    size = androidx.compose.ui.geometry.Size(size.width, strokeWidth),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(halfStroke)
+                                )
+                                
+                                // 竖线底部阴影
+                                drawRoundRect(
+                                    color = Color(0xFFFF8FB8).copy(alpha = 0.7f),
+                                    topLeft = Offset(size.width / 2 - halfStroke, shadowOffset),
+                                    size = androidx.compose.ui.geometry.Size(strokeWidth, size.height),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(halfStroke)
+                                )
+                                
+                                // 白色横线主体
+                                drawRoundRect(
+                                    color = Color.White,
+                                    topLeft = Offset(0f, size.height / 2 - halfStroke),
+                                    size = androidx.compose.ui.geometry.Size(size.width, strokeWidth),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(halfStroke)
+                                )
+                                
+                                // 白色竖线主体
+                                drawRoundRect(
+                                    color = Color.White,
+                                    topLeft = Offset(size.width / 2 - halfStroke, 0f),
+                                    size = androidx.compose.ui.geometry.Size(strokeWidth, size.height),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(halfStroke)
+                                )
+                                
+                                // 加号顶部高光（更明显）
+                                val highlightOffset = -1.5.dp.toPx()
+                                val highlightWidth = strokeWidth * 0.5f
+                                
+                                // 横线顶部高光
+                                drawRoundRect(
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    topLeft = Offset(3.dp.toPx(), size.height / 2 - halfStroke + highlightOffset),
+                                    size = androidx.compose.ui.geometry.Size(size.width - 6.dp.toPx(), highlightWidth),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(highlightWidth / 2)
+                                )
+                                
+                                // 竖线顶部高光
+                                drawRoundRect(
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    topLeft = Offset(size.width / 2 - halfStroke + highlightOffset, 3.dp.toPx()),
+                                    size = androidx.compose.ui.geometry.Size(highlightWidth, size.height - 6.dp.toPx()),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(highlightWidth / 2)
+                                )
+                            }
+                    )
+                }
+            }
+        
+        if (showDialog) {
+            AddMoodDialog(
+                onDismiss = { showDialog = false },
+                onConfirm = { mood, level, note ->
+                    viewModel.addMood(mood, level, note)
+                    showDialog = false
+                }
+            )
+        }
     }
 }
 
@@ -114,50 +381,60 @@ fun MoodScreen(
 fun EmptyMoodState(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
+        // 可爱的浮动提示 - 位于顶部偏下，不遮挡背景
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 180.dp)  // 和习惯页面一样的位置
         ) {
-            // 动画图标
-            var scale by remember { mutableStateOf(1f) }
+            // 跳动的小图标
+            var offsetY by remember { mutableStateOf(0f) }
             LaunchedEffect(Unit) {
                 while (true) {
-                    animate(1f, 1.2f, animationSpec = tween(1000)) { value, _ -> scale = value }
-                    animate(1.2f, 1f, animationSpec = tween(1000)) { value, _ -> scale = value }
+                    animate(0f, -15f, animationSpec = tween(800, easing = FastOutSlowInEasing)) { value, _ -> 
+                        offsetY = value 
+                    }
+                    animate(-15f, 0f, animationSpec = tween(800, easing = FastOutSlowInEasing)) { value, _ -> 
+                        offsetY = value 
+                    }
                 }
             }
             
+            // 可爱的小卡片提示 - 纯透明无阴影
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
+                    .graphicsLayer { translationY = offsetY }
                     .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                Text("😊", fontSize = (60 * scale).sp)
+                Row(
+                    modifier = Modifier,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("💭", fontSize = 24.sp)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "还没有心情记录哦",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF87CEEB),  // 天蓝色 (Sky Blue)
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            "点击右下角按钮记录心情",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFADD8E6),  // 浅蓝色 (Light Blue)
+                            fontSize = 13.sp
+                        )
+                    }
+                }
             }
-            
-            Text(
-                "还没有心情记录",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "点击下方按钮记录今天的心情\n记录每一天的情绪变化",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
@@ -246,14 +523,18 @@ fun MoodStatItem(icon: String, label: String, value: String) {
 fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
     // 根据心情选择颜色和装饰
     val (moodColor, decorEmoji) = when (mood.mood) {
-        "😊", "😃" -> Color(0xFF4ECDC4) to listOf("✨", "💫", "⭐")
-        "😐" -> Color(0xFFFFD700) to listOf("☁️", "🌤️", "💭")
-        "😢" -> Color(0xFF3498DB) to listOf("💧", "🌧️", "💙")
-        "😡" -> Color(0xFFE74C3C) to listOf("💢", "⚡", "🔥")
+        "😊", "😃", "🥰", "😍", "🤗" -> Color(0xFF4ECDC4) to listOf("✨", "💫", "⭐")
+        "😐", "🤔", "😶" -> Color(0xFFFFD700) to listOf("☁️", "🌤️", "💭")
+        "😢", "😭", "🥺" -> Color(0xFF3498DB) to listOf("💧", "🌧️", "💙")
+        "😡", "😤", "😠" -> Color(0xFFE74C3C) to listOf("💢", "⚡", "🔥")
+        "😴", "🥱", "😪" -> Color(0xFF9B59B6) to listOf("💤", "🌙", "⭐")
         else -> Color(0xFF4ECDC4) to listOf("✨", "💫", "⭐")
     }
     
     var isPressed by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+    
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
@@ -262,6 +543,7 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { showDetailDialog = true }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -273,23 +555,18 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // 可爱的渐变背景
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                moodColor.copy(alpha = 0.08f),
-                                moodColor.copy(alpha = 0.15f),
-                                moodColor.copy(alpha = 0.08f)
-                            )
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            moodColor.copy(alpha = 0.08f),
+                            moodColor.copy(alpha = 0.15f),
+                            moodColor.copy(alpha = 0.08f)
                         )
                     )
-            )
+                )
+        ) {
             
             // 装饰圆圈 - 左上角
             Box(
@@ -461,7 +738,7 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFFFF5F5))
-                        .clickable { onDelete() },
+                        .clickable { showDeleteDialog = true },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -469,6 +746,221 @@ fun EnhancedMoodCard(mood: MoodEntry, onDelete: () -> Unit) {
                         contentDescription = "删除",
                         tint = Color(0xFFFF6B6B),
                         modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+    
+    // 删除确认对话框
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = {
+                Text("🗑️", fontSize = 48.sp)
+            },
+            title = {
+                Text(
+                    "确认删除",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    "确定要删除这条心情记录吗？\n删除后将无法恢复。",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDelete()
+                        showDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF6B6B)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("确定删除")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showDeleteDialog = false },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("取消")
+                }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+    
+    // 可爱的详情面板
+    if (showDetailDialog) {
+        MoodDetailDialog(
+            mood = mood,
+            color = moodColor,
+            onDismiss = { showDetailDialog = false }
+        )
+    }
+}
+
+@Composable
+fun MoodDetailDialog(
+    mood: MoodEntry,
+    color: Color,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(32.dp))
+                .background(Color(0xFFFFFBF5))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // 顶部装饰
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("✨", fontSize = 24.sp)
+                    Text("✨", fontSize = 24.sp)
+                }
+                
+                // 大心情图标
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    color.copy(alpha = 0.3f),
+                                    color.copy(alpha = 0.15f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(mood.mood, fontSize = 72.sp)
+                }
+                
+                // 日期信息
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = color.copy(alpha = 0.12f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val date = try {
+                            val formatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日")
+                            LocalDate.parse(mood.date).format(formatter)
+                        } catch (e: Exception) {
+                            mood.date
+                        }
+                        
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("📅", fontSize = 20.sp)
+                            Text(
+                                date,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF5D4037)
+                            )
+                        }
+                    }
+                }
+                
+                // 心情备注
+                if (mood.note.isNotEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("💭", fontSize = 20.sp)
+                                Text(
+                                    "今天的心情",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF5D4037)
+                                )
+                            }
+                            
+                            Text(
+                                mood.note,
+                                fontSize = 15.sp,
+                                color = Color(0xFF5D4037).copy(alpha = 0.8f),
+                                lineHeight = 22.sp
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("💭", fontSize = 32.sp)
+                            Text(
+                                "没有记录心情备注",
+                                fontSize = 14.sp,
+                                color = Color(0xFF5D4037).copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
+                
+                // 关闭按钮
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = color.copy(alpha = 0.85f)
+                    ),
+                    shape = RoundedCornerShape(25.dp)
+                ) {
+                    Text(
+                        "知道了 ✓",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
                 }
             }
@@ -522,15 +1014,27 @@ fun AddMoodDialog(
     onConfirm: (String, Int, String) -> Unit
 ) {
     var selectedMood by remember { mutableStateOf("😊") }
-    var selectedLevel by remember { mutableStateOf(3) }
+    var selectedLevel by remember { mutableStateOf(5) }
     var note by remember { mutableStateOf("") }
     
+    // 更多可爱的表情选项
     val moods = listOf(
+        "🥰" to "超开心",
         "😊" to "开心",
         "😃" to "兴奋",
+        "🤗" to "温暖",
+        "😍" to "喜欢",
         "😐" to "平静",
+        "🤔" to "思考",
+        "😶" to "无语",
+        "😴" to "困倦",
+        "🥱" to "疲惫",
         "😢" to "难过",
-        "😡" to "生气"
+        "😭" to "伤心",
+        "🥺" to "委屈",
+        "😡" to "生气",
+        "😤" to "愤怒",
+        "😠" to "不满"
     )
     
     AlertDialog(
@@ -546,11 +1050,17 @@ fun AddMoodDialog(
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Text(
-                    "记录心情",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("✨", fontSize = 24.sp)
+                    Text(
+                        "记录心情",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
@@ -559,11 +1069,13 @@ fun AddMoodDialog(
                         fontWeight = FontWeight.Bold
                     )
                     
-                    Row(
+                    // 使用LazyRow显示更多表情
+                    LazyRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        moods.forEachIndexed { index, (emoji, label) ->
+                        items(moods.size) { index ->
+                            val (emoji, label) = moods[index]
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -580,10 +1092,11 @@ fun AddMoodDialog(
                                             Color.Transparent
                                     )
                                     .padding(12.dp)
+                                    .width(60.dp)
                             ) {
                                 Text(
                                     emoji,
-                                    fontSize = if (selectedMood == emoji) 40.sp else 32.sp
+                                    fontSize = if (selectedMood == emoji) 36.sp else 28.sp
                                 )
                                 Text(
                                     label,
@@ -591,7 +1104,10 @@ fun AddMoodDialog(
                                     color = if (selectedMood == emoji)
                                         MaterialTheme.colorScheme.onPrimaryContainer
                                     else
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    fontSize = 11.sp
                                 )
                             }
                         }

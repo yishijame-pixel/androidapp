@@ -22,11 +22,13 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import com.example.funlife.data.model.*
 import com.example.funlife.ui.components.FrameAnimation
@@ -47,13 +49,17 @@ fun PetScreen(
     val uiState by viewModel.uiState.collectAsState()
     val animationState by viewModel.animationState.collectAsState()
     
+    // 商城对话框状态
+    var showShopDialog by remember { mutableStateOf(false) }
+    
     when {
         pet == null -> {
             // 没有宠物，显示领养界面
             AdoptPetScreen(
                 onAdopt = { name, type ->
                     viewModel.createPet(name, type)
-                }
+                },
+                onBack = { navController.popBackStack() }
             )
         }
         else -> {
@@ -65,10 +71,21 @@ fun PetScreen(
                 onClean = { viewModel.cleanPet() },
                 onPlay = { viewModel.playWithPet() },
                 onPet = { viewModel.petPet() },
-                onShop = { /* TODO: 打开商店 */ },
+                onShop = { showShopDialog = true },
                 onBack = { navController.popBackStack() }
             )
         }
+    }
+    
+    // 宠物商城对话框
+    if (showShopDialog) {
+        PetShopDialog(
+            onDismiss = { showShopDialog = false },
+            onPurchase = { itemId ->
+                // TODO: 实现购买逻辑
+                showShopDialog = false
+            }
+        )
     }
 }
 
@@ -173,23 +190,35 @@ fun PetTopBar(
     petName: String,
     onBack: () -> Unit
 ) {
-    TopAppBar(
-        title = {
-            Text(
-                text = petName,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+    ) {
+        // 左上角返回按钮
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .size(40.dp)
+        ) {
+            Icon(
+                Icons.Default.ArrowBack,
+                contentDescription = "返回",
+                tint = Color(0xFF5D4037),
+                modifier = Modifier.size(24.dp)
             )
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "返回")
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent
+        }
+        
+        // 中间宠物名字（可选）
+        Text(
+            text = petName,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF5D4037),
+            modifier = Modifier.align(Alignment.TopCenter)
         )
-    )
+    }
 }
 
 @Composable
@@ -331,6 +360,7 @@ fun PetCharacter(
         shouldWalk -> {
             // 显示行走动画
             PetWalkingAnimation(
+                petType = pet.type,
                 size = 200.dp,
                 autoWalk = true,
                 walkSpeed = 0.3f,
@@ -584,6 +614,7 @@ fun PetStaticCharacter(
                             PetType.DOG -> "🐶"
                             PetType.RABBIT -> "🐰"
                             PetType.HAMSTER -> "🐹"
+                            PetType.TIGER -> "🐯"
                         },
                         fontSize = 120.sp
                     )
@@ -1099,7 +1130,8 @@ fun ActionButton(
 
 @Composable
 fun AdoptPetScreen(
-    onAdopt: (String, PetType) -> Unit
+    onAdopt: (String, PetType) -> Unit,
+    onBack: () -> Unit
 ) {
     var petName by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf<PetType?>(null) }
@@ -1135,6 +1167,22 @@ fun AdoptPetScreen(
                             )
                         )
                     )
+            )
+        }
+        
+        // 左上角返回按钮
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .size(40.dp)
+        ) {
+            Icon(
+                Icons.Default.ArrowBack,
+                contentDescription = "返回",
+                tint = Color(0xFF5D4037),
+                modifier = Modifier.size(24.dp)
             )
         }
         
@@ -1264,6 +1312,397 @@ fun PetTypeButton(
                 text = emoji,
                 fontSize = 40.sp
             )
+        }
+    }
+}
+
+
+// 宠物道具数据类
+data class PetShopItem(
+    val id: String,
+    val name: String,
+    val description: String,
+    val imagePath: String,
+    val price: Int,
+    val type: String  // "food" 或 "toy"
+)
+
+// 宠物商城对话框
+@Composable
+fun PetShopDialog(
+    onDismiss: () -> Unit,
+    onPurchase: (String) -> Unit
+) {
+    val context = LocalContext.current
+    
+    // 定义商城道具列表
+    val shopItems = remember {
+        listOf(
+            // 食物类 - 基础猫粮
+            PetShopItem(
+                id = "pet_foot",
+                name = "普通猫粮",
+                description = "基础食物，恢复少量饱食度",
+                imagePath = "pet/daoju/pet_foot.png",
+                price = 10,
+                type = "food"
+            ),
+            // 食物类 - 狗粮系列
+            PetShopItem(
+                id = "dog_foot",
+                name = "狗粮",
+                description = "适合狗狗的美味食物",
+                imagePath = "pet/daoju/dog_foot.png",
+                price = 15,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "dog_foot_01",
+                name = "优质狗粮",
+                description = "更美味的狗粮，营养更丰富",
+                imagePath = "pet/daoju/dog_foot_01.png",
+                price = 18,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "dog_foot_02",
+                name = "特级狗粮",
+                description = "特制配方，狗狗最爱",
+                imagePath = "pet/daoju/dog_foot_02.png",
+                price = 22,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "dog_foot_03",
+                name = "顶级狗粮",
+                description = "顶级食材，恢复大量饱食度",
+                imagePath = "pet/daoju/dog_foot_03.png",
+                price = 28,
+                type = "food"
+            ),
+            // 食物类 - 高级猫粮系列
+            PetShopItem(
+                id = "high_foot",
+                name = "高级猫粮",
+                description = "营养丰富，恢复大量饱食度",
+                imagePath = "pet/daoju/high_foot.png",
+                price = 30,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "high_foot_01",
+                name = "豪华猫粮",
+                description = "顶级配方，猫咪的最爱",
+                imagePath = "pet/daoju/high_foot_01.png",
+                price = 35,
+                type = "food"
+            ),
+            // 食物类 - 鱼罐头系列
+            PetShopItem(
+                id = "yu_foot",
+                name = "鱼罐头",
+                description = "猫咪最爱的鱼罐头",
+                imagePath = "pet/daoju/yu_foot.png",
+                price = 25,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "yu_foot_01",
+                name = "金枪鱼罐头",
+                description = "新鲜金枪鱼制作，美味可口",
+                imagePath = "pet/daoju/yu_foot_01.png",
+                price = 28,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "yu_foot_02",
+                name = "三文鱼罐头",
+                description = "营养丰富的三文鱼",
+                imagePath = "pet/daoju/yu_foot_02.png",
+                price = 32,
+                type = "food"
+            ),
+            PetShopItem(
+                id = "yu_foot_03",
+                name = "豪华海鲜罐头",
+                description = "多种海鲜混合，极致美味",
+                imagePath = "pet/daoju/yu_foot_03.png",
+                price = 38,
+                type = "food"
+            ),
+            // 玩具类 - 小球系列
+            PetShopItem(
+                id = "qiu",
+                name = "小球",
+                description = "可爱的玩具球，增加快乐值",
+                imagePath = "pet/daoju/qiu.png",
+                price = 20,
+                type = "toy"
+            ),
+            PetShopItem(
+                id = "qiu_01",
+                name = "彩色小球",
+                description = "五彩缤纷，吸引宠物注意",
+                imagePath = "pet/daoju/qiu_01.png",
+                price = 22,
+                type = "toy"
+            ),
+            PetShopItem(
+                id = "qiu_02",
+                name = "弹力球",
+                description = "弹性十足，玩耍更有趣",
+                imagePath = "pet/daoju/qiu_02.png",
+                price = 25,
+                type = "toy"
+            ),
+            PetShopItem(
+                id = "qiu_03",
+                name = "发光球",
+                description = "夜晚也能玩，会发光的球",
+                imagePath = "pet/daoju/qiu_03.png",
+                price = 28,
+                type = "toy"
+            ),
+            PetShopItem(
+                id = "qiu_04",
+                name = "智能互动球",
+                description = "自动滚动，智能互动玩具",
+                imagePath = "pet/daoju/qiu_04.png",
+                price = 35,
+                type = "toy"
+            )
+        )
+    }
+    
+    var selectedCategory by remember { mutableStateOf("all") }
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFFFFF8E1)
+            )
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // 标题栏
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFFF6B9D),
+                                    Color(0xFFFF8FB3)
+                                )
+                            )
+                        )
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "🛒 宠物商城",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "关闭",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+                
+                // 分类标签
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CategoryChip(
+                        label = "全部",
+                        selected = selectedCategory == "all",
+                        onClick = { selectedCategory = "all" }
+                    )
+                    CategoryChip(
+                        label = "食物",
+                        selected = selectedCategory == "food",
+                        onClick = { selectedCategory = "food" }
+                    )
+                    CategoryChip(
+                        label = "玩具",
+                        selected = selectedCategory == "toy",
+                        onClick = { selectedCategory = "toy" }
+                    )
+                }
+                
+                // 商品列表
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    val filteredItems = if (selectedCategory == "all") {
+                        shopItems
+                    } else {
+                        shopItems.filter { it.type == selectedCategory }
+                    }
+                    
+                    items(filteredItems.size) { index ->
+                        val item = filteredItems[index]
+                        PetShopItemCard(
+                            item = item,
+                            onPurchase = { onPurchase(item.id) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) Color(0xFFFF6B9D) else Color.White,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) Color.Transparent else Color(0xFFFF6B9D)
+        )
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            color = if (selected) Color.White else Color(0xFFFF6B9D),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+fun PetShopItemCard(
+    item: PetShopItem,
+    onPurchase: () -> Unit
+) {
+    val context = LocalContext.current
+    val itemImage = remember(item.imagePath) {
+        try {
+            context.assets.open(item.imagePath).use { inputStream ->
+                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 商品图片
+            if (itemImage != null) {
+                Image(
+                    bitmap = itemImage,
+                    contentDescription = item.name,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFFFF3E0)),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFFFF3E0)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🎁", fontSize = 32.sp)
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // 商品信息
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = item.name,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF5D4037)
+                )
+                Text(
+                    text = item.description,
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text("💰", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${item.price}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFF6B9D)
+                    )
+                }
+            }
+            
+            // 购买按钮
+            Button(
+                onClick = onPurchase,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFF6B9D)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.height(40.dp)
+            ) {
+                Text(
+                    "购买",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

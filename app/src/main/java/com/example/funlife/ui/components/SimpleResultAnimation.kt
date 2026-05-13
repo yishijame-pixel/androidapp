@@ -2,6 +2,7 @@
 package com.example.funlife.ui.components
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -13,7 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -21,14 +25,13 @@ import androidx.compose.ui.unit.sp
 import com.example.funlife.data.model.SpinWheelMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.cos
-import kotlin.math.sin
 
 @Composable
 fun SimpleResultAnimation(
     result: String,
     mode: SpinWheelMode,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    panelSkin: String = "js_1"  // 添加皮肤参数
 ) {
     var visible by remember { mutableStateOf(true) }
     val overallAlpha = remember { Animatable(1f) }
@@ -66,77 +69,38 @@ fun SimpleResultAnimation(
                     .background(Color.Black.copy(alpha = 0.85f))
             )
             
-            // 先显示卡片（在粒子下面）
+            // 显示卡片（无粒子效果）
             Box(
                 modifier = Modifier.graphicsLayer {
                     translationX = shakeOffset.value
                 }
             ) {
-                StaticCard(result = result, mode = mode)
-            }
-            
-            // 粒子层（在卡片上面，更明显）
-            Box(
-                modifier = Modifier.size(700.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                repeat(12) { i ->
-                    BigGiftParticle(
-                        angle = i * 30f,
-                        startRadius = 150f,
-                        endRadius = 300f
-                    )
-                }
+                StaticCard(result = result, mode = mode, panelSkin = panelSkin)
             }
         }
     }
-}
-
-@Composable
-fun BigGiftParticle(
-    angle: Float,
-    startRadius: Float,
-    endRadius: Float
-) {
-    val radius = remember { Animatable(startRadius) }
-    val alpha = remember { Animatable(1f) }
-    val scale = remember { Animatable(1.2f) }
-    
-    LaunchedEffect(Unit) {
-        launch {
-            radius.animateTo(endRadius, tween(1400, easing = FastOutSlowInEasing))
-        }
-        launch {
-            delay(700)
-            alpha.animateTo(0f, tween(700))
-        }
-        launch {
-            scale.animateTo(1.8f, tween(1400, easing = LinearOutSlowInEasing))
-        }
-    }
-    
-    val angleRad = Math.toRadians(angle.toDouble())
-    val offsetX = (radius.value * cos(angleRad)).toFloat()
-    val offsetY = (radius.value * sin(angleRad)).toFloat()
-    
-    Text(
-        text = "🎁",
-        fontSize = 32.sp,  // 更大的粒子
-        modifier = Modifier.graphicsLayer {
-            translationX = offsetX
-            translationY = offsetY
-            this.alpha = alpha.value
-            scaleX = scale.value
-            scaleY = scale.value
-        }
-    )
 }
 
 @Composable
 fun StaticCard(
     result: String,
-    mode: SpinWheelMode
+    mode: SpinWheelMode,
+    panelSkin: String = "js_1"  // 默认使用 js_1
 ) {
+    val context = LocalContext.current
+    
+    // 加载面板图片
+    val panelBitmap = remember(panelSkin) {
+        try {
+            context.assets.open("login/$panelSkin.png").use { inputStream ->
+                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StaticCard", "Failed to load panel image: ${e.message}")
+            null
+        }
+    }
+    
     val (bgColors, accentColor) = when (mode) {
         SpinWheelMode.NORMAL -> Pair(
             listOf(Color(0xFFE3F2FD), Color(0xFF90CAF9)),
@@ -163,53 +127,44 @@ fun StaticCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(colors = bgColors))
-                .padding(40.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(28.dp)
-            ) {
-                Text(
-                    "✨ 恭喜获得 ✨",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = accentColor,
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.2f),
-                            offset = Offset(2f, 2f),
-                            blurRadius = 4f
-                        )
-                    )
+            // 如果有图片，使用图片背景；否则使用渐变色
+            if (panelBitmap != null) {
+                Image(
+                    bitmap = panelBitmap,
+                    contentDescription = "结算面板",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(),
+                    contentScale = ContentScale.FillWidth
                 )
-                
+            } else {
                 Box(
                     modifier = Modifier
-                        .size(150.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(Color.White, bgColors[0])
-                            ),
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("🎁", fontSize = 90.sp)
-                }
-                
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(colors = bgColors))
+                        .padding(40.dp)
+                )
+            }
+            
+            // 只显示结果文字，叠加在红色框框位置（下方偏下）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 280.dp, bottom = 40.dp, start = 40.dp, end = 40.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     result,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = accentColor,
+                    color = Color(0xFF5D4037),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.headlineLarge.copy(
                         shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.15f),
+                            color = Color.White.copy(alpha = 0.8f),
                             offset = Offset(2f, 2f),
-                            blurRadius = 3f
+                            blurRadius = 8f
                         )
                     )
                 )

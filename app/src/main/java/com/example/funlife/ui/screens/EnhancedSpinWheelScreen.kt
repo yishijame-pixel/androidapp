@@ -1,4 +1,4 @@
-﻿// EnhancedSpinWheelScreen.kt - 增强版转盘屏幕（简化版）
+// EnhancedSpinWheelScreen.kt - 增强版转盘屏幕（简化版）
 package com.example.funlife.ui.screens
 
 import androidx.compose.animation.*
@@ -6,7 +6,10 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -78,6 +83,78 @@ fun EnhancedSpinWheelScreen(
         saveMessage?.let { message ->
             android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
             viewModel.clearSaveMessage()
+        }
+    }
+    
+    // 🔥 获取用户偏好中的按钮皮肤
+    val userPreferencesRepository = remember {
+        com.example.funlife.repository.UserPreferencesRepository(
+            (context.applicationContext as com.example.funlife.FunLifeApplication).database.userPreferencesDao()
+        )
+    }
+    val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val userSession = authViewModel.getCurrentSession()
+    val userPreferences by userPreferencesRepository.getPreferences(userSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    val buttonSkin = userPreferences?.spinButtonSkin ?: "pf_1"
+    
+    // 加载按钮皮肤图片
+    val buttonSkinBitmap = remember(buttonSkin) {
+        try {
+            context.assets.open("login/$buttonSkin.png").use { inputStream ->
+                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("EnhancedSpinWheel", "Failed to load button skin: $buttonSkin", e)
+            null
+        }
+    }
+    
+    // 🔥 按钮皮肤文字位置映射 - 根据每个皮肤的设计调整文字位置
+    // 特殊皮肤居中显示：青山绿水(pf_9)、金碧辉煌(pf_10)、银装素裹(pf_11)、霓虹幻彩(pf_12)、烈焰焚天(pf_14)、冰清玉洁(pf_15)
+    // 其他皮肤靠右显示
+    val buttonSkinTextOffsets = remember {
+        mapOf(
+            "pf_1" to (110.dp to 20.dp),   // 初心如故 - 靠右
+            "pf_2" to (110.dp to 20.dp),   // 粉黛流年 - 靠右
+            "pf_3" to (110.dp to 20.dp),   // 碧海青天 - 靠右
+            "pf_4" to (110.dp to 20.dp),   // 翠竹凝烟 - 靠右
+            "pf_5" to (110.dp to 20.dp),   // 紫气东来 - 靠右
+            "pf_6" to (110.dp to 20.dp),   // 橙黄橘绿 - 靠右
+            "pf_7" to (110.dp to 20.dp),   // 丹霞映日 - 靠右
+            "pf_8" to (110.dp to 20.dp),   // 金风玉露 - 靠右
+            "pf_9" to (0.dp to 0.dp),      // 青山绿水 - 居中 ✓
+            "pf_10" to (0.dp to 0.dp),     // 金碧辉煌 - 居中 ✓
+            "pf_11" to (0.dp to 0.dp),     // 银装素裹 - 居中 ✓
+            "pf_12" to (0.dp to 0.dp),     // 霓虹幻彩 - 居中 ✓
+            "pf_13" to (110.dp to 20.dp),  // 星河璀璨 - 靠右
+            "pf_14" to (0.dp to 0.dp),     // 烈焰焚天 - 居中 ✓
+            "pf_15" to (0.dp to 0.dp),     // 冰清玉洁 - 居中 ✓
+            "pf_16" to (110.dp to 20.dp),  // 雷霆万钧 - 靠右
+            "pf_17" to (110.dp to 20.dp),  // 林深见鹿 - 靠右
+            "pf_18" to (110.dp to 20.dp),  // 沧海桑田 - 靠右
+            "pf_19" to (110.dp to 20.dp),  // 大漠孤烟 - 靠右
+            "pf_20" to (110.dp to 20.dp),  // 极光流转 - 靠右
+            "pf_21" to (110.dp to 20.dp),  // 樱花烂漫 - 靠右
+            "pf_22" to (110.dp to 20.dp),  // 枫叶如丹 - 靠右
+            "pf_23" to (110.dp to 20.dp),  // 雪舞轻扬 - 靠右
+            "pf_24" to (110.dp to 20.dp),  // 星辰大海 - 靠右
+            "pf_25" to (110.dp to 20.dp),  // 月华如水 - 靠右
+            "pf_26" to (110.dp to 20.dp)   // 传世经典 - 靠右
+        )
+    }
+    
+    // 获取当前按钮皮肤的文字偏移量
+    val (textStartPadding, textEndPadding) = buttonSkinTextOffsets[buttonSkin] ?: (110.dp to 20.dp)
+    
+    // 🔥 转盘旋转音量状态
+    var spinRotationVolume by remember { mutableFloatStateOf(0.7f) }
+    
+    // 🔥 从用户偏好加载音量
+    LaunchedEffect(userPreferences) {
+        userPreferences?.let {
+            spinRotationVolume = it.spinRotationVolume
+            android.util.Log.d("EnhancedSpinWheel", "Loaded volume: ${it.spinRotationVolume}")
         }
     }
     
@@ -452,8 +529,8 @@ fun EnhancedSpinWheelScreen(
                         },
                         onSpinStart = {
                             android.util.Log.d("EnhancedSpinWheel", "=== onSpinStart (ImageBasedSpinWheel) ===")
-                            // 播放转盘旋转音效（循环播放）
-                            soundManager.play(SoundEffect.SPIN_ROTATING, volume = 0.7f, loop = true)
+                            // 播放转盘旋转音效（循环播放）- 使用用户设置的音量
+                            soundManager.play(SoundEffect.SPIN_ROTATING, volume = spinRotationVolume, loop = true)
                         },
                         onResult = { result ->
                             scope.launch {
@@ -552,324 +629,457 @@ fun EnhancedSpinWheelScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(0.95f)
-                            .height(75.dp)
+                            .height(120.dp)
                             .scale(buttonScale),
                         contentAlignment = Alignment.Center
                     ) {
-                        // 第一层：最外层脉冲光晕
-                        if (!isPreparingToSpin && canSpin) {
+                        // 🔥 如果有按钮皮肤，直接使用图片作为按钮
+                        if (buttonSkinBitmap != null && !isPreparingToSpin) {
+                            // 🔥 使用remember状态来手动控制按下效果
+                            var isManualPressed by remember { mutableStateOf(false) }
+                            
+                            // 🔥 调试日志 - 监控状态变化
+                            LaunchedEffect(isManualPressed) {
+                                android.util.Log.d("ButtonClick", "isManualPressed changed to: $isManualPressed")
+                            }
+                            
+                            // 🔥 增强点击效果：更明显的缩放和透明度变化
+                            val pressScale by animateFloatAsState(
+                                targetValue = if (isManualPressed) 0.85f else 1f, // 更明显的缩放
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                ),
+                                label = "pressScale"
+                            )
+                            
+                            // 🔥 添加透明度动画
+                            val pressAlpha by animateFloatAsState(
+                                targetValue = if (isManualPressed) 0.6f else 1f, // 更明显的透明度
+                                animationSpec = tween(durationMillis = 150),
+                                label = "pressAlpha"
+                            )
+                            
+                            // 🔥 调试日志 - 监控动画值
+                            LaunchedEffect(pressScale, pressAlpha) {
+                                android.util.Log.d("ButtonClick", "Animation values - pressScale: $pressScale, pressAlpha: $pressAlpha")
+                            }
+                            
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .scale(1.15f)
-                                    .background(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(
-                                                when (currentMode.name) {
-                                                    "LUCKY" -> Color(0xFFFFD700).copy(alpha = glowAlpha * 0.5f)
-                                                    "ADVANCED" -> Color(0xFF9C27B0).copy(alpha = glowAlpha * 0.5f)
-                                                    else -> Color(0xFF2196F3).copy(alpha = glowAlpha * 0.5f)
-                                                },
-                                                Color.Transparent
+                                    .width(280.dp)  // 缩小宽度
+                                    .height(90.dp)  // 缩小高度
+                                    .align(Alignment.Center)  // 居中对齐
+                                    .pointerInput(canSpin) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                android.util.Log.d("ButtonClick", "onPress triggered - setting isManualPressed=true")
+                                                isManualPressed = true
+                                                tryAwaitRelease()
+                                                isManualPressed = false
+                                                android.util.Log.d("ButtonClick", "onPress released - setting isManualPressed=false")
+                                            },
+                                            onTap = {
+                                                if (!canSpin || currentOptions.filter { !it.isExcluded }.isEmpty()) {
+                                                    android.util.Log.d("ButtonClick", "Tap blocked: canSpin=$canSpin")
+                                                    return@detectTapGestures
+                                                }
+                                                
+                                                android.util.Log.d("ButtonClick", "Button tapped!")
+                                                scope.launch {
+                                                    if (isPreparingToSpin || hasUserClicked) {
+                                                        android.util.Log.d("ButtonClick", "Blocked: isPreparingToSpin=$isPreparingToSpin, hasUserClicked=$hasUserClicked")
+                                                        return@launch
+                                                    }
+                                                    hasUserClicked = true
+                                                    isPreparingToSpin = true
+                                                    
+                                                    // 🔥 添加触觉反馈
+                                                    try {
+                                                        val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                                            vibrator?.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                                                        } else {
+                                                            @Suppress("DEPRECATION")
+                                                            vibrator?.vibrate(50)
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        android.util.Log.e("EnhancedSpinWheel", "Vibration failed", e)
+                                                    }
+                                                    
+                                                    if (selectedTargetOption != null && luckyValue > 0) {
+                                                        val baseProb = 100f / currentOptions.filter { !it.isExcluded }.size
+                                                        val maxProb = 50f
+                                                        val hitProbability = baseProb + (maxProb - baseProb) * (luckyValue / 100f)
+                                                        val random = kotlin.random.Random.nextFloat() * 100f
+                                                        currentForceResult = if (random < hitProbability) selectedTargetOption?.text else null
+                                                    } else {
+                                                        currentForceResult = null
+                                                    }
+                                                    
+                                                    if (multiSpinMode && currentSpinIndex == 0) {
+                                                        val totalCost = currentMode.costPerSpin * multiSpinCount
+                                                        if (viewModel.userCoins.value < totalCost || !viewModel.deductCoinsForMultiSpin(totalCost)) {
+                                                            snackbarHostState.showSnackbar("❌ 金币不足！")
+                                                            currentForceResult = null
+                                                            isPreparingToSpin = false
+                                                            hasUserClicked = false
+                                                            return@launch
+                                                        }
+                                                    } else if (!multiSpinMode && !viewModel.checkAndDeductCoins()) {
+                                                        snackbarHostState.showSnackbar("❌ 金币不足！")
+                                                        currentForceResult = null
+                                                        isPreparingToSpin = false
+                                                        hasUserClicked = false
+                                                        return@launch
+                                                    }
+                                                    
+                                                    isPreparingToSpin = false
+                                                    triggerSpin++
+                                                }
+                                            }
+                                        )
+                                    }
+                                    .scale(pressScale)
+                                    .graphicsLayer(alpha = pressAlpha),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // 背景图片
+                                androidx.compose.foundation.Image(
+                                    bitmap = buttonSkinBitmap,
+                                    contentDescription = "按钮皮肤",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.FillBounds  // 改为FillBounds，填充整个按钮
+                                )
+                                
+                                // 文字叠加层 - 根据按钮皮肤调整位置
+                                // 🔥 关键修复：不要让文字层拦截点击事件
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(start = textStartPadding, end = textEndPadding),  // 🔥 使用动态padding，根据皮肤自动调整
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            if (isPreparingToSpin) "准备中..." else "开始旋转",
+                                            fontSize = 16.sp,  // 缩小字体
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.headlineSmall.copy(
+                                                shadow = androidx.compose.ui.graphics.Shadow(
+                                                    color = Color.Black.copy(alpha = 0.7f),
+                                                    offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                                                    blurRadius = 8f
+                                                )
                                             )
-                                        ),
-                                        shape = RoundedCornerShape(40.dp)
-                                    )
-                            )
-                        }
-                        
-                        // 第二层：中层光晕
-                        if (!isPreparingToSpin && canSpin) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .scale(1.08f)
-                                    .background(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(
-                                                when (currentMode.name) {
-                                                    "LUCKY" -> Color(0xFFFFD700).copy(alpha = glowAlpha * 0.7f)
-                                                    "ADVANCED" -> Color(0xFF9C27B0).copy(alpha = glowAlpha * 0.7f)
-                                                    else -> Color(0xFF2196F3).copy(alpha = glowAlpha * 0.7f)
-                                                },
-                                                Color.Transparent
+                                        )
+                                        if (!isPreparingToSpin && multiSpinMode && currentSpinIndex == 0) {
+                                            Text(
+                                                "🎲 ${multiSpinCount}连抽模式",
+                                                fontSize = 13.sp,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                                        color = Color.Black.copy(alpha = 0.7f),
+                                                        offset = androidx.compose.ui.geometry.Offset(1f, 1f),
+                                                        blurRadius = 6f
+                                                    )
+                                                )
                                             )
-                                        ),
-                                        shape = RoundedCornerShape(40.dp)
-                                    )
-                            )
-                        }
-                        
-                        // 主按钮容器
-                        Card(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = RoundedCornerShape(40.dp),
-                            elevation = CardDefaults.cardElevation(
-                                defaultElevation = if (!isPreparingToSpin && canSpin) 12.dp else 4.dp
-                            )
-                        ) {
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        // 防止重复点击
-                                        if (isPreparingToSpin || hasUserClicked) {
-                                            android.util.Log.d("EnhancedSpinWheel", "Button click ignored - already spinning or clicked")
-                                            return@launch
                                         }
-                                        
-                                        hasUserClicked = true
-                                        isPreparingToSpin = true
-                                        
-                                        android.util.Log.d("EnhancedSpinWheel", "=== Custom Button Clicked ===")
-                                        android.util.Log.d("EnhancedSpinWheel", "selectedTargetOption: ${selectedTargetOption?.text}")
-                                        android.util.Log.d("EnhancedSpinWheel", "luckyValue: $luckyValue")
-                                        
-                                        // 计算是否命中目标 - 幸运值满时50%概率
-                                        if (selectedTargetOption != null && luckyValue > 0) {
-                                            // 计算实际命中概率：从基础概率逐渐增加到50%
-                                            val baseProb = 100f / currentOptions.filter { !it.isExcluded }.size
-                                            val maxProb = 50f
-                                            val hitProbability = baseProb + (maxProb - baseProb) * (luckyValue / 100f)
-                                            val random = kotlin.random.Random.nextFloat() * 100f
-                                            val hit = random < hitProbability
+                                    }
+                                }
+                            }
+                        } else {
+                            // 默认按钮样式（无皮肤或准备中状态）
+                            // 第一层：最外层脉冲光晕
+                            if (!isPreparingToSpin && canSpin) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .scale(1.15f)
+                                        .background(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    when (currentMode.name) {
+                                                        "LUCKY" -> Color(0xFFFFD700).copy(alpha = glowAlpha * 0.5f)
+                                                        "ADVANCED" -> Color(0xFF9C27B0).copy(alpha = glowAlpha * 0.5f)
+                                                        else -> Color(0xFF2196F3).copy(alpha = glowAlpha * 0.5f)
+                                                    },
+                                                    Color.Transparent
+                                                )
+                                            ),
+                                            shape = RoundedCornerShape(40.dp)
+                                        )
+                                )
+                            }
+                            
+                            // 第二层：中层光晕
+                            if (!isPreparingToSpin && canSpin) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .scale(1.08f)
+                                        .background(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    when (currentMode.name) {
+                                                        "LUCKY" -> Color(0xFFFFD700).copy(alpha = glowAlpha * 0.7f)
+                                                        "ADVANCED" -> Color(0xFF9C27B0).copy(alpha = glowAlpha * 0.7f)
+                                                        else -> Color(0xFF2196F3).copy(alpha = glowAlpha * 0.7f)
+                                                    },
+                                                    Color.Transparent
+                                                )
+                                            ),
+                                            shape = RoundedCornerShape(40.dp)
+                                        )
+                                )
+                            }
+                            
+                            // 主按钮容器
+                            Card(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = RoundedCornerShape(40.dp),
+                                elevation = CardDefaults.cardElevation(
+                                    defaultElevation = if (!isPreparingToSpin && canSpin) 12.dp else 4.dp
+                                )
+                            ) {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            // 防止重复点击
+                                            if (isPreparingToSpin || hasUserClicked) {
+                                                android.util.Log.d("EnhancedSpinWheel", "Button click ignored - already spinning or clicked")
+                                                return@launch
+                                            }
                                             
-                                            android.util.Log.d("EnhancedSpinWheel", "baseProb: $baseProb%, maxProb: $maxProb%, luckyValue: $luckyValue")
-                                            android.util.Log.d("EnhancedSpinWheel", "hitProbability: $hitProbability%, random: $random, hit: $hit")
+                                            hasUserClicked = true
+                                            isPreparingToSpin = true
                                             
-                                            // 根据概率决定是否命中
-                                            currentForceResult = if (hit) selectedTargetOption?.text else null
-                                            android.util.Log.d("EnhancedSpinWheel", "currentForceResult set to: $currentForceResult")
-                                        } else {
-                                            currentForceResult = null
-                                            android.util.Log.d("EnhancedSpinWheel", "No target or lucky value is 0")
-                                        }
-                                        
-                                        // 扣除金币
-                                        if (multiSpinMode) {
-                                            if (currentSpinIndex == 0) {
-                                                // 🔥 修复：第一次点击，一次性扣除所有金币
-                                                val totalCost = currentMode.costPerSpin * multiSpinCount
-                                                if (viewModel.userCoins.value < totalCost) {
+                                            android.util.Log.d("EnhancedSpinWheel", "=== Custom Button Clicked ===")
+                                            android.util.Log.d("EnhancedSpinWheel", "selectedTargetOption: ${selectedTargetOption?.text}")
+                                            android.util.Log.d("EnhancedSpinWheel", "luckyValue: $luckyValue")
+                                            
+                                            // 计算是否命中目标 - 幸运值满时50%概率
+                                            if (selectedTargetOption != null && luckyValue > 0) {
+                                                // 计算实际命中概率：从基础概率逐渐增加到50%
+                                                val baseProb = 100f / currentOptions.filter { !it.isExcluded }.size
+                                                val maxProb = 50f
+                                                val hitProbability = baseProb + (maxProb - baseProb) * (luckyValue / 100f)
+                                                val random = kotlin.random.Random.nextFloat() * 100f
+                                                val hit = random < hitProbability
+                                                
+                                                android.util.Log.d("EnhancedSpinWheel", "baseProb: $baseProb%, maxProb: $maxProb%, luckyValue: $luckyValue")
+                                                android.util.Log.d("EnhancedSpinWheel", "hitProbability: $hitProbability%, random: $random, hit: $hit")
+                                                
+                                                // 根据概率决定是否命中
+                                                currentForceResult = if (hit) selectedTargetOption?.text else null
+                                                android.util.Log.d("EnhancedSpinWheel", "currentForceResult set to: $currentForceResult")
+                                            } else {
+                                                currentForceResult = null
+                                                android.util.Log.d("EnhancedSpinWheel", "No target or lucky value is 0")
+                                            }
+                                            
+                                            // 扣除金币
+                                            if (multiSpinMode) {
+                                                if (currentSpinIndex == 0) {
+                                                    // 🔥 修复：第一次点击，一次性扣除所有金币
+                                                    val totalCost = currentMode.costPerSpin * multiSpinCount
+                                                    if (viewModel.userCoins.value < totalCost) {
+                                                        snackbarHostState.showSnackbar("❌ 金币不足！")
+                                                        currentForceResult = null
+                                                        isPreparingToSpin = false
+                                                        hasUserClicked = false
+                                                        return@launch
+                                                    }
+                                                    // 一次性扣除总金额，而不是循环扣除
+                                                    if (!viewModel.deductCoinsForMultiSpin(totalCost)) {
+                                                        snackbarHostState.showSnackbar("❌ 金币扣除失败！")
+                                                        currentForceResult = null
+                                                        isPreparingToSpin = false
+                                                        hasUserClicked = false
+                                                        return@launch
+                                                    }
+                                                    android.util.Log.d("EnhancedSpinWheel", "Deducted $totalCost coins for $multiSpinCount spins")
+                                                }
+                                            } else {
+                                                if (!viewModel.checkAndDeductCoins()) {
                                                     snackbarHostState.showSnackbar("❌ 金币不足！")
                                                     currentForceResult = null
                                                     isPreparingToSpin = false
                                                     hasUserClicked = false
                                                     return@launch
                                                 }
-                                                // 一次性扣除总金额，而不是循环扣除
-                                                if (!viewModel.deductCoinsForMultiSpin(totalCost)) {
-                                                    snackbarHostState.showSnackbar("❌ 金币扣除失败！")
-                                                    currentForceResult = null
-                                                    isPreparingToSpin = false
-                                                    hasUserClicked = false
-                                                    return@launch
-                                                }
-                                                android.util.Log.d("EnhancedSpinWheel", "Deducted $totalCost coins for $multiSpinCount spins")
                                             }
-                                        } else {
-                                            if (!viewModel.checkAndDeductCoins()) {
-                                                snackbarHostState.showSnackbar("❌ 金币不足！")
-                                                currentForceResult = null
-                                                isPreparingToSpin = false
-                                                hasUserClicked = false
-                                                return@launch
-                                            }
+                                            
+                                            isPreparingToSpin = false
+                                            
+                                            // 触发旋转
+                                            triggerSpin++
+                                            android.util.Log.d("EnhancedSpinWheel", "triggerSpin incremented to: $triggerSpin")
                                         }
-                                        
-                                        isPreparingToSpin = false
-                                        
-                                        // 触发旋转
-                                        triggerSpin++
-                                        android.util.Log.d("EnhancedSpinWheel", "triggerSpin incremented to: $triggerSpin")
-                                    }
-                                },
-                                enabled = !isPreparingToSpin && canSpin && currentOptions.filter { !it.isExcluded }.isNotEmpty(),
-                                modifier = Modifier.fillMaxSize(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.Transparent,
-                                    disabledContainerColor = Color.Transparent
-                                ),
-                                contentPadding = PaddingValues(0.dp),
-                                shape = RoundedCornerShape(40.dp),
-                                elevation = ButtonDefaults.buttonElevation(
-                                    defaultElevation = 0.dp,
-                                    pressedElevation = 0.dp
-                                )
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    // 背景渐变层
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                brush = if (!isPreparingToSpin && canSpin) {
-                                                    when (currentMode.name) {
-                                                        "LUCKY" -> Brush.linearGradient(
-                                                            colors = listOf(
-                                                                Color(0xFFFFD700),
-                                                                Color(0xFFFFA500),
-                                                                Color(0xFFFF8C00)
-                                                            ),
-                                                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                                            end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
-                                                        )
-                                                        "ADVANCED" -> Brush.linearGradient(
-                                                            colors = listOf(
-                                                                Color(0xFF9C27B0),
-                                                                Color(0xFFE91E63),
-                                                                Color(0xFFFF4081)
-                                                            ),
-                                                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                                            end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
-                                                        )
-                                                        else -> Brush.linearGradient(
-                                                            colors = listOf(
-                                                                Color(0xFF2196F3),
-                                                                Color(0xFF00BCD4),
-                                                                Color(0xFF00E5FF)
-                                                            ),
-                                                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                                            end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
-                                                        )
-                                                    }
-                                                } else {
-                                                    Brush.linearGradient(
-                                                        colors = listOf(
-                                                            Color(0xFF9E9E9E),
-                                                            Color(0xFF757575)
-                                                        )
-                                                    )
-                                                },
-                                                shape = RoundedCornerShape(40.dp)
-                                            )
+                                    },
+                                    enabled = !isPreparingToSpin && canSpin && currentOptions.filter { !it.isExcluded }.isNotEmpty(),
+                                    modifier = Modifier.fillMaxSize(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.Transparent,
+                                        disabledContainerColor = Color.Transparent
+                                    ),
+                                    contentPadding = PaddingValues(0.dp),
+                                    shape = RoundedCornerShape(40.dp),
+                                    elevation = ButtonDefaults.buttonElevation(
+                                        defaultElevation = 0.dp,
+                                        pressedElevation = 0.dp
                                     )
-                                    
-                                    // 闪光动画层
-                                    if (!isPreparingToSpin && canSpin) {
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        // 默认背景渐变层
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .background(
-                                                    brush = Brush.linearGradient(
-                                                        colors = listOf(
-                                                            Color.Transparent,
-                                                            Color.White.copy(alpha = 0.4f),
-                                                            Color.Transparent
-                                                        ),
-                                                        start = androidx.compose.ui.geometry.Offset(
-                                                            shimmerOffset * 1000f,
-                                                            shimmerOffset * 1000f
-                                                        ),
-                                                        end = androidx.compose.ui.geometry.Offset(
-                                                            (shimmerOffset + 0.5f) * 1000f,
-                                                            (shimmerOffset + 0.5f) * 1000f
+                                                    brush = if (!isPreparingToSpin && canSpin) {
+                                                        when (currentMode.name) {
+                                                            "LUCKY" -> Brush.linearGradient(
+                                                                colors = listOf(
+                                                                    Color(0xFFFFD700),
+                                                                    Color(0xFFFFA500),
+                                                                    Color(0xFFFF8C00)
+                                                                ),
+                                                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                                end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
+                                                            )
+                                                            "ADVANCED" -> Brush.linearGradient(
+                                                                colors = listOf(
+                                                                    Color(0xFF9C27B0),
+                                                                    Color(0xFFE91E63),
+                                                                    Color(0xFFFF4081)
+                                                                ),
+                                                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                                end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
+                                                            )
+                                                            else -> Brush.linearGradient(
+                                                                colors = listOf(
+                                                                    Color(0xFF2196F3),
+                                                                    Color(0xFF00BCD4),
+                                                                    Color(0xFF00E5FF)
+                                                                ),
+                                                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                                end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
+                                                            )
+                                                        }
+                                                    } else {
+                                                        Brush.linearGradient(
+                                                            colors = listOf(
+                                                                Color(0xFF9E9E9E),
+                                                                Color(0xFF757575)
+                                                            )
                                                         )
-                                                    ),
+                                                    },
                                                     shape = RoundedCornerShape(40.dp)
                                                 )
                                         )
-                                    }
-                                    
-                                    // 顶部高光
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(25.dp)
-                                            .align(Alignment.TopCenter)
-                                            .background(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(
-                                                        Color.White.copy(alpha = 0.35f),
-                                                        Color.Transparent
+                                        
+                                        // 闪光动画层
+                                        if (!isPreparingToSpin && canSpin) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(
+                                                        brush = Brush.linearGradient(
+                                                            colors = listOf(
+                                                                Color.Transparent,
+                                                                Color.White.copy(alpha = 0.4f),
+                                                                Color.Transparent
+                                                            ),
+                                                            start = androidx.compose.ui.geometry.Offset(
+                                                                shimmerOffset * 1000f,
+                                                                shimmerOffset * 1000f
+                                                            ),
+                                                            end = androidx.compose.ui.geometry.Offset(
+                                                                (shimmerOffset + 0.5f) * 1000f,
+                                                                (shimmerOffset + 0.5f) * 1000f
+                                                            )
+                                                        ),
+                                                        shape = RoundedCornerShape(40.dp)
                                                     )
-                                                ),
-                                                shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp)
-                                            )
-                                    )
-                                    
-                                    // 按钮内容
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 24.dp),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // 左侧装饰
-                                        if (!isPreparingToSpin) {
-                                            Text(
-                                                "✨",
-                                                fontSize = 20.sp,
-                                                modifier = Modifier.padding(end = 8.dp)
                                             )
                                         }
                                         
-                                        // 主图标
+                                        // 顶部高光
                                         Box(
                                             modifier = Modifier
-                                                .size(48.dp)
+                                                .fillMaxWidth()
+                                                .height(25.dp)
+                                                .align(Alignment.TopCenter)
                                                 .background(
-                                                    Color.White.copy(alpha = 0.3f),
-                                                    CircleShape
+                                                    brush = Brush.verticalGradient(
+                                                        colors = listOf(
+                                                            Color.White.copy(alpha = 0.35f),
+                                                            Color.Transparent
+                                                        )
+                                                    ),
+                                                    shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp)
                                                 )
-                                                .clip(CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                if (isPreparingToSpin) "⏳" else "🐶",
-                                                fontSize = 28.sp
-                                            )
-                                        }
+                                        )
                                         
-                                        Spacer(Modifier.width(16.dp))
-                                        
-                                        // 文字内容
-                                        Column(
-                                            horizontalAlignment = Alignment.Start
+                                        // 按钮内容 - 文字始终显示
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 24.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                if (isPreparingToSpin) "准备中..." else "开始旋转",
-                                                fontSize = 22.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = Color.White,
-                                                style = MaterialTheme.typography.headlineSmall.copy(
-                                                    shadow = androidx.compose.ui.graphics.Shadow(
-                                                        color = Color.Black.copy(alpha = 0.3f),
-                                                        offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                                                        blurRadius = 4f
+                                            // 文字内容
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    if (isPreparingToSpin) "准备中..." else "开始旋转",
+                                                    fontSize = 16.sp,  // 缩小字体
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                                        shadow = androidx.compose.ui.graphics.Shadow(
+                                                            color = Color.Black.copy(alpha = 0.5f),
+                                                            offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                                                            blurRadius = 6f
+                                                        )
                                                     )
                                                 )
-                                            )
-                                            if (!isPreparingToSpin && multiSpinMode && currentSpinIndex == 0) {
-                                                Text(
-                                                    "🎲 ${multiSpinCount}连抽模式",
-                                                    fontSize = 13.sp,
-                                                    color = Color.White.copy(alpha = 0.95f),
-                                                    fontWeight = FontWeight.Bold
-                                                )
+                                                if (!isPreparingToSpin && multiSpinMode && currentSpinIndex == 0) {
+                                                    Text(
+                                                        "🎲 ${multiSpinCount}连抽模式",
+                                                        fontSize = 13.sp,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold,
+                                                        style = MaterialTheme.typography.bodySmall.copy(
+                                                            shadow = androidx.compose.ui.graphics.Shadow(
+                                                                color = Color.Black.copy(alpha = 0.5f),
+                                                                offset = androidx.compose.ui.geometry.Offset(1f, 1f),
+                                                                blurRadius = 4f
+                                                            )
+                                                        )
+                                                    )
+                                                }
                                             }
-                                        }
-                                        
-                                        // 右侧装饰
-                                        if (!isPreparingToSpin) {
-                                            Text(
-                                                "✨",
-                                                fontSize = 20.sp,
-                                                modifier = Modifier.padding(start = 8.dp)
-                                            )
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-                
-                Spacer(Modifier.height(16.dp))
+                        }  // else 结束
+                    }  // Box (button container) 结束
+                }  // key 结束
             }  // Column 结束
-        }  // Surface 结束
             
             // 🔥 浮动的连抽进度条和结果显示（不挤压转盘）
             if (multiSpinMode) {
@@ -1130,14 +1340,18 @@ fun EnhancedSpinWheelScreen(
                 }
             }
         }
-    }
+    }  // Box (background) 结束
+    
+    // 获取用户偏好中的结算面板皮肤
+    val panelSkin = userPreferences?.spinResultPanelSkin ?: "js_1"
     
     // 获得动画（覆盖在整个屏幕上）- 保留
     if (showResultAnimation) {
         com.example.funlife.ui.components.ResultAnimation(
             result = animationResult,
             mode = currentMode,
-            onDismiss = { showResultAnimation = false }
+            onDismiss = { showResultAnimation = false },
+            panelSkin = panelSkin
         )
     }
     
@@ -1387,6 +1601,25 @@ fun EnhancedSpinWheelScreen(
                     icon = Icons.Default.Animation,
                     iconColor = Color(0xFF00BCD4),
                     onClick = { showAnimationDialog = true }
+                )
+                
+                // 🔥 音效设置分组
+                SettingsGroupHeader(title = "音效设置", emoji = "🔊")
+                
+                // 🔥 转盘旋转音量控制卡片
+                VolumeControlSettingsCard(
+                    volume = spinRotationVolume,
+                    onVolumeChange = { newVolume ->
+                        android.util.Log.d("EnhancedSpinWheel", "Volume changed to: $newVolume")
+                        spinRotationVolume = newVolume
+                        scope.launch {
+                            userPreferences?.let { prefs ->
+                                userPreferencesRepository.update(
+                                    prefs.copy(spinRotationVolume = newVolume)
+                                )
+                            }
+                        }
+                    }
                 )
                 
                 // 数据管理分组
@@ -4158,6 +4391,91 @@ private fun SettingsItem(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+// 🔥 音量控制设置卡片
+@Composable
+private fun VolumeControlSettingsCard(
+    volume: Float,
+    onVolumeChange: (Float) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 音量图标容器
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF00BCD4).copy(alpha = 0.8f),
+                                    Color(0xFF00BCD4)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        when {
+                            volume == 0f -> Icons.Default.VolumeOff
+                            volume < 0.5f -> Icons.Default.VolumeDown
+                            else -> Icons.Default.VolumeUp
+                        },
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        "转盘旋转音量",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "${(volume * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // 音量滑块
+            Slider(
+                value = volume,
+                onValueChange = onVolumeChange,
+                valueRange = 0f..1f,
+                steps = 9,  // 10个档位（0%, 10%, 20%, ..., 100%）
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFF00BCD4),
+                    activeTrackColor = Color(0xFF00BCD4),
+                    inactiveTrackColor = Color(0xFF00BCD4).copy(alpha = 0.3f)
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

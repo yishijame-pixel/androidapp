@@ -5,11 +5,13 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.funlife.data.dao.AnniversaryDao
 import com.example.funlife.data.dao.AnniversaryReminderDao
 import com.example.funlife.data.dao.PlayerDao
+import com.example.funlife.data.dao.PlayerVictoryRecordDao
 import com.example.funlife.data.dao.GameHistoryDao
 import com.example.funlife.data.dao.UserPreferencesDao
 import com.example.funlife.data.dao.SpinWheelTemplateDao
@@ -23,9 +25,12 @@ import com.example.funlife.data.dao.GuaranteeCounterDao
 import com.example.funlife.data.dao.CustomSpinModeDao
 import com.example.funlife.data.dao.OperationLogDao
 import com.example.funlife.data.dao.DailyRewardDao
+import com.example.funlife.data.dao.InventoryDao
+import com.example.funlife.data.dao.ScoreOperationDao
 import com.example.funlife.data.model.Anniversary
 import com.example.funlife.data.model.AnniversaryReminder
 import com.example.funlife.data.model.Player
+import com.example.funlife.data.model.PlayerVictoryRecord
 import com.example.funlife.data.model.GameHistory
 import com.example.funlife.data.model.UserPreferences
 import com.example.funlife.data.model.SpinWheelTemplate
@@ -42,12 +47,18 @@ import com.example.funlife.data.model.GuaranteeCounter
 import com.example.funlife.data.model.CustomSpinMode
 import com.example.funlife.data.model.OperationLog
 import com.example.funlife.data.model.DailyReward
+import com.example.funlife.data.model.InventoryItem
+import com.example.funlife.data.model.ScoreOperation
+import com.example.funlife.data.model.UserVip
+import com.example.funlife.data.model.RedeemCode
+import com.example.funlife.data.model.UserRedeemHistory
 
 @Database(
     entities = [
         Anniversary::class,
         AnniversaryReminder::class,
         Player::class,
+        PlayerVictoryRecord::class,
         GameHistory::class,
         UserPreferences::class,
         SpinWheelTemplate::class,
@@ -69,16 +80,29 @@ import com.example.funlife.data.model.DailyReward
         DailyReward::class,
         com.example.funlife.data.model.Riddle::class,
         com.example.funlife.data.model.RiddleProgress::class,
-        com.example.funlife.data.model.RiddleStats::class
+        com.example.funlife.data.model.RiddleStats::class,
+        InventoryItem::class,
+        ScoreOperation::class,
+        UserVip::class,
+        RedeemCode::class,
+        UserRedeemHistory::class,
+        com.example.funlife.data.model.UserAvatar::class,
+        com.example.funlife.data.model.AvatarFrame::class,
+        com.example.funlife.data.model.ProfileBackground::class,
+        com.example.funlife.data.model.UserOwnedFrame::class,
+        com.example.funlife.data.model.UserOwnedBackground::class,
+        com.example.funlife.data.model.UserAvatarFrame::class  // 🔥 新增：用户头像框表
     ],
-    version = 24,  // 🔥 升级到版本24 - 添加猜谜游戏系统
+    version = 36,  // 🔥 升级到版本36 - 添加头像框商城系统
     exportSchema = false
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     
     abstract fun anniversaryDao(): AnniversaryDao
     abstract fun anniversaryReminderDao(): AnniversaryReminderDao
     abstract fun playerDao(): PlayerDao
+    abstract fun playerVictoryRecordDao(): PlayerVictoryRecordDao
     abstract fun gameHistoryDao(): GameHistoryDao
     abstract fun userPreferencesDao(): UserPreferencesDao
     abstract fun spinWheelTemplateDao(): SpinWheelTemplateDao
@@ -89,15 +113,21 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun goalDao(): GoalDao
     abstract fun coinDao(): CoinDao
     abstract fun shopDao(): ShopDao
+    abstract fun scoreOperationDao(): ScoreOperationDao
     abstract fun guaranteeCounterDao(): GuaranteeCounterDao
     abstract fun customSpinModeDao(): CustomSpinModeDao
     abstract fun operationLogDao(): OperationLogDao
     abstract fun petDao(): com.example.funlife.data.dao.PetDao
     abstract fun petItemDao(): com.example.funlife.data.dao.PetItemDao
+    abstract fun inventoryDao(): InventoryDao
     abstract fun dailyRewardDao(): DailyRewardDao
     abstract fun riddleDao(): com.example.funlife.data.dao.RiddleDao
     abstract fun riddleProgressDao(): com.example.funlife.data.dao.RiddleProgressDao
     abstract fun riddleStatsDao(): com.example.funlife.data.dao.RiddleStatsDao
+    abstract fun userVipDao(): com.example.funlife.data.dao.UserVipDao
+    abstract fun redeemCodeDao(): com.example.funlife.data.dao.RedeemCodeDao
+    abstract fun userAvatarDao(): com.example.funlife.data.dao.UserAvatarDao
+    abstract fun userAvatarFrameDao(): com.example.funlife.data.dao.UserAvatarFrameDao  // 🔥 新增：用户头像框DAO
     
     companion object {
         @Volatile
@@ -741,7 +771,6 @@ abstract class AppDatabase : RoomDatabase() {
         // 🔥 新增：版本23到24 - 添加猜谜游戏系统
         private val MIGRATION_23_24 = object : Migration(23, 24) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // 创建谜题表
                 database.execSQL("""
                     CREATE TABLE IF NOT EXISTS riddles (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -752,7 +781,6 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """)
                 
-                // 创建谜题进度表
                 database.execSQL("""
                     CREATE TABLE IF NOT EXISTS riddle_progress (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -765,7 +793,6 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """)
                 
-                // 创建谜题统计表
                 database.execSQL("""
                     CREATE TABLE IF NOT EXISTS riddle_stats (
                         userId INTEGER PRIMARY KEY NOT NULL,
@@ -777,10 +804,337 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """)
                 
-                // 创建索引
                 database.execSQL("""
                     CREATE UNIQUE INDEX IF NOT EXISTS index_riddle_progress_userId_riddleId 
                     ON riddle_progress(userId, riddleId)
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本24到25 - 占位迁移（保持版本连续性）
+        private val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 占位迁移，确保版本号连续
+                // 如果之前有其他功能在版本25，可以在这里添加
+            }
+        }
+        
+        // 🔥 新增：版本25到26 - 添加玩家胜利记录表
+        private val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS player_victory_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        playerName TEXT NOT NULL,
+                        avatar TEXT NOT NULL,
+                        victoryCount INTEGER NOT NULL DEFAULT 0,
+                        lastVictoryTime INTEGER NOT NULL
+                    )
+                """)
+                
+                database.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_player_victory_records_playerName 
+                    ON player_victory_records(playerName)
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本26到27 - 添加背包系统
+        private val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS inventory_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL DEFAULT 1,
+                        itemId TEXT NOT NULL,
+                        itemName TEXT NOT NULL,
+                        itemType TEXT NOT NULL,
+                        itemRarity TEXT NOT NULL,
+                        iconEmoji TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        quantity INTEGER NOT NULL DEFAULT 1,
+                        isUsable INTEGER NOT NULL DEFAULT 1,
+                        effectValue INTEGER NOT NULL DEFAULT 0,
+                        purchasePrice INTEGER NOT NULL DEFAULT 0,
+                        obtainedTime INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本27到28 - 添加转盘结算面板皮肤
+        private val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN spinResultPanelSkin TEXT NOT NULL DEFAULT 'js_1'
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本28到29 - 添加分数操作记录表
+        private val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS score_operations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        gameSessionId INTEGER NOT NULL,
+                        playerId INTEGER NOT NULL,
+                        playerName TEXT NOT NULL,
+                        playerAvatar TEXT NOT NULL,
+                        operation INTEGER NOT NULL,
+                        scoreBefore INTEGER NOT NULL,
+                        scoreAfter INTEGER NOT NULL,
+                        timestamp INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本29到30 - 添加转盘按钮皮肤
+        private val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN spinButtonSkin TEXT NOT NULL DEFAULT 'pf_1'
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本30到31 - 添加转盘旋转音量
+        private val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE user_preferences 
+                    ADD COLUMN spinRotationVolume REAL NOT NULL DEFAULT 0.7
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本31到32 - 添加纪念日相框字段
+        private val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE anniversaries 
+                    ADD COLUMN frameId TEXT NOT NULL DEFAULT 'jinian_card_1'
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本32到33 - 添加VIP系统
+        private val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建用户VIP表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_vip (
+                        userId INTEGER PRIMARY KEY NOT NULL,
+                        vipLevel INTEGER NOT NULL DEFAULT 0,
+                        expireDate TEXT,
+                        lastDailyClaimDate TEXT,
+                        totalDaysActive INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                
+                // 创建兑换码表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS redeem_codes (
+                        code TEXT PRIMARY KEY NOT NULL,
+                        type TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        maxUses INTEGER NOT NULL DEFAULT -1,
+                        currentUses INTEGER NOT NULL DEFAULT 0,
+                        expiryDate TEXT,
+                        isActive INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                
+                // 创建用户兑换历史表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_redeem_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        code TEXT NOT NULL,
+                        redeemDate TEXT NOT NULL,
+                        reward TEXT NOT NULL
+                    )
+                """)
+                
+                // 插入终身VIP兑换码（223498）
+                database.execSQL("""
+                    INSERT OR REPLACE INTO redeem_codes (code, type, value, maxUses, currentUses, expiryDate, isActive)
+                    VALUES ('223498', 'VIP', '3', -1, 0, NULL, 1)
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本33到34 - 添加VIP安全签名
+        private val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 为user_vip表添加signature字段（防篡改签名）
+                database.execSQL("""
+                    ALTER TABLE user_vip ADD COLUMN signature TEXT
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本34到35 - 添加VIP个人主页系统
+        private val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 创建用户头像信息表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_avatars (
+                        userId INTEGER PRIMARY KEY NOT NULL,
+                        avatarUri TEXT,
+                        frameId TEXT,
+                        backgroundId TEXT,
+                        updatedAt INTEGER NOT NULL
+                    )
+                """)
+                
+                // 创建头像框表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS avatar_frames (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        icon TEXT NOT NULL,
+                        price INTEGER NOT NULL,
+                        requiredVipLevel INTEGER NOT NULL,
+                        animationType TEXT NOT NULL,
+                        category TEXT NOT NULL DEFAULT 'basic',
+                        description TEXT NOT NULL DEFAULT '',
+                        isDefault INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                
+                // 创建背景主题表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS profile_backgrounds (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        preview TEXT NOT NULL,
+                        price INTEGER NOT NULL,
+                        requiredVipLevel INTEGER NOT NULL,
+                        gradientColors TEXT NOT NULL,
+                        particleType TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        isDefault INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                
+                // 创建用户拥有的头像框表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_owned_frames (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        frameId TEXT NOT NULL,
+                        purchasedAt INTEGER NOT NULL
+                    )
+                """)
+                
+                // 创建用户拥有的背景表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_owned_backgrounds (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        backgroundId TEXT NOT NULL,
+                        purchasedAt INTEGER NOT NULL
+                    )
+                """)
+                
+                // 创建索引
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_user_owned_frames_userId 
+                    ON user_owned_frames(userId)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_user_owned_backgrounds_userId 
+                    ON user_owned_backgrounds(userId)
+                """)
+                
+                database.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_user_owned_frames_userId_frameId 
+                    ON user_owned_frames(userId, frameId)
+                """)
+                
+                database.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_user_owned_backgrounds_userId_backgroundId 
+                    ON user_owned_backgrounds(userId, backgroundId)
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本35到36 - 添加头像框商城系统
+        private val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 1. 扩展 shop_items 表，添加头像框相关字段
+                database.execSQL("""
+                    ALTER TABLE shop_items ADD COLUMN vipPrice INTEGER NOT NULL DEFAULT 0
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE shop_items ADD COLUMN assetPath TEXT
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE shop_items ADD COLUMN rarity TEXT NOT NULL DEFAULT 'COMMON'
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE shop_items ADD COLUMN isAnimated INTEGER NOT NULL DEFAULT 0
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE shop_items ADD COLUMN category TEXT
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE shop_items ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0
+                """)
+                
+                // 2. 创建用户头像框拥有表
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_avatar_frames (
+                        userId INTEGER NOT NULL,
+                        frameId INTEGER NOT NULL,
+                        purchasedAt INTEGER NOT NULL,
+                        isEquipped INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(userId, frameId)
+                    )
+                """)
+                
+                // 3. 扩展 users 表，添加头像框装备和VIP字段
+                database.execSQL("""
+                    ALTER TABLE users ADD COLUMN equippedFrameId INTEGER
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE users ADD COLUMN isVip INTEGER NOT NULL DEFAULT 0
+                """)
+                
+                database.execSQL("""
+                    ALTER TABLE users ADD COLUMN vipExpireAt INTEGER
+                """)
+                
+                // 4. 创建索引以提高查询性能
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_user_avatar_frames_userId 
+                    ON user_avatar_frames(userId)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_user_avatar_frames_frameId 
+                    ON user_avatar_frames(frameId)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_shop_items_type_rarity 
+                    ON shop_items(type, rarity)
+                """)
+                
+                database.execSQL("""
+                    CREATE INDEX IF NOT EXISTS index_shop_items_category 
+                    ON shop_items(category)
                 """)
             }
         }
@@ -815,10 +1169,21 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_20_21,  // 🔥 新增：艺术字颜色主题
                     MIGRATION_21_22,  // 🔥 新增：宠物系统
                     MIGRATION_22_23,  // 🔥 新增：每日奖励系统
-                    MIGRATION_23_24   // 🔥 新增：猜谜游戏系统
+                    MIGRATION_23_24,  // 🔥 新增：猜谜游戏系统
+                    MIGRATION_24_25,  // 🔥 新增：占位迁移
+                    MIGRATION_25_26,  // 🔥 新增：玩家胜利记录系统
+                    MIGRATION_26_27,  // 🔥 新增：背包系统
+                    MIGRATION_27_28,  // 🔥 新增：转盘结算面板皮肤
+                    MIGRATION_28_29,  // 🔥 新增：分数操作记录表
+                    MIGRATION_29_30,  // 🔥 新增：转盘按钮皮肤
+                    MIGRATION_30_31,  // 🔥 新增：转盘旋转音量
+                    MIGRATION_31_32,  // 🔥 新增：纪念日相框字段
+                    MIGRATION_32_33,  // 🔥 新增：VIP系统
+                    MIGRATION_33_34,  // 🔥 新增：VIP安全签名
+                    MIGRATION_34_35,  // 🔥 新增：VIP个人主页系统
+                    MIGRATION_35_36   // 🔥 新增：头像框商城系统
                 )
-                // 🔥 修复：移除破坏性降级，保护用户数据
-                // .fallbackToDestructiveMigration()  // 已移除！
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

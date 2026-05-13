@@ -24,6 +24,7 @@ data class Anniversary(
     val name: String,          // 纪念日名称
     val date: String,          // 日期 (格式: yyyy-MM-dd)
     val imageUri: String? = null,  // 背景图片 URI
+    val frameId: String = "jinian_card_1",  // 🔥 相框ID（默认相框）
     val isPinned: Boolean = false,  // 是否置顶
     val type: String = AnniversaryType.CUSTOM.name,  // 纪念日类型
     val isYearly: Boolean = true,  // 是否每年重复

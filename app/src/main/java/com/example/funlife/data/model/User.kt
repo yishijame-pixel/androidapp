@@ -12,6 +12,12 @@ data class User(
     val password: String, // 实际项目中应该加密存储
     val nickname: String = username,
     val avatar: String = "", // 头像URL或资源ID
+    
+    // 🔥 新增字段 - 头像框装备
+    val equippedFrameId: Int? = null,  // 当前装备的头像框ID
+    val isVip: Boolean = false,        // 是否为VIP
+    val vipExpireAt: Long? = null,     // VIP过期时间
+    
     val createdAt: Long = System.currentTimeMillis(),
     val lastLoginAt: Long = System.currentTimeMillis()
 )

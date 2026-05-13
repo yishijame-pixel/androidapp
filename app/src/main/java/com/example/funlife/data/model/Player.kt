@@ -10,5 +10,6 @@ data class Player(
     val id: Int = 0,
     val userId: Long = 0,      // 🔥 用户ID
     val name: String,          // 玩家名称
-    val score: Int = 0         // 当前分数
+    val score: Int = 0,        // 当前分数
+    val avatar: String = "tx_1" // 头像文件名
 )

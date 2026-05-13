@@ -12,7 +12,8 @@ class PlayerRepository(private val playerDao: PlayerDao) {
     
     suspend fun insert(player: Player) {
         Log.d("PlayerRepository", "Inserting player: $player")
-        playerDao.insertPlayer(player)
+        val rowId = playerDao.insertPlayer(player)
+        Log.d("PlayerRepository", "Player inserted with row ID: $rowId")
     }
     
     suspend fun update(player: Player) {

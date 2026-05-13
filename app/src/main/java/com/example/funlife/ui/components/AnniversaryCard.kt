@@ -2,11 +2,13 @@
 package com.example.funlife.ui.components
 
 import android.net.Uri
+import androidx.compose.animation.*
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -101,367 +103,171 @@ fun AnniversaryCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
             .graphicsLayer {
                 scaleX = scale * pulseScale
                 scaleY = scale * pulseScale
                 this.alpha = alpha
             }
-            .animateContentSize(),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isToday) 12.dp else 6.dp),
+            .animateContentSize()
+            .clickable { showDetailDialog = true },
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Transparent
         )
     ) {
-        Box(
+        // 🔥 相框部分 - 使用透明中间区域的相框
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 280.dp)
-                .clickable { showDetailDialog = true }
+                .aspectRatio(1.5f)
         ) {
-            // 背景图片（如果有）- 完全覆盖整个卡片
+            // 根据卡片宽度计算图标大小
+            val cardWidth = maxWidth
+            val iconSize = (cardWidth * 0.06f).coerceIn(20.dp, 28.dp)  // 图标大小为卡片宽度的6%
+            val iconFontSize = (iconSize.value * 0.7f).sp  // 字体大小为图标的70%
+            val iconSpacing = (iconSize * 0.3f).coerceAtLeast(4.dp)  // 间距为图标的30%
+            val iconPadding = (cardWidth * 0.02f).coerceIn(4.dp, 8.dp)  // 边距为卡片宽度的2%
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val frameBitmap = remember(anniversary.frameId) {
+                com.example.funlife.utils.ImageCache.loadImage(context, "login/${anniversary.frameId}.png")
+            }
+            
+            // 🔥 用户上传的图片显示在底层
             if (!anniversary.imageUri.isNullOrEmpty()) {
                 AsyncImage(
                     model = Uri.parse(anniversary.imageUri),
-                    contentDescription = "背景图片",
+                    contentDescription = "纪念日图片",
                     modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(20.dp)),
+                        .fillMaxSize()
+                        .padding(
+                            start = 50.dp,
+                            end = 50.dp,
+                            top = 40.dp,
+                            bottom = 40.dp
+                        )
+                        .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
-                
-                // 渐变遮罩 - 从透明到半透明
+            } else {
+                // 占位符
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.2f),
-                                    Color.Black.copy(alpha = 0.6f)
-                                )
-                            )
+                        .fillMaxSize()
+                        .padding(
+                            start = 50.dp,
+                            end = 50.dp,
+                            top = 40.dp,
+                            bottom = 40.dp
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📷",
+                            fontSize = 48.sp,
+                            color = Color.Gray.copy(alpha = 0.3f)
                         )
+                    }
+                }
+            }
+            
+            // 🔥 透明相框边框覆盖在最上层
+            frameBitmap?.let { bitmap ->
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap,
+                    contentDescription = "相框边框",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds
                 )
             }
             
+            // 🔥 右上角可展开操作菜单（自适应大小）
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(iconPadding),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(iconSpacing)
             ) {
-                // 顶部：类型emoji + 标题 + 置顶按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    // 左侧：emoji + 标题
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // 类型emoji
-                        Text(
-                            text = anniversary.getTypeEnum().emoji,
-                            fontSize = 36.sp
-                        )
-                        
-                        Column {
-                            Text(
-                                text = anniversary.name,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
-                                color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color.White
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                            
-                            // 重要程度星星
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                repeat(anniversary.importance) {
-                                    Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = null,
-                                        tint = Color(0xFFFFD700),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 右侧：置顶按钮
-                    IconButton(
-                        onClick = onPin,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (anniversary.isPinned) {
-                                Icons.Default.PushPin
-                            } else {
-                                Icons.Outlined.PushPin
-                            },
-                            contentDescription = if (anniversary.isPinned) "取消置顶" else "置顶",
-                            tint = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                if (anniversary.isPinned) Color(0xFFFFD700) else Color.White
-                            } else {
-                                if (anniversary.isPinned) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary
-                            },
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // 日期和年份信息
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // 可爱的菜单按钮（小星星图标）
+                Box(
+                    modifier = Modifier
+                        .size(iconSize)
+                        .clickable { showActions = !showActions },
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = anniversary.getFormattedDate(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                            Color.White.copy(alpha = 0.95f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (showActions) "✖️" else "⭐",
+                        fontSize = iconFontSize,
+                        modifier = Modifier.graphicsLayer {
+                            rotationZ = if (showActions) 0f else -15f
                         }
                     )
-                    
-                    // 每年重复标记
-                    if (anniversary.isYearly) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                Color.White.copy(alpha = 0.25f)
-                            } else {
-                                MaterialTheme.colorScheme.primaryContainer
-                            }
+                }
+                
+                // 展开的操作按钮
+                AnimatedVisibility(
+                    visible = showActions,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(iconSpacing),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        // 置顶按钮
+                        Box(
+                            modifier = Modifier
+                                .size(iconSize * 0.9f)  // 操作按钮比菜单按钮小10%
+                                .clickable { 
+                                    onPin()
+                                    showActions = false
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "🔄 每年",
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color.White
-                                } else {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                }
+                                text = if (anniversary.isPinned) "📌" else "📍",
+                                fontSize = iconFontSize * 0.9f
                             )
-                        }
-                    }
-                }
-                
-                // 已过年数（如果有）
-                val yearsPassed = anniversary.getYearsPassed()
-                if (anniversary.isYearly && yearsPassed > 0) {
-                    Text(
-                        text = "已经 $yearsPassed 年了 💝",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                            Color.White.copy(alpha = 0.9f)
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        }
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // 剩余天数显示 - 更大更醒目，更透明
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                        Color.White.copy(alpha = 0.5f)
-                    } else {
-                        gradientColors[0].copy(alpha = 0.15f)
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val daysText = when {
-                            daysRemaining > 0 -> "还有 $daysRemaining 天"
-                            daysRemaining == 0L -> "🎉 就是今天！"
-                            else -> "已过去 ${-daysRemaining} 天"
                         }
                         
-                        Text(
-                            text = daysText,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                Color.White
-                            } else {
-                                gradientColors[0]
-                            }
-                        )
-                    }
-                }
-                
-                // 进度条
-                if (anniversary.isYearly && daysRemaining >= 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val progress = 1f - (daysRemaining.toFloat() / 365f)
-                    LinearProgressIndicator(
-                        progress = progress,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = gradientColors[0],
-                        trackColor = if (!anniversary.imageUri.isNullOrEmpty()) {
-                            Color.White.copy(alpha = 0.3f)
-                        } else {
-                            gradientColors[0].copy(alpha = 0.2f)
-                        }
-                    )
-                }
-                
-                // 展开的详细信息
-                if (isExpanded && !anniversary.note.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                            Color.White.copy(alpha = 0.2f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "📝 备注",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color.White.copy(alpha = 0.95f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                            Text(
-                                text = anniversary.note,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color.White.copy(alpha = 0.9f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                        }
-                    }
-                }
-                
-                // 底部：展开/收起按钮 + 操作按钮（可展开）
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // 展开/收起操作按钮的箭头
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    IconButton(
-                        onClick = { showActions = !showActions }
-                    ) {
-                        Icon(
-                            imageVector = if (showActions) {
-                                Icons.Default.KeyboardArrowUp
-                            } else {
-                                Icons.Default.KeyboardArrowDown
-                            },
-                            contentDescription = if (showActions) "收起操作" else "展开操作",
-                            tint = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                Color.White
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            }
-                        )
-                    }
-                }
-                
-                // 操作按钮行（可展开/收起）
-                if (showActions) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         // 编辑按钮
-                        TextButton(
-                            onClick = onEdit,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color.White
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                }
-                            )
+                        Box(
+                            modifier = Modifier
+                                .size(iconSize * 0.9f)
+                                .clickable { 
+                                    onEdit()
+                                    showActions = false
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "编辑",
-                                modifier = Modifier.size(20.dp)
+                            Text(
+                                text = "✏️",
+                                fontSize = iconFontSize * 0.9f
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("编辑")
-                        }
-                        
-                        // 分享按钮
-                        TextButton(
-                            onClick = onShare,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color.White
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                }
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = "分享",
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("分享")
                         }
                         
                         // 删除按钮
-                        TextButton(
-                            onClick = onDelete,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = if (!anniversary.imageUri.isNullOrEmpty()) {
-                                    Color(0xFFFF6B6B)
-                                } else {
-                                    MaterialTheme.colorScheme.error
-                                }
-                            )
+                        Box(
+                            modifier = Modifier
+                                .size(iconSize * 0.9f)
+                                .clickable { 
+                                    onDelete()
+                                    showActions = false
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "删除",
-                                modifier = Modifier.size(20.dp)
+                            Text(
+                                text = "🗑️",
+                                fontSize = iconFontSize * 0.9f
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("删除")
                         }
                     }
                 }

@@ -61,8 +61,45 @@ fun HomeScreen(
     val userSession = authViewModel.getCurrentSession()
     val countdowns by goalViewModel.countdowns.collectAsState()
     
-    // 获取用户偏好设置
+    // 获取VIP状态
     val context = androidx.compose.ui.platform.LocalContext.current
+    val database = remember { (context.applicationContext as com.example.funlife.FunLifeApplication).database }
+    val vipRepository = remember {
+        com.example.funlife.repository.VipRepository(
+            database.userVipDao(),
+            database.redeemCodeDao(),
+            database.coinDao(),
+            context
+        )
+    }
+    val userVip by vipRepository.getUserVip(userSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    val vipLevel = userVip?.getCurrentVipLevel() ?: com.example.funlife.data.model.VipLevel.NORMAL
+    
+    // 获取用户头像
+    val userAvatarDao = remember { database.userAvatarDao() }
+    val userAvatar by userAvatarDao.getUserAvatar(userSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    
+    // VIP首次进入特效状态
+    var showFirstEntryEffect by remember { mutableStateOf(false) }
+    
+    // 检测VIP激活（从VIP页面返回）
+    LaunchedEffect(vipLevel) {
+        if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
+            // 检查是否刚激活（可以通过SharedPreferences或其他方式）
+            val prefs = context.getSharedPreferences("vip_animation", android.content.Context.MODE_PRIVATE)
+            val shouldShowAnimation = prefs.getBoolean("show_first_entry_effect", false)
+            
+            if (shouldShowAnimation) {
+                showFirstEntryEffect = true
+                // 清除标记
+                prefs.edit().putBoolean("show_first_entry_effect", false).apply()
+            }
+        }
+    }
+    
+    // 获取用户偏好设置
     val userPreferencesRepository = remember {
         com.example.funlife.repository.UserPreferencesRepository(
             (context.applicationContext as com.example.funlife.FunLifeApplication).database.userPreferencesDao()
@@ -79,21 +116,22 @@ fun HomeScreen(
         isVisible = true
     }
     
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFE1BEE7),  // 顶部浅紫色
-                        Color(0xFFF3E5F5),  // 中间更浅的紫色
-                        Color(0xFFFCE4EC),  // 底部粉色
-                        Color(0xFFFFF0F5)   // 最底部浅粉色
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFE1BEE7),  // 顶部浅紫色
+                            Color(0xFFF3E5F5),  // 中间更浅的紫色
+                            Color(0xFFFCE4EC),  // 底部粉色
+                            Color(0xFFFFF0F5)   // 最底部浅粉色
+                        )
                     )
-                )
-            ),
-        contentPadding = PaddingValues(bottom = 80.dp)
-    ) {
+                ),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
         // 置顶纪念日展示区域
         item {
             AnimatedVisibility(
@@ -109,6 +147,12 @@ fun HomeScreen(
                 } else {
                     WelcomeHeader(
                         userSession = userSession,
+                        avatarUri = userAvatar?.avatarUri,
+                        vipLevel = vipLevel,
+                        showFirstEntryEffect = showFirstEntryEffect,
+                        onFirstEntryComplete = {
+                            showFirstEntryEffect = false
+                        },
                         onLogout = {
                             authViewModel.logout()
                             navController.navigate(com.example.funlife.navigation.Screen.Welcome.route) {
@@ -200,6 +244,7 @@ fun HomeScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -489,6 +534,10 @@ fun PinnedAnniversaryHeader(
 @Composable
 fun WelcomeHeader(
     userSession: com.example.funlife.data.model.UserSession?,
+    avatarUri: String? = null,
+    vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL,
+    showFirstEntryEffect: Boolean = false,
+    onFirstEntryComplete: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val currentHour = remember { LocalDateTime.now().hour }
@@ -529,6 +578,15 @@ fun WelcomeHeader(
                 )
         )
         
+        // VIP首次进入光芒特效
+        if (showFirstEntryEffect && vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
+            com.example.funlife.ui.components.VipFirstEntryEffect(
+                vipLevel = vipLevel,
+                avatarCenter = Offset(45f, 60f), // 头像中心位置
+                onComplete = onFirstEntryComplete
+            )
+        }
+        
         // 内容
         Column(
             modifier = Modifier
@@ -546,32 +604,84 @@ fun WelcomeHeader(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 用户头像 - 简单圆形
+                    // 用户头像 - 带VIP光环
                     Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(CircleShape)
-                            .background(Color.White),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "0",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF9C27B0)
-                        )
+                        // VIP光环（在头像后面）
+                        if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
+                            com.example.funlife.ui.components.VipAvatarHalo(
+                                vipLevel = vipLevel,
+                                modifier = Modifier.size(64.dp)
+                            )
+                        }
+                        
+                        // 头像 - 显示真实头像或默认头像
+                        if (avatarUri != null) {
+                            // 显示用户上传的头像
+                            coil.compose.AsyncImage(
+                                model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                    .data(avatarUri)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "用户头像",
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            // 默认头像
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = userSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "0",
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF9C27B0)
+                                )
+                            }
+                        }
+                        
+                        // VIP徽章（在头像右下角）
+                        if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 4.dp, y = 4.dp)
+                            ) {
+                                com.example.funlife.ui.components.VipBadgeIcon(
+                                    vipLevel = vipLevel
+                                )
+                            }
+                        }
                     }
                     
-                    // 用户名和昵称
+                    // 用户名和昵称 - VIP用户名发光
                     Column {
+                        if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
+                            com.example.funlife.ui.components.VipGlowingText(
+                                text = userSession?.nickname ?: "用户",
+                                vipLevel = vipLevel,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Text(
+                                text = userSession?.nickname ?: "用户",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                        
                         Text(
-                            text = userSession?.nickname ?: "0000",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "@${userSession?.username ?: "yishi"}",
+                            text = "@${userSession?.username ?: "guest"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.9f)
                         )
@@ -1319,7 +1429,7 @@ fun FunctionCardsSection(navController: NavController) {
             )
         }
         
-        // 第二行：商城 + 宠物屋 + 习惯打卡
+        // 第二行：商城 + 背包 + 宠物屋
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1328,8 +1438,16 @@ fun FunctionCardsSection(navController: NavController) {
                 modifier = Modifier.weight(1f),
                 title = "商城",
                 icon = "🛒",
-                gradient = listOf(Color(0xFF81C784), Color(0xFF66BB6A)),
+                gradient = listOf(Color(0xFFFF6B9D), Color(0xFFFF8FB3)),
                 onClick = { navController.navigate("shop") }
+            )
+            
+            FunctionCard(
+                modifier = Modifier.weight(1f),
+                title = "背包",
+                icon = "🎒",
+                gradient = listOf(Color(0xFFFFB74D), Color(0xFFFFA726)),
+                onClick = { navController.navigate("inventory") }
             )
             
             FunctionCard(
@@ -1339,7 +1457,13 @@ fun FunctionCardsSection(navController: NavController) {
                 gradient = listOf(Color(0xFFFFB6C1), Color(0xFFFF69B4)),
                 onClick = { navController.navigate("pet") }
             )
-            
+        }
+        
+        // 第三行：习惯打卡 + 目标管理 + 猜谜游戏
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             FunctionCard(
                 modifier = Modifier.weight(1f),
                 title = "习惯打卡",
@@ -1347,13 +1471,7 @@ fun FunctionCardsSection(navController: NavController) {
                 gradient = listOf(Color(0xFF4DD0E1), Color(0xFF26C6DA)),
                 onClick = { navController.navigate("habit") }
             )
-        }
-        
-        // 第三行：目标管理 + 猜谜游戏 + 心情日记
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+            
             FunctionCard(
                 modifier = Modifier.weight(1f),
                 title = "目标管理",
@@ -1369,13 +1487,35 @@ fun FunctionCardsSection(navController: NavController) {
                 gradient = listOf(Color(0xFFFF6FAE), Color(0xFF8B5CF6)),
                 onClick = { navController.navigate("riddle_game") }
             )
-            
+        }
+        
+        // 第四行：心情日记 + VIP会员 + 头像框商城
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             FunctionCard(
                 modifier = Modifier.weight(1f),
                 title = "心情日记",
                 icon = "📝",
                 gradient = listOf(Color(0xFF90CAF9), Color(0xFF64B5F6)),
                 onClick = { navController.navigate("mood") }
+            )
+            
+            FunctionCard(
+                modifier = Modifier.weight(1f),
+                title = "VIP会员",
+                icon = "👑",
+                gradient = listOf(Color(0xFFFFD700), Color(0xFFFF6B9D)),
+                onClick = { navController.navigate("vip") }
+            )
+            
+            FunctionCard(
+                modifier = Modifier.weight(1f),
+                title = "头像框",
+                icon = "🖼️",
+                gradient = listOf(Color(0xFF9C27B0), Color(0xFFE91E63)),
+                onClick = { navController.navigate("avatar_frame_shop") }
             )
         }
     }
@@ -1407,7 +1547,7 @@ fun FunctionCard(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
@@ -1418,8 +1558,8 @@ fun FunctionCard(
             // 可爱的装饰圆圈（左上角）
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .offset(x = (-10).dp, y = (-10).dp)
+                    .size(32.dp)
+                    .offset(x = (-8).dp, y = (-8).dp)
                     .background(
                         Color.White.copy(alpha = 0.2f),
                         CircleShape
@@ -1429,9 +1569,9 @@ fun FunctionCard(
             // 可爱的装饰圆圈（右下角）
             Box(
                 modifier = Modifier
-                    .size(50.dp)
+                    .size(40.dp)
                     .align(Alignment.BottomEnd)
-                    .offset(x = 15.dp, y = 15.dp)
+                    .offset(x = 12.dp, y = 12.dp)
                     .background(
                         Color.White.copy(alpha = 0.15f),
                         CircleShape
@@ -1441,43 +1581,46 @@ fun FunctionCard(
             // 小星星装饰（右上角）
             Text(
                 "✨",
-                fontSize = 16.sp,
+                fontSize = 14.sp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(8.dp)
+                    .padding(6.dp)
             )
             
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(14.dp),
+                    .padding(8.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 
                 // 图标
                 Text(
                     text = icon,
-                    fontSize = 44.sp,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    fontSize = 30.sp,
+                    modifier = Modifier.padding(vertical = 2.dp)
                 )
                 
-                // 标题 - 增加阴影和描边效果
+                // 标题 - 允许两行显示，减小字体
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall.copy(
                         shadow = Shadow(
                             color = Color.Black.copy(alpha = 0.3f),
                             offset = Offset(2f, 2f),
-                            blurRadius = 4f
-                        )
+                            blurRadius = 4f)
                     ),
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    fontSize = 15.sp,
+                    fontSize = 11.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    maxLines = 1
+                    maxLines = 2,
+                    lineHeight = 13.sp,
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .padding(horizontal = 2.dp)
                 )
             }
         }

@@ -5,6 +5,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,18 @@ fun WelcomeScreen(
     onNavigateToHome: () -> Unit
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    
+    // 设置状态栏颜色为透明，图标为深色
+    val systemUiController = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(Unit) {
+        val window = (systemUiController.context as? android.app.Activity)?.window
+        window?.let {
+            it.statusBarColor = android.graphics.Color.TRANSPARENT
+            it.decorView.systemUiVisibility = 
+                android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        }
+    }
     
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) {
@@ -105,268 +118,106 @@ fun WelcomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF9C4),
-                        Color(0xFFFFE082),
-                        Color(0xFFFFCA28)
-                    )
-                )
-            )
     ) {
-        // 装饰圆点 - 漂浮效果
-        Box(
-            modifier = Modifier
-                .size(150.dp)
-                .offset(x = 30.dp, y = 80.dp)
-                .scale(scale)
-                .alpha(0.15f)
-                .background(
-                    Color(0xFFFFB74D),
-                    CircleShape
-                )
+        // 使用qidon_1.png作为全屏背景
+        Image(
+            painter = painterResource(id = com.example.funlife.R.drawable.qidon_1),
+            contentDescription = "欢迎页面",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
         )
         
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = (-20).dp, y = 150.dp)
-                .rotate(rotate1)
-                .alpha(0.12f)
-                .background(
-                    Color(0xFFFF8A65),
-                    CircleShape
-                )
-        )
-        
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .align(Alignment.BottomStart)
-                .offset(x = 40.dp, y = (-120).dp)
-                .rotate(rotate2)
-                .alpha(0.1f)
-                .background(
-                    Color(0xFFFFD54F),
-                    CircleShape
-                )
-        )
-        
-        // 小爪印装饰
-        repeat(3) { index ->
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .offset(
-                        x = (50 + index * 40).dp,
-                        y = (200 + index * 30).dp
-                    )
-                    .rotate(rotate1 * 0.3f)
-                    .alpha(0.08f)
-                    .background(
-                        Color(0xFFFF6B9D),
-                        CircleShape
-                    )
-            )
-        }
-        
+        // 在图片上添加按钮
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Bottom,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.weight(1f))
-            
-            AnimatedVisibility(
-                visible = contentVisible,
-                enter = fadeIn(tween(1000)) + scaleIn(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
+            // "开始使用"按钮
+            Button(
+                onClick = onNavigateToLogin,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                shape = RoundedCornerShape(32.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent
+                ),
+                contentPadding = PaddingValues(0.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 8.dp,
+                    pressedElevation = 12.dp
                 )
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // 可爱的小狗 Logo
-                    Box(
-                        modifier = Modifier
-                            .size(160.dp)
-                            .scale(logoScale),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // 外圈光晕
-                        Box(
-                            modifier = Modifier
-                                .size(160.dp)
-                                .background(
-                                    Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFB74D).copy(alpha = 0.3f),
-                                            Color.Transparent
-                                        )
-                                    ),
-                                    CircleShape
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFFF6B9D),
+                                    Color(0xFFFF8A65)
                                 )
-                        )
-                        
-                        // 主圆形背景
-                        Box(
-                            modifier = Modifier
-                                .size(130.dp)
-                                .background(
-                                    Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFB74D),
-                                            Color(0xFFFF8A65)
-                                        )
-                                    ),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // 使用 Emoji 小狗
-                            Text(
-                                "🐶",
-                                fontSize = 70.sp,
-                                modifier = Modifier.offset(y = (-5).dp)
-                            )
-                        }
-                    }
-                    
-                    Spacer(Modifier.height(32.dp))
-                    
-                    // 应用名称 "一十"
-                    Text(
-                        "一十",
-                        fontSize = 56.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFF424242),
-                        letterSpacing = 4.sp
-                    )
-                    
-                    Spacer(Modifier.height(12.dp))
-                    
-                    // 副标题
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Color.White.copy(alpha = 0.6f),
-                                RoundedCornerShape(20.dp)
-                            )
-                            .padding(horizontal = 24.dp, vertical = 10.dp)
+                            ),
+                            RoundedCornerShape(32.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "让生活更有趣 🎉",
-                            fontSize = 16.sp,
-                            color = Color(0xFF424242),
-                            fontWeight = FontWeight.Medium
+                            "开始使用",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Icon(
+                            Icons.Default.ArrowForward,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
             
-            Spacer(Modifier.weight(0.8f))
+            Spacer(Modifier.height(16.dp))
             
-            AnimatedVisibility(
-                visible = contentVisible,
-                enter = fadeIn(tween(1000, delayMillis = 400)) + slideInVertically(
-                    initialOffsetY = { it / 2 },
-                    animationSpec = tween(1000, delayMillis = 400)
+            // "创建账号"按钮
+            OutlinedButton(
+                onClick = onNavigateToRegister,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                shape = RoundedCornerShape(32.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    2.5.dp,
+                    Color.White
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White.copy(alpha = 0.3f)
                 )
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 登录按钮
-                    Button(
-                        onClick = onNavigateToLogin,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp),
-                        shape = RoundedCornerShape(32.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent
-                        ),
-                        contentPadding = PaddingValues(0.dp),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 8.dp,
-                            pressedElevation = 12.dp
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFFFF6B9D),
-                                            Color(0xFFFF8A65)
-                                        )
-                                    ),
-                                    RoundedCornerShape(32.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "开始使用",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Icon(
-                                    Icons.Default.ArrowForward,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
-                    
-                    // 注册按钮
-                    OutlinedButton(
-                        onClick = onNavigateToRegister,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp),
-                        shape = RoundedCornerShape(32.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            2.5.dp,
-                            Color.White
-                        ),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color.White.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "创建账号",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF424242)
-                            )
-                            Icon(
-                                Icons.Default.PersonAdd,
-                                contentDescription = null,
-                                tint = Color(0xFF424242),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+                    Text(
+                        "创建账号",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF424242)
+                    )
+                    Icon(
+                        Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        tint = Color(0xFF424242),
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
             

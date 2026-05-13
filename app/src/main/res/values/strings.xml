@@ -65,6 +65,11 @@
     <string name="shop_product_double_card">双倍卡</string>
     <string name="shop_product_guarantee_ticket">保底券</string>
     <string name="shop_product_lucky_box">幸运宝箱</string>
+    <string name="shop_product_panel_1">结算面板·警察</string>
+    <string name="shop_product_panel_2">结算面板·小熊</string>
+    <string name="shop_product_panel_3">结算面板·小狐狸</string>
+    <string name="shop_product_panel_4">结算面板·小羊</string>
+    <string name="shop_product_panel_5">结算面板·小兔</string>
     <string name="shop_product_rainbow_skin">彩虹皮肤</string>
     <string name="shop_product_sakura_skin">樱花皮肤</string>
     <string name="shop_product_starry_skin">星空皮肤</string>
@@ -87,6 +92,11 @@
     <string name="shop_desc_double_card">下次转盘奖励翻倍</string>
     <string name="shop_desc_guarantee_ticket">保证获得稀有奖励</string>
     <string name="shop_desc_lucky_box">随机获得道具</string>
+    <string name="shop_desc_panel_1">转盘结算面板·警察主题</string>
+    <string name="shop_desc_panel_2">转盘结算面板·小熊主题</string>
+    <string name="shop_desc_panel_3">转盘结算面板·小狐狸主题</string>
+    <string name="shop_desc_panel_4">转盘结算面板·小羊主题</string>
+    <string name="shop_desc_panel_5">转盘结算面板·小兔主题</string>
     <string name="shop_desc_rainbow_skin">转盘彩虹主题</string>
     <string name="shop_desc_sakura_skin">转盘樱花主题</string>
     <string name="shop_desc_starry_skin">转盘星空主题</string>

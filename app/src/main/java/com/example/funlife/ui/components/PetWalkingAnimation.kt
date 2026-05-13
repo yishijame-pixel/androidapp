@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.funlife.data.model.PetType
 import com.example.funlife.utils.rememberAssetImage
 import kotlinx.coroutines.delay
 import kotlin.random.Random
@@ -17,6 +18,7 @@ import kotlin.random.Random
 @Composable
 fun PetWalkingAnimation(
     modifier: Modifier = Modifier,
+    petType: PetType = PetType.CAT,
     size: Dp = 200.dp,
     autoWalk: Boolean = true,
     walkSpeed: Float = 0.3f,
@@ -25,6 +27,27 @@ fun PetWalkingAnimation(
     var offsetX by remember { mutableStateOf(0.dp) }  // 使用 Dp 单位的绝对位置
     var direction by remember { mutableStateOf(1f) }  // 1 = right, -1 = left
     var currentFrame by remember { mutableStateOf(0) }
+    
+    // 根据宠物类型获取行走动画路径
+    val walkFramePaths = remember(petType) {
+        when (petType) {
+            PetType.CAT -> listOf(
+                "pet/cat/work1.png",
+                "pet/cat/work2.png",
+                "pet/cat/work3.png"
+            )
+            PetType.TIGER -> listOf(
+                "pet/tiger/work1.png",
+                "pet/tiger/work2.png",
+                "pet/tiger/work3.png"
+            )
+            else -> listOf(
+                "pet/work1.png",
+                "pet/work2.png",
+                "pet/work3.png"
+            )
+        }
+    }
     
     // 帧动画 - 持续循环播放3帧
     LaunchedEffect(Unit) {
@@ -63,9 +86,9 @@ fun PetWalkingAnimation(
     }
     
     // 加载图片 - 3帧
-    val frame1 = rememberAssetImage("pet/work1.png")
-    val frame2 = rememberAssetImage("pet/work2.png")
-    val frame3 = rememberAssetImage("pet/work3.png")
+    val frame1 = rememberAssetImage(walkFramePaths[0])
+    val frame2 = rememberAssetImage(walkFramePaths[1])
+    val frame3 = rememberAssetImage(walkFramePaths[2])
     
     // 根据当前帧选择图片
     val currentImage = when (currentFrame) {

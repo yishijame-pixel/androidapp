@@ -43,6 +43,10 @@ sealed class Screen(val route: String, val title: String) {
     object History : Screen("history", "历史")
     object Settings : Screen("settings", "设置")
     object Profile : Screen("profile", "我的")
+    object Inventory : Screen("inventory", "背包")
+    object Vip : Screen("vip", "VIP会员")
+    object VipProfile : Screen("vip_profile", "VIP个人主页")
+    object AvatarFrameShop : Screen("avatar_frame_shop", "头像框商城")  // 🔥 新增：头像框商城
 }
 
 @Composable
@@ -238,6 +242,85 @@ fun NavGraph(
                     }
                 }
             )
+        }
+        
+        // 背包页面
+        composable(Screen.Inventory.route) {
+            val context = LocalContext.current
+            val database = (context.applicationContext as FunLifeApplication).database
+            val inventoryRepository = remember { 
+                com.example.funlife.repository.InventoryRepository(database.inventoryDao()) 
+            }
+            val userPreferencesDao = remember { database.userPreferencesDao() }
+            val userVipDao = remember { database.userVipDao() } // 🔥 新增VIP DAO
+            val inventoryViewModel: com.example.funlife.viewmodel.InventoryViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        @Suppress("UNCHECKED_CAST")
+                        return com.example.funlife.viewmodel.InventoryViewModel(
+                            inventoryRepository,
+                            userPreferencesDao,
+                            userVipDao // 🔥 传递VIP DAO
+                        ) as T
+                    }
+                }
+            )
+            
+            InventoryScreen(
+                viewModel = inventoryViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        // VIP会员页面
+        composable(Screen.Vip.route) {
+            VipScreen(
+                navController = navController,
+                authViewModel = authViewModel
+            )
+        }
+        
+        // VIP个人主页
+        composable(Screen.VipProfile.route) {
+            VipProfileScreen(
+                authViewModel = authViewModel,
+                scoreViewModel = scoreViewModel,
+                onLogout = {
+                    navController.navigate(Screen.Welcome.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // 🔥 头像框商城
+        composable(Screen.AvatarFrameShop.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            
+            if (userSession != null) {
+                val shopViewModel: com.example.funlife.viewmodel.ShopViewModel = viewModel(
+                    factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                            @Suppress("UNCHECKED_CAST")
+                            return com.example.funlife.viewmodel.ShopViewModel(application) as T
+                        }
+                    }
+                )
+                
+                com.example.funlife.ui.screens.AvatarFrameShopScreen(
+                    viewModel = shopViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                // 如果没有登录，返回登录页
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
         }
     }
 }

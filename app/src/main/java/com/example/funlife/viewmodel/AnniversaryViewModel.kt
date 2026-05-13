@@ -15,11 +15,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.example.funlife.data.model.AnniversaryViewMode
 
 class AnniversaryViewModel(application: Application) : AndroidViewModel(application) {
     
     private val context = application.applicationContext
     private val repository: AnniversaryRepository
+    
+    // 视图模式状态
+    private val _viewMode = MutableStateFlow(AnniversaryViewMode.LIST)
+    val viewMode: StateFlow<AnniversaryViewMode> = _viewMode
     
     // 筛选和排序状态
     private val _selectedType = MutableStateFlow<String?>(null)
@@ -147,6 +152,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
         name: String, 
         date: String, 
         imageUri: String? = null,
+        frameId: String = "jinian_card_1",  // 🔥 添加相框ID参数
         type: String = "CUSTOM",
         isYearly: Boolean = true,
         note: String? = null,
@@ -199,6 +205,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                     name = name, 
                     date = date, 
                     imageUri = savedImageUri,
+                    frameId = frameId,  // 🔥 使用传入的相框ID
                     type = type,
                     isYearly = isYearly,
                     note = note,
@@ -273,6 +280,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
         name: String,
         date: String,
         imageUri: String? = null,
+        frameId: String = "jinian_card_1",  // 🔥 添加相框ID参数
         type: String = "CUSTOM",
         isYearly: Boolean = true,
         note: String? = null,
@@ -307,6 +315,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 name = name,
                 date = date,
                 imageUri = savedImageUri,
+                frameId = frameId,  // 🔥 更新相框ID
                 type = type,
                 isYearly = isYearly,
                 note = note,
@@ -402,6 +411,11 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
             // 🔥 主动重新加载
             loadAnniversaries()
         }
+    }
+    
+    // 切换视图模式
+    fun setViewMode(mode: AnniversaryViewMode) {
+        _viewMode.value = mode
     }
 }
 

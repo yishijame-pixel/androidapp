@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -159,20 +160,18 @@ fun LoginScreen(
                             onValueChange = { username = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(54.dp),
+                                .height(56.dp),
                             placeholder = { 
                                 Text(
                                     "用户名",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp
                                 ) 
                             },
                             leadingIcon = {
                                 // 可爱的狗爪图标 - 美化版
                                 Canvas(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .padding(start = 2.dp)
+                                    modifier = Modifier.size(22.dp)
                                 ) {
                                     val pawColor1 = Color(0xFFFFB74D) // 浅橙色
                                     val pawColor2 = Color(0xFFFF9E80) // 深橙色
@@ -223,6 +222,7 @@ fun LoginScreen(
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             shape = RoundedCornerShape(25.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color.White,
@@ -251,20 +251,18 @@ fun LoginScreen(
                             onValueChange = { password = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(54.dp),
+                                .height(56.dp),
                             placeholder = { 
                                 Text(
                                     "密码",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp
                                 ) 
                             },
                             leadingIcon = {
                                 // 可爱的狗爪图标 - 和用户名框一样
                                 Canvas(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .padding(start = 2.dp)
+                                    modifier = Modifier.size(22.dp)
                                 ) {
                                     val pawColor1 = Color(0xFFFFB74D) // 浅橙色
                                     val pawColor2 = Color(0xFFFF9E80) // 深橙色
@@ -315,13 +313,14 @@ fun LoginScreen(
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             trailingIcon = {
                                 // 可爱的小狗头图标
                                 IconButton(
                                     onClick = { passwordVisible = !passwordVisible }
                                 ) {
                                     Canvas(
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(24.dp)
                                     ) {
                                         val dogColor = Color(0xFFFFB74D)
                                         val darkColor = Color(0xFFFF9E80)
@@ -635,7 +634,10 @@ fun LoginScreen(
                                 fontSize = 14.sp,
                                 color = Color(0xFF666666)
                             )
-                            TextButton(onClick = onNavigateToRegister) {
+                            TextButton(
+                                onClick = onNavigateToRegister,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
                                 Text(
                                     "立即注册",
                                     fontSize = 14.sp,
@@ -643,12 +645,6 @@ fun LoginScreen(
                                     color = Color(0xFF64B5F6)
                                 )
                             }
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                "注册",
-                                fontSize = 14.sp,
-                                color = Color(0xFF666666)
-                            )
                         }
                     }
                 }

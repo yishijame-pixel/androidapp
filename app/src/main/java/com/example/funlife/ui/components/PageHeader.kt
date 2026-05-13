@@ -65,7 +65,7 @@ fun PageHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (subtitle != null) 140.dp else 120.dp)
+            .height(if (subtitle != null) 90.dp else 80.dp)
             .shadow(12.dp, RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
     ) {
         // 背景渐变
@@ -148,7 +148,7 @@ fun PageHeader(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 返回按钮（如果需要）
@@ -156,7 +156,7 @@ fun PageHeader(
                 IconButton(
                     onClick = onBackClick,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.25f))
                 ) {
@@ -164,7 +164,7 @@ fun PageHeader(
                         imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
                         contentDescription = "返回",
                         tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 
@@ -174,7 +174,7 @@ fun PageHeader(
             // Emoji 图标容器
             Box(
                 modifier = Modifier
-                    .size(if (subtitle != null) 80.dp else 70.dp)
+                    .size(if (subtitle != null) 52.dp else 48.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.25f))
                     .padding(4.dp),
@@ -198,7 +198,7 @@ fun PageHeader(
                     // Emoji
                     Text(
                         text = emoji,
-                        fontSize = if (subtitle != null) 42.sp else 36.sp,
+                        fontSize = if (subtitle != null) 28.sp else 26.sp,
                         modifier = Modifier.graphicsLayer {
                             scaleX = emojiScale
                             scaleY = emojiScale
@@ -216,17 +216,17 @@ fun PageHeader(
             ) {
                 Text(
                     text = title,
-                    fontSize = if (subtitle != null) 32.sp else 28.sp,
+                    fontSize = if (subtitle != null) 22.sp else 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                     letterSpacing = 1.sp
                 )
                 
                 if (subtitle != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = subtitle,
-                        fontSize = 15.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color.White.copy(alpha = 0.9f),
                         letterSpacing = 0.5.sp

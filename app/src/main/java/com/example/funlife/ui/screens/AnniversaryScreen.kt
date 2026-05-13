@@ -5,8 +5,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +32,11 @@ import com.example.funlife.R
 import com.example.funlife.data.model.Anniversary
 import com.example.funlife.data.model.AnniversaryType
 import com.example.funlife.ui.components.AnniversaryCard
+import com.example.funlife.ui.components.AnniversaryListView
+import com.example.funlife.ui.components.AnniversaryGridView
+import com.example.funlife.ui.components.AnniversaryWaterfallView
+import com.example.funlife.ui.components.AnniversaryMemoryWallView
+import com.example.funlife.ui.components.AnniversaryTimelineView
 import com.example.funlife.ui.components.AnniversaryStatisticsDialog
 import com.example.funlife.ui.components.PageHeader
 import com.example.funlife.ui.components.PageHeaderGradients
@@ -52,6 +59,7 @@ fun AnniversaryScreen(
     val selectedType by viewModel.selectedType.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val viewMode by viewModel.viewMode.collectAsState() // 🔥 视图模式状态
     
     // 🔥 监听用户变化，刷新数据
     val sessionManager = remember { com.example.funlife.utils.UserSessionManager(context) }
@@ -68,6 +76,7 @@ fun AnniversaryScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showSearchBar by remember { mutableStateOf(false) }
     var showStatistics by remember { mutableStateOf(false) }
+    var showViewModeMenu by remember { mutableStateOf(false) } // 🔥 视图模式菜单
     
     // FAB 拖动状态
     var fabOffsetX by remember { mutableStateOf(0f) }
@@ -79,153 +88,29 @@ fun AnniversaryScreen(
     val upcomingAnniversaries by viewModel.getUpcomingAnniversaries().collectAsState()
     
     Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            floatingActionButton = {} // 移除默认的 FAB
-        ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            PageHeader(
-                title = stringResource(R.string.anniversary_title),
-                emoji = "🎂",
-                gradientColors = PageHeaderGradients.Anniversary,
-                subtitle = stringResource(R.string.anniversary_subtitle),
-                showBackButton = true,
-                onBackClick = onNavigateBack
+        // 🔥 背景图片 - jinian.png
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val backgroundBitmap = remember {
+            com.example.funlife.utils.ImageCache.loadImage(context, "login/jinian.png")
+        }
+        
+        backgroundBitmap?.let { bitmap ->
+            androidx.compose.foundation.Image(
+                bitmap = bitmap,
+                contentDescription = "纪念日背景",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-            
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 2.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (showSearchBar) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.setSearchQuery(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text(stringResource(R.string.anniversary_search)) },
-                            leadingIcon = { Icon(Icons.Default.Search, stringResource(R.string.anniversary_search_button)) },
-                            trailingIcon = {
-                                IconButton(onClick = { 
-                                    viewModel.setSearchQuery("")
-                                    showSearchBar = false
-                                }) {
-                                    Icon(Icons.Default.Close, stringResource(R.string.anniversary_close))
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (!showSearchBar) {
-                            FilterChip(
-                                selected = false,
-                                onClick = { showSearchBar = true },
-                                label = { Text(stringResource(R.string.anniversary_search_button)) },
-                                leadingIcon = { Icon(Icons.Default.Search, null, Modifier.size(18.dp)) }
-                            )
-                        }
-                        
-                        FilterChip(
-                            selected = selectedType != null,
-                            onClick = { showFilterMenu = true },
-                            label = { 
-                                Text(
-                                    if (selectedType != null) {
-                                        AnniversaryType.valueOf(selectedType!!).displayName
-                                    } else {
-                                        stringResource(R.string.anniversary_type)
-                                    }
-                                ) 
-                            },
-                            leadingIcon = { Icon(Icons.Default.FilterList, null, Modifier.size(18.dp)) }
-                        )
-                        
-                        FilterChip(
-                            selected = sortOrder != SortOrder.DEFAULT,
-                            onClick = { showSortMenu = true },
-                            label = { Text(sortOrder.displayName) },
-                            leadingIcon = { Icon(Icons.Default.Sort, null, Modifier.size(18.dp)) }
-                        )
-                        
-                        if (selectedType != null || sortOrder != SortOrder.DEFAULT || searchQuery.isNotBlank()) {
-                            FilterChip(
-                                selected = false,
-                                onClick = { viewModel.clearFilters() },
-                                label = { Text(stringResource(R.string.anniversary_clear)) },
-                                leadingIcon = { Icon(Icons.Default.Close, null, Modifier.size(18.dp)) }
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.weight(1f))
-                        
-                        FilterChip(
-                            selected = false,
-                            onClick = { showStatistics = true },
-                            label = { Text(stringResource(R.string.anniversary_stats)) },
-                            leadingIcon = { Icon(Icons.Default.BarChart, null, Modifier.size(18.dp)) }
-                        )
-                    }
-                    
-                    DropdownMenu(
-                        expanded = showFilterMenu,
-                        onDismissRequest = { showFilterMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.anniversary_all_types)) },
-                            onClick = {
-                                viewModel.setTypeFilter(null)
-                                showFilterMenu = false
-                            }
-                        )
-                        Divider()
-                        AnniversaryType.values().forEach { type ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(type.emoji)
-                                        Text(type.displayName)
-                                    }
-                                },
-                                onClick = {
-                                    viewModel.setTypeFilter(type.name)
-                                    showFilterMenu = false
-                                }
-                            )
-                        }
-                    }
-                    
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false }
-                    ) {
-                        SortOrder.values().forEach { order ->
-                            DropdownMenuItem(
-                                text = { Text(order.displayName) },
-                                onClick = {
-                                    viewModel.setSortOrder(order)
-                                    showSortMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+        }
+        
+        Scaffold(
+            contentWindowInsets = WindowInsets(0.dp),
+            floatingActionButton = {}, // 移除默认的 FAB
+            containerColor = Color.Transparent // 🔥 透明背景以显示背景图片
+        ) { paddingValues ->
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 🔥 添加顶部间距，避免遮挡"纪念日"标题
+                Spacer(modifier = Modifier.height(150.dp))
             
             if (anniversaries.isEmpty()) {
                 Box(
@@ -244,44 +129,195 @@ fun AnniversaryScreen(
                             text = stringResource(R.string.anniversary_empty),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.White
                         )
                         Text(
                             text = stringResource(R.string.anniversary_empty_hint),
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.White.copy(alpha = 0.9f)
                         )
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(anniversaries, key = { it.id }) { anniversary ->
-                        AnniversaryCard(
-                            anniversary = anniversary,
-                            onDelete = { viewModel.deleteAnniversary(anniversary) },
-                            onPin = {
+                // 🔥 根据视图模式显示不同的布局
+                when (viewMode) {
+                    com.example.funlife.data.model.AnniversaryViewMode.LIST -> {
+                        AnniversaryListView(
+                            anniversaries = anniversaries,
+                            onDelete = { anniversary -> viewModel.deleteAnniversary(anniversary) },
+                            onPin = { anniversary ->
                                 if (anniversary.isPinned) {
                                     viewModel.unpinAnniversary(anniversary)
                                 } else {
                                     viewModel.pinAnniversary(anniversary)
                                 }
                             },
-                            onEdit = {
-                                editingAnniversary = anniversary
-                            },
-                            onShare = {
+                            onEdit = { anniversary -> editingAnniversary = anniversary },
+                            onShare = { anniversary ->
                                 val shareHelper = com.example.funlife.utils.AnniversaryShareHelper(context)
                                 shareHelper.shareImage(anniversary)
-                            }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 8.dp)
+                        )
+                    }
+                    com.example.funlife.data.model.AnniversaryViewMode.GRID -> {
+                        AnniversaryGridView(
+                            anniversaries = anniversaries,
+                            onDelete = { anniversary -> viewModel.deleteAnniversary(anniversary) },
+                            onPin = { anniversary ->
+                                if (anniversary.isPinned) {
+                                    viewModel.unpinAnniversary(anniversary)
+                                } else {
+                                    viewModel.pinAnniversary(anniversary)
+                                }
+                            },
+                            onEdit = { anniversary -> editingAnniversary = anniversary },
+                            onShare = { anniversary ->
+                                val shareHelper = com.example.funlife.utils.AnniversaryShareHelper(context)
+                                shareHelper.shareImage(anniversary)
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 8.dp)
+                        )
+                    }
+                    com.example.funlife.data.model.AnniversaryViewMode.WATERFALL -> {
+                        AnniversaryWaterfallView(
+                            anniversaries = anniversaries,
+                            onDelete = { anniversary -> viewModel.deleteAnniversary(anniversary) },
+                            onPin = { anniversary ->
+                                if (anniversary.isPinned) {
+                                    viewModel.unpinAnniversary(anniversary)
+                                } else {
+                                    viewModel.pinAnniversary(anniversary)
+                                }
+                            },
+                            onEdit = { anniversary -> editingAnniversary = anniversary },
+                            onShare = { anniversary ->
+                                val shareHelper = com.example.funlife.utils.AnniversaryShareHelper(context)
+                                shareHelper.shareImage(anniversary)
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 8.dp)
+                        )
+                    }
+                    com.example.funlife.data.model.AnniversaryViewMode.MEMORY_WALL -> {
+                        AnniversaryMemoryWallView(
+                            anniversaries = anniversaries,
+                            onDelete = { anniversary -> viewModel.deleteAnniversary(anniversary) },
+                            onPin = { anniversary ->
+                                if (anniversary.isPinned) {
+                                    viewModel.unpinAnniversary(anniversary)
+                                } else {
+                                    viewModel.pinAnniversary(anniversary)
+                                }
+                            },
+                            onEdit = { anniversary -> editingAnniversary = anniversary },
+                            onShare = { anniversary ->
+                                val shareHelper = com.example.funlife.utils.AnniversaryShareHelper(context)
+                                shareHelper.shareImage(anniversary)
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 8.dp)
+                        )
+                    }
+                    com.example.funlife.data.model.AnniversaryViewMode.TIMELINE -> {
+                        AnniversaryTimelineView(
+                            anniversaries = anniversaries,
+                            onDelete = { anniversary -> viewModel.deleteAnniversary(anniversary) },
+                            onPin = { anniversary ->
+                                if (anniversary.isPinned) {
+                                    viewModel.unpinAnniversary(anniversary)
+                                } else {
+                                    viewModel.pinAnniversary(anniversary)
+                                }
+                            },
+                            onEdit = { anniversary -> editingAnniversary = anniversary },
+                            onShare = { anniversary ->
+                                val shareHelper = com.example.funlife.utils.AnniversaryShareHelper(context)
+                                shareHelper.shareImage(anniversary)
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 8.dp)
                         )
                     }
                 }
             }
-        }
+            } // Column 结束
         } // Scaffold 结束
+        
+        // 🔥 返回按钮 - 固定在左上角
+        IconButton(
+            onClick = onNavigateBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .size(40.dp)
+        ) {
+            Icon(
+                Icons.Default.ArrowBack,
+                contentDescription = "返回",
+                tint = Color(0xFF8B4513)
+            )
+        }
+        
+        // 🔥 视图模式切换按钮 - 固定在右上角
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+        ) {
+            IconButton(
+                onClick = { showViewModeMenu = true },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = when (viewMode) {
+                        com.example.funlife.data.model.AnniversaryViewMode.LIST -> Icons.Default.ViewList
+                        com.example.funlife.data.model.AnniversaryViewMode.GRID -> Icons.Default.GridView
+                        com.example.funlife.data.model.AnniversaryViewMode.WATERFALL -> Icons.Default.ViewModule
+                        com.example.funlife.data.model.AnniversaryViewMode.MEMORY_WALL -> Icons.Default.Photo
+                        com.example.funlife.data.model.AnniversaryViewMode.TIMELINE -> Icons.Default.Timeline
+                    },
+                    contentDescription = "切换视图",
+                    tint = Color(0xFF8B4513)
+                )
+            }
+            
+            // 视图模式菜单
+            DropdownMenu(
+                expanded = showViewModeMenu,
+                onDismissRequest = { showViewModeMenu = false }
+            ) {
+                com.example.funlife.data.model.AnniversaryViewMode.values().forEach { mode ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(mode.icon)
+                                Text(mode.displayName)
+                            }
+                        },
+                        onClick = {
+                            viewModel.setViewMode(mode)
+                            showViewModeMenu = false
+                        },
+                        leadingIcon = {
+                            if (viewMode == mode) {
+                                Icon(Icons.Default.Check, "已选择")
+                            }
+                        }
+                    )
+                }
+            }
+        }
         
         // 可拖动的 FAB
         val density = androidx.compose.ui.platform.LocalDensity.current
@@ -324,8 +360,8 @@ fun AnniversaryScreen(
     if (showDialog) {
         AddAnniversaryDialog(
             onDismiss = { showDialog = false },
-            onConfirm = { name, date, imageUri, type, isYearly, note, importance ->
-                android.util.Log.d("AnniversaryScreen", "添加纪念日: name=$name, date=$date")
+            onConfirm = { name, date, imageUri, type, isYearly, note, importance, frameId ->
+                android.util.Log.d("AnniversaryScreen", "添加纪念日: name=$name, date=$date, frameId=$frameId")
                 viewModel.addAnniversary(
                     name = name,
                     date = date,
@@ -334,6 +370,7 @@ fun AnniversaryScreen(
                     isYearly = isYearly,
                     note = note,
                     importance = importance,
+                    frameId = frameId,
                     onSuccess = {
                         android.widget.Toast.makeText(context, "纪念日已添加", android.widget.Toast.LENGTH_SHORT).show()
                     },
@@ -350,7 +387,7 @@ fun AnniversaryScreen(
         EditAnniversaryDialog(
             anniversary = anniversary,
             onDismiss = { editingAnniversary = null },
-            onConfirm = { name, date, imageUri, type, isYearly, note, importance ->
+            onConfirm = { name, date, imageUri, type, isYearly, note, importance, frameId ->
                 viewModel.updateAnniversary(
                     anniversary = anniversary,
                     name = name,
@@ -359,7 +396,8 @@ fun AnniversaryScreen(
                     type = type,
                     isYearly = isYearly,
                     note = note,
-                    importance = importance
+                    importance = importance,
+                    frameId = frameId
                 )
                 editingAnniversary = null
             }
@@ -382,8 +420,16 @@ fun AnniversaryScreen(
 @Composable
 fun AddAnniversaryDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String?, String, Boolean, String?, Int) -> Unit
+    onConfirm: (String, String, String?, String, Boolean, String?, Int, String) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val database = (context.applicationContext as com.example.funlife.FunLifeApplication).database
+    val inventoryDao = remember { database.inventoryDao() }
+    
+    // 获取用户拥有的相框
+    val ownedFrames by inventoryDao.getItemsByType(1L, com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME)
+        .collectAsState(initial = emptyList())
+    
     var name by remember { mutableStateOf("") }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -393,6 +439,7 @@ fun AddAnniversaryDialog(
     var note by remember { mutableStateOf("") }
     var importance by remember { mutableStateOf(3) }
     var showTypeMenu by remember { mutableStateOf(false) }
+    var selectedFrameId by remember { mutableStateOf("jinian_card_1") } // 默认相框
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = System.currentTimeMillis()
@@ -679,6 +726,16 @@ fun AddAnniversaryDialog(
                         }
                     }
                 }
+                
+                // 🔥 相框选择器
+                item {
+                    com.example.funlife.ui.components.FrameSelector(
+                        selectedFrameId = selectedFrameId,
+                        ownedFrames = ownedFrames,
+                        onFrameSelected = { frameId -> selectedFrameId = frameId },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         },
         confirmButton = {
@@ -693,7 +750,8 @@ fun AddAnniversaryDialog(
                             selectedType.name,
                             isYearly,
                             note.ifBlank { null },
-                            importance
+                            importance,
+                            selectedFrameId
                         )
                     }
                 },
@@ -756,8 +814,16 @@ fun AddAnniversaryDialog(
 fun EditAnniversaryDialog(
     anniversary: Anniversary,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String?, String, Boolean, String?, Int) -> Unit
+    onConfirm: (String, String, String?, String, Boolean, String?, Int, String) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val database = (context.applicationContext as com.example.funlife.FunLifeApplication).database
+    val inventoryDao = remember { database.inventoryDao() }
+    
+    // 获取用户拥有的相框
+    val ownedFrames by inventoryDao.getItemsByType(1L, com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME)
+        .collectAsState(initial = emptyList())
+    
     var name by remember { mutableStateOf(anniversary.name) }
     var selectedDate by remember { 
         mutableStateOf(
@@ -771,6 +837,7 @@ fun EditAnniversaryDialog(
     var note by remember { mutableStateOf(anniversary.note ?: "") }
     var importance by remember { mutableStateOf(anniversary.importance) }
     var showTypeMenu by remember { mutableStateOf(false) }
+    var selectedFrameId by remember { mutableStateOf(anniversary.frameId) } // 使用当前相框
     
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = selectedDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -1057,6 +1124,16 @@ fun EditAnniversaryDialog(
                         }
                     }
                 }
+                
+                // 🔥 相框选择器
+                item {
+                    com.example.funlife.ui.components.FrameSelector(
+                        selectedFrameId = selectedFrameId,
+                        ownedFrames = ownedFrames,
+                        onFrameSelected = { frameId -> selectedFrameId = frameId },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         },
         confirmButton = {
@@ -1071,7 +1148,8 @@ fun EditAnniversaryDialog(
                             selectedType.name,
                             isYearly,
                             note.ifBlank { null },
-                            importance
+                            importance,
+                            selectedFrameId
                         )
                     }
                 },

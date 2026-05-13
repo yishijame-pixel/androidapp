@@ -29,4 +29,36 @@ interface UserDao {
     
     @Query("SELECT COUNT(*) FROM users")
     suspend fun getUserCount(): Int
+    
+    // 🔥 新增：头像框装备相关
+    
+    /**
+     * 更新用户装备的头像框
+     */
+    @Query("UPDATE users SET equippedFrameId = :frameId WHERE id = :userId")
+    suspend fun updateEquippedFrame(userId: Long, frameId: Int?)
+    
+    /**
+     * 获取用户装备的头像框ID
+     */
+    @Query("SELECT equippedFrameId FROM users WHERE id = :userId")
+    suspend fun getEquippedFrameId(userId: Long): Int?
+    
+    /**
+     * 检查用户是否为VIP
+     */
+    @Query("SELECT isVip FROM users WHERE id = :userId")
+    suspend fun isUserVip(userId: Long): Boolean
+    
+    /**
+     * 检查用户是否为VIP（Flow）
+     */
+    @Query("SELECT isVip FROM users WHERE id = :userId")
+    fun isUserVipFlow(userId: Long): Flow<Boolean>
+    
+    /**
+     * 更新用户VIP状态
+     */
+    @Query("UPDATE users SET isVip = :isVip, vipExpireAt = :expireAt WHERE id = :userId")
+    suspend fun updateVipStatus(userId: Long, isVip: Boolean, expireAt: Long?)
 }

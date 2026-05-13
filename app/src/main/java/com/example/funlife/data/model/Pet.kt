@@ -67,7 +67,8 @@ enum class PetType {
     CAT,      // 猫
     DOG,      // 狗
     RABBIT,   // 兔子
-    HAMSTER   // 仓鼠
+    HAMSTER,  // 仓鼠
+    TIGER     // 老虎
 }
 
 // 成长阶段

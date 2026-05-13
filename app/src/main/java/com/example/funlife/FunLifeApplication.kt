@@ -8,6 +8,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.util.DebugLogger
 import com.example.funlife.utils.AuditLogger
+import com.example.funlife.security.SecurityInitializer
 
 class FunLifeApplication : Application(), ImageLoaderFactory {
     
@@ -19,8 +20,23 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         
+        // 🔒 初始化安全系统（优先级最高）
+        SecurityInitializer.initialize(this)
+        
         // 初始化审计日志系统
         AuditLogger.initialize(this)
+        
+        // 执行安全自检（可选，仅在调试模式下）
+        try {
+            // 检查是否为调试模式
+            val isDebug = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            if (isDebug) {
+                val checkResult = SecurityInitializer.performSecurityCheck(this)
+                android.util.Log.d("FunLifeApplication", checkResult.getSummary())
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FunLifeApplication", "安全自检失败", e)
+        }
     }
     
     override fun newImageLoader(): ImageLoader {

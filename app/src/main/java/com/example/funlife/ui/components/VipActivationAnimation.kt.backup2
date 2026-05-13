@@ -1,0 +1,1719 @@
+// VipActivationAnimation.kt - 超级华丽震撼的VIP激活动画
+package com.example.funlife.ui.components
+
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.example.funlife.data.model.VipLevel
+import kotlinx.coroutines.delay
+import kotlin.math.*
+import kotlin.random.Random
+
+/**
+ * VIP激活动画对话框 - 超级震撼版，情绪价值拉满
+ * @param vipLevel VIP等级
+ * @param coins 赠送的金币数量
+ * @param onDismiss 关闭回调
+ */
+@Composable
+fun VipActivationAnimation(
+    vipLevel: VipLevel,
+    coins: Int,
+    onDismiss: () -> Unit
+) {
+    var animationPhase by remember { mutableStateOf(0) }
+    
+    // 动画阶段：
+    // 0: 准备
+    // 1: 震撼登场 + 屏幕闪白
+    // 2: 光芒爆发 + 粒子爆炸
+    // 3: VIP文字震撼出现
+    // 4: 金币雨 + 烟花
+    // 5: 完成，等待关闭
+    
+    LaunchedEffect(Unit) {
+        delay(100)
+        animationPhase = 1
+        delay(1200)
+        animationPhase = 2
+        delay(1000)
+        animationPhase = 3
+        delay(1200)
+        animationPhase = 4
+        delay(3500)
+        animationPhase = 5
+        delay(1500)
+        onDismiss()
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.98f))
+            .zIndex(1000f),
+        contentAlignment = Alignment.Center
+    ) {
+        // 屏幕闪白震撼效果
+        AnimatedVisibility(
+            visible = animationPhase == 1,
+            enter = fadeIn(animationSpec = tween(100)),
+            exit = fadeOut(animationSpec = tween(300))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White)
+            )
+        }
+        
+        // 彩虹光波扩散
+        if (animationPhase >= 1) {
+            RainbowWaveEffect(vipLevel)
+        }
+        
+        // 背景粒子爆炸
+        if (animationPhase >= 1) {
+            VipBackgroundParticles(vipLevel)
+            ExplosionParticles(vipLevel)
+        }
+        
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // 徽章/皇冠震撼登场
+            AnimatedVisibility(
+                visible = animationPhase >= 1,
+                enter = scaleIn(
+                    initialScale = 0.2f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ) + fadeIn() + expandIn(
+                    expandFrom = Alignment.Center
+                )
+            ) {
+                Box {
+                    when (vipLevel) {
+                        VipLevel.VIP3 -> MajesticCrownAnimation()
+                        VipLevel.VIP2 -> PremiumBadgeAnimation()
+                        VipLevel.VIP1 -> ClassicBadgeAnimation()
+                        else -> ClassicBadgeAnimation()
+                    }
+                    
+                    // 震撼光环
+                    if (animationPhase >= 2) {
+                        ShockwaveRings(vipLevel)
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(60.dp))
+            
+            // 超级光芒爆发
+            if (animationPhase >= 2) {
+                Box(
+                    modifier = Modifier.size(450.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SuperRadiantBurst(vipLevel)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(60.dp))
+            
+            // VIP文字震撼出现 - 超强可见版（保留所有特效）
+            AnimatedVisibility(
+                visible = animationPhase >= 3,
+                enter = slideInVertically(
+                    initialOffsetY = { it / 2 }
+                ) + scaleIn(initialScale = 0.7f) + fadeIn()
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                ) {
+                    // 恭喜文字 - 加强版
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF2A2A2A),
+                                        Color(0xFF1A1A1A)
+                                    )
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                            )
+                            .border(
+                                width = 3.dp,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.5f),
+                                        Color.White.copy(alpha = 0.8f),
+                                        Color.White.copy(alpha = 0.5f)
+                                    )
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                            )
+                            .padding(horizontal = 40.dp, vertical = 16.dp)
+                    ) {
+                        Text(
+                            text = "🎉 恭喜您成为 🎉",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(40.dp))
+                    
+                    // VIP等级 - 超级加强版
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = when (vipLevel) {
+                                        VipLevel.VIP3 -> listOf(
+                                            Color(0xFF3A3000),
+                                            Color(0xFF2A2000),
+                                            Color(0xFF1A1A1A)
+                                        )
+                                        VipLevel.VIP2 -> listOf(
+                                            Color(0xFF002A3A),
+                                            Color(0xFF001A2A),
+                                            Color(0xFF1A1A1A)
+                                        )
+                                        else -> listOf(
+                                            Color(0xFF3A2A00),
+                                            Color(0xFF2A1A00),
+                                            Color(0xFF1A1A1A)
+                                        )
+                                    }
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                            )
+                            .border(
+                                width = 4.dp,
+                                brush = Brush.horizontalGradient(
+                                    colors = when (vipLevel) {
+                                        VipLevel.VIP3 -> listOf(
+                                            Color(0xFFFFD700),
+                                            Color(0xFFFFE55C),
+                                            Color(0xFFFFD700)
+                                        )
+                                        VipLevel.VIP2 -> listOf(
+                                            Color(0xFF00D9FF),
+                                            Color(0xFF00FFFF),
+                                            Color(0xFF00D9FF)
+                                        )
+                                        else -> listOf(
+                                            Color(0xFFFFB800),
+                                            Color(0xFFFFD700),
+                                            Color(0xFFFFB800)
+                                        )
+                                    }
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                            )
+                            .padding(horizontal = 60.dp, vertical = 28.dp)
+                    ) {
+                        Text(
+                            text = vipLevel.displayName,
+                            fontSize = 76.sp,
+                            fontWeight = FontWeight.Black,
+                            color = when (vipLevel) {
+                                VipLevel.VIP3 -> Color(0xFFFFD700)
+                                VipLevel.VIP2 -> Color(0xFF00D9FF)
+                                VipLevel.VIP1 -> Color(0xFFFFB800)
+                                else -> Color.White
+                            }
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(40.dp))
+                    
+                    // 尊贵身份文字 - 加强版
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF2A2A2A),
+                                        Color(0xFF1A1A1A)
+                                    )
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                            )
+                            .border(
+                                width = 3.dp,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.5f),
+                                        Color.White.copy(alpha = 0.8f),
+                                        Color.White.copy(alpha = 0.5f)
+                                    )
+                                ),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                            )
+                            .padding(horizontal = 40.dp, vertical = 16.dp)
+                    ) {
+                        Text(
+                            text = "✨ 尊贵身份已激活 ✨",
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(60.dp))
+            
+            // 金币奖励 - 超级震撼
+            AnimatedVisibility(
+                visible = animationPhase >= 4,
+                enter = scaleIn(
+                    initialScale = 0.4f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ) + fadeIn()
+            ) {
+                SuperCoinRewardAnimation(coins, vipLevel)
+            }
+        }
+        
+        // 超级金币雨
+        if (animationPhase >= 4) {
+            SuperCoinRainEffect()
+        }
+        
+        // 烟花爆炸效果
+        if (animationPhase >= 4) {
+            FireworksExplosion(vipLevel)
+        }
+    }
+}
+
+
+/**
+ * 终生VIP - 超大皇冠emoji动画
+ */
+@Composable
+fun MajesticCrownAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "crown")
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = -12f,
+        targetValue = 12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rotation"
+    )
+    
+    val glow by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow"
+    )
+    
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+    
+    Box(
+        modifier = Modifier
+            .size(380.dp)
+            .scale(glow),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val centerX = size.width / 2
+            val centerY = size.height / 2
+            
+            // 超强外层光晕
+            repeat(8) { layer ->
+                val radius = 150.dp.toPx() + layer * 30.dp.toPx()
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.6f - layer * 0.07f),
+                            Color(0xFFFFB800).copy(alpha = 0.4f - layer * 0.05f),
+                            Color.Transparent
+                        ),
+                        center = Offset(centerX, centerY),
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = Offset(centerX, centerY)
+                )
+            }
+            
+            // 中心金色光晕
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = 0.7f),
+                        Color(0xFFFFB800).copy(alpha = 0.5f),
+                        Color(0xFFFF9500).copy(alpha = 0.3f),
+                        Color.Transparent
+                    ),
+                    radius = 130.dp.toPx()
+                ),
+                radius = 130.dp.toPx(),
+                center = Offset(centerX, centerY)
+            )
+        }
+        
+        // 超大皇冠emoji - 修复版（完全移除阴影和裁剪）
+        Box(
+            modifier = Modifier
+                .size(250.dp)
+                .graphicsLayer { 
+                    rotationZ = rotation
+                    scaleX = pulse
+                    scaleY = pulse
+                    clip = false
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "👑",
+                fontSize = 200.sp
+            )
+        }
+        
+        // 更多闪烁星星
+        SparkleStars(count = 24, radius = 200.dp)
+    }
+}
+
+/**
+ * 年费VIP - 超大钻石emoji动画
+ */
+@Composable
+fun PremiumBadgeAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "badge")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = -10f,
+        targetValue = 10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rotation"
+    )
+    
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer"
+    )
+    
+    Box(
+        modifier = Modifier
+            .size(340.dp)
+            .scale(scale),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val centerX = size.width / 2
+            val centerY = size.height / 2
+            
+            // 超强外圈光晕
+            repeat(7) { layer ->
+                val radius = 140.dp.toPx() + layer * 28.dp.toPx()
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF00D9FF).copy(alpha = 0.6f - layer * 0.08f),
+                            Color(0xFF6B5FFF).copy(alpha = 0.4f - layer * 0.05f),
+                            Color.Transparent
+                        ),
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = Offset(centerX, centerY)
+                )
+            }
+            
+            // 中心蓝紫光晕
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF00D9FF).copy(alpha = 0.7f),
+                        Color(0xFF6B5FFF).copy(alpha = 0.5f),
+                        Color(0xFF9D4FFF).copy(alpha = 0.3f),
+                        Color.Transparent
+                    ),
+                    radius = 120.dp.toPx()
+                ),
+                radius = 120.dp.toPx(),
+                center = Offset(centerX, centerY)
+            )
+            
+            // 流光效果
+            val shimmerAngle = shimmer * 360f
+            rotate(shimmerAngle, pivot = Offset(centerX, centerY)) {
+                repeat(6) { i ->
+                    val angle = (i * 60f) * (PI / 180f).toFloat()
+                    val startX = centerX + cos(angle) * 50.dp.toPx()
+                    val startY = centerY + sin(angle) * 50.dp.toPx()
+                    val endX = centerX + cos(angle) * 140.dp.toPx()
+                    val endY = centerY + sin(angle) * 140.dp.toPx()
+                    
+                    drawLine(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.7f),
+                                Color.Transparent
+                            ),
+                            start = Offset(startX, startY),
+                            end = Offset(endX, endY)
+                        ),
+                        start = Offset(startX, startY),
+                        end = Offset(endX, endY),
+                        strokeWidth = 5.dp.toPx()
+                    )
+                }
+            }
+        }
+        
+        // 超大钻石emoji - 修复版（完全移除阴影和裁剪）
+        Box(
+            modifier = Modifier
+                .size(220.dp)
+                .graphicsLayer { 
+                    rotationZ = rotation
+                    clip = false
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "💎",
+                fontSize = 180.sp
+            )
+        }
+        
+        // 旋转光芒
+        RotatingRays(color = Color(0xFF00D9FF), count = 20)
+        
+        // 闪烁星星
+        SparkleStars(count = 18, radius = 180.dp)
+    }
+}
+
+/**
+ * 普通VIP - 超大星星emoji动画
+ */
+@Composable
+fun ClassicBadgeAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "classic")
+    
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.88f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = -12f,
+        targetValue = 12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rotation"
+    )
+    
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer"
+    )
+    
+    Box(
+        modifier = Modifier
+            .size(320.dp)
+            .scale(pulse),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val centerX = size.width / 2
+            val centerY = size.height / 2
+            
+            // 超强光晕
+            repeat(6) { layer ->
+                val radius = 130.dp.toPx() + layer * 28.dp.toPx()
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.7f - layer * 0.1f),
+                            Color(0xFFFF9500).copy(alpha = 0.4f - layer * 0.06f),
+                            Color.Transparent
+                        ),
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = Offset(centerX, centerY)
+                )
+            }
+            
+            // 中心金色光晕
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = 0.8f),
+                        Color(0xFFFFB800).copy(alpha = 0.6f),
+                        Color(0xFFFF9500).copy(alpha = 0.4f),
+                        Color.Transparent
+                    ),
+                    radius = 110.dp.toPx()
+                ),
+                radius = 110.dp.toPx(),
+                center = Offset(centerX, centerY)
+            )
+            
+            // 流光效果
+            val shimmerAngle = shimmer * 360f
+            rotate(shimmerAngle, pivot = Offset(centerX, centerY)) {
+                repeat(8) { i ->
+                    val angle = (i * 45f) * (PI / 180f).toFloat()
+                    val startX = centerX + cos(angle) * 40.dp.toPx()
+                    val startY = centerY + sin(angle) * 40.dp.toPx()
+                    val endX = centerX + cos(angle) * 130.dp.toPx()
+                    val endY = centerY + sin(angle) * 130.dp.toPx()
+                    
+                    drawLine(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.8f),
+                                Color.Transparent
+                            ),
+                            start = Offset(startX, startY),
+                            end = Offset(endX, endY)
+                        ),
+                        start = Offset(startX, startY),
+                        end = Offset(endX, endY),
+                        strokeWidth = 4.dp.toPx()
+                    )
+                }
+            }
+        }
+        
+        // 超大星星emoji - 修复版（完全移除阴影和裁剪）
+        Box(
+            modifier = Modifier
+                .size(210.dp)
+                .graphicsLayer { 
+                    rotationZ = rotation
+                    clip = false
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "⭐",
+                fontSize = 170.sp
+            )
+        }
+        
+        // 闪烁星星
+        SparkleStars(count = 16, radius = 170.dp)
+    }
+}
+
+
+/**
+ * 光芒爆发效果
+ */
+@Composable
+fun RadiantBurstEffect(vipLevel: VipLevel) {
+    val infiniteTransition = rememberInfiniteTransition(label = "burst")
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    
+    val colors = when (vipLevel) {
+        VipLevel.VIP3 -> listOf(Color(0xFFFFD700), Color(0xFFFF00FF))
+        VipLevel.VIP2 -> listOf(Color(0xFF00D9FF), Color(0xFF6B5FFF))
+        VipLevel.VIP1 -> listOf(Color(0xFFFFD700), Color(0xFFFF9500))
+        else -> listOf(Color.White, Color.Gray)
+    }
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        rotate(rotation) {
+            val centerX = size.width / 2
+            val centerY = size.height / 2
+            
+            repeat(12) { index ->
+                val angle = (index * 30f) * (PI / 180f).toFloat()
+                val startRadius = 20.dp.toPx()
+                val endRadius = 150.dp.toPx()
+                
+                val startX = centerX + cos(angle) * startRadius
+                val startY = centerY + sin(angle) * startRadius
+                val endX = centerX + cos(angle) * endRadius
+                val endY = centerY + sin(angle) * endRadius
+                
+                drawLine(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            colors[0].copy(alpha = 0.8f),
+                            Color.Transparent
+                        ),
+                        start = Offset(startX, startY),
+                        end = Offset(endX, endY)
+                    ),
+                    start = Offset(startX, startY),
+                    end = Offset(endX, endY),
+                    strokeWidth = 3.dp.toPx()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 闪烁星星效果
+ */
+@Composable
+fun SparkleStars(count: Int, radius: androidx.compose.ui.unit.Dp) {
+    val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
+    
+    repeat(count) { index ->
+        val delay = index * 100
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 1500
+                    0f at delay
+                    1f at delay + 300
+                    0f at delay + 600
+                },
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "alpha$index"
+        )
+        
+        val angle = (index * 360f / count) * (PI / 180f).toFloat()
+        val offsetX = cos(angle) * radius.value
+        val offsetY = sin(angle) * radius.value
+        
+        Canvas(
+            modifier = Modifier
+                .offset(x = offsetX.dp, y = offsetY.dp)
+                .size(10.dp)
+        ) {
+            drawCircle(
+                color = Color.White.copy(alpha = alpha),
+                radius = size.minDimension / 2
+            )
+            
+            // 十字光芒
+            drawLine(
+                color = Color.White.copy(alpha = alpha),
+                start = Offset(size.width / 2, 0f),
+                end = Offset(size.width / 2, size.height),
+                strokeWidth = 1.5.dp.toPx()
+            )
+            drawLine(
+                color = Color.White.copy(alpha = alpha),
+                start = Offset(0f, size.height / 2),
+                end = Offset(size.width, size.height / 2),
+                strokeWidth = 1.5.dp.toPx()
+            )
+        }
+    }
+}
+
+/**
+ * 旋转光芒
+ */
+@Composable
+fun RotatingRays(color: Color, count: Int = 8) {
+    val infiniteTransition = rememberInfiniteTransition(label = "rays")
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    
+    Canvas(modifier = Modifier.size(280.dp)) {
+        rotate(rotation) {
+            repeat(count) { index ->
+                val angle = (index * (360f / count)) * (PI / 180f).toFloat()
+                val length = 120.dp.toPx()
+                val centerX = size.width / 2
+                val centerY = size.height / 2
+                
+                val endX = centerX + cos(angle) * length
+                val endY = centerY + sin(angle) * length
+                
+                drawLine(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            color.copy(alpha = 0.9f),
+                            color.copy(alpha = 0.5f),
+                            Color.Transparent
+                        ),
+                        start = Offset(centerX, centerY),
+                        end = Offset(endX, endY)
+                    ),
+                    start = Offset(centerX, centerY),
+                    end = Offset(endX, endY),
+                    strokeWidth = 4.dp.toPx()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 闪光文字
+ */
+@Composable
+fun ShimmeringText(
+    text: String,
+    fontSize: androidx.compose.ui.unit.TextUnit,
+    color: Color,
+    fontWeight: FontWeight = FontWeight.Bold
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmer"
+    )
+    
+    Text(
+        text = text,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        color = color,
+        style = LocalTextStyle.current.copy(
+            shadow = androidx.compose.ui.graphics.Shadow(
+                color = color.copy(alpha = shimmer),
+                offset = Offset(0f, 0f),
+                blurRadius = 30f
+            )
+        )
+    )
+}
+
+/**
+ * 金币奖励显示
+ */
+@Composable
+fun CoinRewardAnimation(coins: Int) {
+    val infiniteTransition = rememberInfiniteTransition(label = "coin")
+    
+    val bounce by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -20f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bounce"
+    )
+    
+    Box(
+        modifier = Modifier
+            .offset(y = bounce.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = 0.3f),
+                        Color(0xFFFF9500).copy(alpha = 0.3f)
+                    )
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+            )
+            .padding(horizontal = 40.dp, vertical = 20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "🪙",
+                fontSize = 40.sp
+            )
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "赠送金币",
+                    fontSize = 16.sp,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+                
+                Text(
+                    text = "+$coins",
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFFFFD700),
+                    style = LocalTextStyle.current.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color(0xFFFFD700).copy(alpha = 0.5f),
+                            offset = Offset(0f, 0f),
+                            blurRadius = 15f
+                        )
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 金币雨效果
+ */
+@Composable
+fun CoinRainEffect() {
+    val coins = remember {
+        List(30) {
+            CoinParticle(
+                startX = Random.nextFloat(),
+                delay = Random.nextInt(0, 2000),
+                duration = Random.nextInt(2000, 4000)
+            )
+        }
+    }
+    
+    coins.forEach { coin ->
+        FallingCoin(coin)
+    }
+}
+
+data class CoinParticle(
+    val startX: Float,
+    val delay: Int,
+    val duration: Int
+)
+
+@Composable
+fun FallingCoin(particle: CoinParticle) {
+    val infiniteTransition = rememberInfiniteTransition(label = "coin")
+    
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = -100f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = particle.duration,
+                delayMillis = particle.delay,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "offsetY"
+    )
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1000,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        Text(
+            text = "🪙",
+            fontSize = 32.sp,
+            modifier = Modifier
+                .offset(
+                    x = (particle.startX * 350).dp,
+                    y = offsetY.dp
+                )
+                .graphicsLayer {
+                    rotationZ = rotation
+                }
+        )
+    }
+}
+
+/**
+ * 背景粒子效果
+ */
+@Composable
+fun VipBackgroundParticles(vipLevel: VipLevel) {
+    val particles = remember {
+        List(40) {
+            FloatingBackgroundParticle(
+                startX = Random.nextFloat(),
+                startY = Random.nextFloat(),
+                size = Random.nextFloat() * 4f + 2f,
+                duration = Random.nextInt(3000, 6000),
+                delay = Random.nextInt(0, 2000)
+            )
+        }
+    }
+    
+    val colors = when (vipLevel) {
+        VipLevel.VIP3 -> listOf(Color(0xFFFFD700), Color(0xFFFF00FF), Color(0xFF00D9FF))
+        VipLevel.VIP2 -> listOf(Color(0xFF00D9FF), Color(0xFF6B5FFF), Color(0xFF00FFD9))
+        VipLevel.VIP1 -> listOf(Color(0xFFFFD700), Color(0xFFFFB800), Color(0xFFFF9500))
+        else -> listOf(Color.White)
+    }
+    
+    particles.forEach { particle ->
+        AnimatedBackgroundParticle(particle, colors.random())
+    }
+}
+
+data class FloatingBackgroundParticle(
+    val startX: Float,
+    val startY: Float,
+    val size: Float,
+    val duration: Int,
+    val delay: Int
+)
+
+@Composable
+fun AnimatedBackgroundParticle(particle: FloatingBackgroundParticle, color: Color) {
+    val infiniteTransition = rememberInfiniteTransition(label = "particle")
+    
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = particle.startY * 1000f,
+        targetValue = particle.startY * 1000f - 300f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = particle.duration,
+                delayMillis = particle.delay,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "offsetY"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1500,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        drawCircle(
+            color = color.copy(alpha = alpha),
+            radius = particle.size.dp.toPx(),
+            center = Offset(
+                particle.startX * size.width,
+                offsetY
+            )
+        )
+    }
+}
+
+/**
+ * 彩虹光波扩散效果 - 修复版（不使用Stroke）
+ */
+@Composable
+fun RainbowWaveEffect(vipLevel: VipLevel) {
+    val infiniteTransition = rememberInfiniteTransition(label = "rainbow")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "scale"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "alpha"
+    )
+    
+    val colors = when (vipLevel) {
+        VipLevel.VIP3 -> listOf(
+            Color(0xFFFFD700),
+            Color(0xFFFF00FF),
+            Color(0xFF00D9FF)
+        )
+        VipLevel.VIP2 -> listOf(
+            Color(0xFF00D9FF),
+            Color(0xFF6B5FFF),
+            Color(0xFF9D4FFF)
+        )
+        else -> listOf(
+            Color(0xFFFFD700),
+            Color(0xFFFFB800),
+            Color(0xFFFF9500)
+        )
+    }
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        
+        repeat(5) { layer ->
+            val layerScale = scale + layer * 0.2f
+            val layerAlpha = (alpha * (1f - layer * 0.15f)).coerceAtLeast(0f)
+            
+            // 使用实心圆而不是Stroke
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = colors.map { it.copy(alpha = layerAlpha * 0.3f) },
+                    center = Offset(centerX, centerY),
+                    radius = 150.dp.toPx() * layerScale
+                ),
+                radius = 150.dp.toPx() * layerScale,
+                center = Offset(centerX, centerY)
+            )
+        }
+    }
+}
+
+/**
+ * 爆炸粒子效果
+ */
+@Composable
+fun ExplosionParticles(vipLevel: VipLevel) {
+    val particles = remember {
+        List(80) {
+            ExplosionParticle(
+                angle = Random.nextFloat() * 360f,
+                speed = Random.nextFloat() * 300f + 100f,
+                size = Random.nextFloat() * 6f + 3f,
+                delay = Random.nextInt(0, 500)
+            )
+        }
+    }
+    
+    val colors = when (vipLevel) {
+        VipLevel.VIP3 -> listOf(Color(0xFFFFD700), Color(0xFFFF00FF), Color(0xFF00D9FF))
+        VipLevel.VIP2 -> listOf(Color(0xFF00D9FF), Color(0xFF6B5FFF), Color(0xFF00FFD9))
+        else -> listOf(Color(0xFFFFD700), Color(0xFFFFB800), Color(0xFFFF9500))
+    }
+    
+    particles.forEach { particle ->
+        AnimatedExplosionParticle(particle, colors.random())
+    }
+}
+
+data class ExplosionParticle(
+    val angle: Float,
+    val speed: Float,
+    val size: Float,
+    val delay: Int
+)
+
+@Composable
+fun AnimatedExplosionParticle(particle: ExplosionParticle, color: Color) {
+    val infiniteTransition = rememberInfiniteTransition(label = "explosion")
+    
+    val distance by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = particle.speed,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1500,
+                delayMillis = particle.delay,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "distance"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1500,
+                delayMillis = particle.delay,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "alpha"
+    )
+    
+    val angleRad = particle.angle * (PI / 180f).toFloat()
+    val offsetX = cos(angleRad) * distance
+    val offsetY = sin(angleRad) * distance
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        
+        drawCircle(
+            color = color.copy(alpha = alpha.coerceAtLeast(0f)),
+            radius = particle.size.dp.toPx(),
+            center = Offset(centerX + offsetX, centerY + offsetY)
+        )
+    }
+}
+
+/**
+ * 震撼光环效果 - 修复版（不使用Stroke）
+ */
+@Composable
+fun ShockwaveRings(vipLevel: VipLevel) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shockwave")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "scale"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "alpha"
+    )
+    
+    val color = when (vipLevel) {
+        VipLevel.VIP3 -> Color(0xFFFFD700)
+        VipLevel.VIP2 -> Color(0xFF00D9FF)
+        else -> Color(0xFFFFB800)
+    }
+    
+    Canvas(modifier = Modifier.size(400.dp)) {
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        
+        repeat(3) { ring ->
+            val ringScale = scale + ring * 0.3f
+            val ringAlpha = (alpha * (1f - ring * 0.25f)).coerceAtLeast(0f)
+            
+            // 使用实心圆而不是Stroke
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        color.copy(alpha = ringAlpha * 0.5f),
+                        color.copy(alpha = ringAlpha * 0.3f),
+                        Color.Transparent
+                    ),
+                    center = Offset(centerX, centerY),
+                    radius = 100.dp.toPx() * ringScale
+                ),
+                radius = 100.dp.toPx() * ringScale,
+                center = Offset(centerX, centerY)
+            )
+        }
+    }
+}
+
+/**
+ * 超级光芒爆发效果
+ */
+@Composable
+fun SuperRadiantBurst(vipLevel: VipLevel) {
+    val infiniteTransition = rememberInfiniteTransition(label = "superBurst")
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+    
+    val colors = when (vipLevel) {
+        VipLevel.VIP3 -> listOf(Color(0xFFFFD700), Color(0xFFFF00FF))
+        VipLevel.VIP2 -> listOf(Color(0xFF00D9FF), Color(0xFF6B5FFF))
+        else -> listOf(Color(0xFFFFD700), Color(0xFFFF9500))
+    }
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        rotate(rotation) {
+            val centerX = size.width / 2
+            val centerY = size.height / 2
+            
+            repeat(24) { index ->
+                val angle = (index * 15f) * (PI / 180f).toFloat()
+                val length = 200.dp.toPx() * pulse
+                
+                val endX = centerX + cos(angle) * length
+                val endY = centerY + sin(angle) * length
+                
+                drawLine(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            colors[index % colors.size].copy(alpha = 0.9f),
+                            colors[(index + 1) % colors.size].copy(alpha = 0.5f),
+                            Color.Transparent
+                        ),
+                        start = Offset(centerX, centerY),
+                        end = Offset(endX, endY)
+                    ),
+                    start = Offset(centerX, centerY),
+                    end = Offset(endX, endY),
+                    strokeWidth = 6.dp.toPx()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 烟花爆炸效果
+ */
+@Composable
+fun FireworksExplosion(vipLevel: VipLevel) {
+    val fireworks = remember {
+        listOf(
+            FireworkData(0.2f, 0.3f, 0),
+            FireworkData(0.8f, 0.25f, 500),
+            FireworkData(0.5f, 0.6f, 1000),
+            FireworkData(0.15f, 0.7f, 1500),
+            FireworkData(0.85f, 0.65f, 2000),
+            FireworkData(0.5f, 0.35f, 2500)
+        )
+    }
+    
+    val colors = when (vipLevel) {
+        VipLevel.VIP3 -> listOf(Color(0xFFFFD700), Color(0xFFFF00FF), Color(0xFF00D9FF))
+        VipLevel.VIP2 -> listOf(Color(0xFF00D9FF), Color(0xFF6B5FFF), Color(0xFF9D4FFF))
+        else -> listOf(Color(0xFFFFD700), Color(0xFFFFB800), Color(0xFFFF9500))
+    }
+    
+    fireworks.forEach { firework ->
+        SingleFirework(firework, colors.random())
+    }
+}
+
+data class FireworkData(
+    val x: Float,
+    val y: Float,
+    val delay: Int
+)
+
+@Composable
+fun SingleFirework(firework: FireworkData, color: Color) {
+    val infiniteTransition = rememberInfiniteTransition(label = "firework")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1000,
+                delayMillis = firework.delay,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "scale"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1000,
+                delayMillis = firework.delay,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "alpha"
+    )
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width * firework.x
+        val centerY = size.height * firework.y
+        
+        repeat(16) { index ->
+            val angle = (index * 22.5f) * (PI / 180f).toFloat()
+            val length = 80.dp.toPx() * scale
+            
+            val endX = centerX + cos(angle) * length
+            val endY = centerY + sin(angle) * length
+            
+            drawLine(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        color.copy(alpha = alpha.coerceAtLeast(0f)),
+                        Color.Transparent
+                    ),
+                    start = Offset(centerX, centerY),
+                    end = Offset(endX, endY)
+                ),
+                start = Offset(centerX, centerY),
+                end = Offset(endX, endY),
+                strokeWidth = 4.dp.toPx()
+            )
+            
+            // 烟花粒子
+            drawCircle(
+                color = color.copy(alpha = alpha.coerceAtLeast(0f)),
+                radius = 4.dp.toPx(),
+                center = Offset(endX, endY)
+            )
+        }
+    }
+}
+
+/**
+ * 超级金币奖励动画 - 全新简洁版
+ */
+@Composable
+fun SuperCoinRewardAnimation(coins: Int, vipLevel: VipLevel) {
+    val infiniteTransition = rememberInfiniteTransition(label = "superCoin")
+    
+    val bounce by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bounce"
+    )
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+    
+    Box(
+        modifier = Modifier
+            .offset(y = bounce.dp)
+            .scale(scale)
+    ) {
+        // 超强光晕背景
+        Canvas(modifier = Modifier.size(450.dp)) {
+            val centerX = size.width / 2
+            val centerY = size.height / 2
+            
+            repeat(8) { layer ->
+                val radius = 100.dp.toPx() + layer * 35.dp.toPx()
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.7f - layer * 0.08f),
+                            Color(0xFFFF9500).copy(alpha = 0.5f - layer * 0.06f),
+                            Color.Transparent
+                        ),
+                        radius = radius
+                    ),
+                    radius = radius,
+                    center = Offset(centerX, centerY)
+                )
+            }
+        }
+        
+        Box(
+            modifier = Modifier
+                .size(360.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.5f),
+                            Color(0xFFFF9500).copy(alpha = 0.4f),
+                            Color(0xFFFF6B00).copy(alpha = 0.2f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(60.dp)
+                )
+                .border(
+                    width = 5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700),
+                            Color(0xFFFFE55C),
+                            Color(0xFFFFD700)
+                        )
+                    ),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(60.dp)
+                )
+                .padding(40.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // 超大金币emoji
+                Text(
+                    text = "🪙",
+                    fontSize = 100.sp
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // "赠送金币"文字
+                Text(
+                    text = "赠送金币",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .background(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(30.dp)
+                        )
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 金币数量
+                Text(
+                    text = "+$coins",
+                    fontSize = 68.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFFFFD700),
+                    modifier = Modifier
+                        .background(
+                            color = Color.Black.copy(alpha = 0.8f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(40.dp)
+                        )
+                        .padding(horizontal = 40.dp, vertical = 12.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 超级金币雨效果
+ */
+@Composable
+fun SuperCoinRainEffect() {
+    val coins = remember {
+        List(50) {
+            SuperCoinParticle(
+                startX = Random.nextFloat(),
+                delay = Random.nextInt(0, 3000),
+                duration = Random.nextInt(2500, 5000),
+                size = Random.nextInt(28, 48)
+            )
+        }
+    }
+    
+    coins.forEach { coin ->
+        FallingSuperCoin(coin)
+    }
+}
+
+data class SuperCoinParticle(
+    val startX: Float,
+    val delay: Int,
+    val duration: Int,
+    val size: Int
+)
+
+@Composable
+fun FallingSuperCoin(particle: SuperCoinParticle) {
+    val infiniteTransition = rememberInfiniteTransition(label = "superCoin")
+    
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = -150f,
+        targetValue = 1200f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = particle.duration,
+                delayMillis = particle.delay,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "offsetY"
+    )
+    
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 720f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = particle.duration,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 600,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .offset(
+                    x = (particle.startX * 380).dp,
+                    y = offsetY.dp
+                )
+                .graphicsLayer {
+                    rotationZ = rotation
+                    scaleX = scale
+                    scaleY = scale
+                }
+        ) {
+            // 金币光晕
+            Canvas(modifier = Modifier.size((particle.size + 20).dp)) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.6f),
+                            Color.Transparent
+                        )
+                    ),
+                    radius = size.minDimension / 2
+                )
+            }
+            
+            Text(
+                text = "🪙",
+                fontSize = particle.size.sp,
+                style = LocalTextStyle.current.copy(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color(0xFFFFD700).copy(alpha = 0.8f),
+                        offset = Offset(0f, 0f),
+                        blurRadius = 20f
+                    )
+                )
+            )
+        }
+    }
+}

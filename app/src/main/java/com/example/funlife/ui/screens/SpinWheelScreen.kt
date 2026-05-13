@@ -31,6 +31,9 @@ import java.util.*
 fun SpinWheelScreen(
     onNavigateBack: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val soundManager = remember { com.example.funlife.utils.SoundEffectManager.getInstance(context) }
+    
     var options by remember {
         mutableStateOf(
             listOf("吃火锅", "看电影", "打游戏", "去旅行", "读书", "运动")
@@ -45,6 +48,11 @@ fun SpinWheelScreen(
     // 设置状态
     var soundEnabled by remember { mutableStateOf(true) }
     var vibrationEnabled by remember { mutableStateOf(true) }
+    
+    // 更新声音管理器的启用状态
+    LaunchedEffect(soundEnabled) {
+        soundManager.setEnabled(soundEnabled)
+    }
     
     Scaffold(
         topBar = {
@@ -174,10 +182,22 @@ fun SpinWheelScreen(
             key(options.hashCode()) {
                 SpinWheel(
                     options = options,
+                    mode = "NORMAL",
+                    canSpin = true,
+                    showButton = true,
+                    onSpinStart = {
+                        // 播放旋转音效
+                        if (soundEnabled) {
+                            soundManager.play(com.example.funlife.utils.SoundEffect.SPIN_ROTATING, volume = 0.6f)
+                        }
+                    },
                     onResult = { result ->
                         currentResult = result
+                        // 播放结果音效
+                        if (soundEnabled) {
+                            soundManager.play(com.example.funlife.utils.SoundEffect.RESULT_NORMAL, volume = 0.8f)
+                        }
                         // TODO: 保存到历史记录
-                        // TODO: 播放音效（如果启用）
                         // TODO: 震动反馈（如果启用）
                     }
                 )

@@ -3,6 +3,7 @@ package com.example.funlife.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,7 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,6 +40,7 @@ import com.example.funlife.ui.components.EnhancedTopBar
 import com.example.funlife.ui.components.TopBarAction
 import com.example.funlife.ui.components.TopBarGradients
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -45,6 +50,7 @@ fun HabitScreen(
     viewModel: HabitViewModel = viewModel(),
     onNavigateBack: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val habitsWithStats by viewModel.habitsWithStats.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
     var selectedHabit by remember { mutableStateOf<HabitWithStats?>(null) }
@@ -53,79 +59,130 @@ fun HabitScreen(
     var bonusMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 新的增强版顶部导航栏
-        EnhancedTopBar(
-            title = "习惯打卡",
-            subtitle = "坚持每一天，成就更好的自己",
-            icon = Icons.Default.CheckCircle,
-            gradientColors = TopBarGradients.Green,
-            actions = listOf(
-                TopBarAction(
-                    icon = Icons.Default.Add,
-                    contentDescription = "添加习惯",
-                    onClick = { showDialog = true },
-                    highlighted = true
-                ),
-                TopBarAction(
-                    icon = Icons.Default.BarChart,
-                    contentDescription = "统计",
-                    onClick = { /* 查看统计 */ }
-                )
+    // 加载背景图片
+    val backgroundBitmap = remember {
+        try {
+            context.assets.open("login/xiguan.png").use { inputStream ->
+                android.graphics.BitmapFactory.decodeStream(inputStream)
+            }
+        } catch (e: IOException) {
+            null
+        }
+    }
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 背景图片
+        backgroundBitmap?.let { bitmap ->
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "习惯背景",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-        )
+        }
         
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (habitsWithStats.isEmpty()) {
-                EmptyHabitState(Modifier.fillMaxSize())
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+        // 内容层
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 顶部返回按钮（简洁版，不使用 EnhancedTopBar）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onNavigateBack,
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    // 顶部统计卡片
-                    item {
-                        HabitOverviewCard(habitsWithStats)
+                    Icon(
+                        Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(
+                        onClick = { showDialog = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "添加习惯",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                     
-                    // 习惯列表
-                    items(habitsWithStats, key = { it.habit.id }) { habitStats ->
-                        EnhancedHabitCard(
-                            habitStats = habitStats,
-                            onCheckIn = { 
-                                coroutineScope.launch {
-                                    viewModel.toggleCheckIn(habitStats.habit.id, habitStats.todayChecked).collect { result ->
-                                        when (result) {
-                                            is CheckInResult.Success -> {
-                                                coinRewardAmount = result.coins
-                                                bonusMessage = if (result.hasBonus) "连续7天额外奖励！" else ""
-                                                showCoinReward = true
-                                            }
-                                            is CheckInResult.Cancelled -> {
-                                                // 取消打卡，不显示动画
-                                            }
-                                            is CheckInResult.Failed -> {
-                                                // 可以显示错误提示
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            onDelete = { viewModel.deleteHabit(habitStats.habit) },
-                            onClick = { selectedHabit = habitStats }
+                    IconButton(
+                        onClick = { /* 查看统计 */ },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.BarChart,
+                            contentDescription = "统计",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
             
-            // 金币奖励动画
-            if (showCoinReward) {
-                CoinRewardAnimation(
-                    amount = coinRewardAmount,
-                    bonusMessage = bonusMessage,
-                    onDismiss = { showCoinReward = false }
-                )
+            // 添加顶部间距，避免挡住标题
+            Spacer(modifier = Modifier.height(120.dp))
+            
+            // 主内容区域
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (habitsWithStats.isEmpty()) {
+                    EmptyHabitState(Modifier.fillMaxSize())
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 32.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // 习惯列表
+                        items(habitsWithStats, key = { it.habit.id }) { habitStats ->
+                            EnhancedHabitCard(
+                                habitStats = habitStats,
+                                onCheckIn = { 
+                                    coroutineScope.launch {
+                                        viewModel.toggleCheckIn(habitStats.habit.id, habitStats.todayChecked).collect { result ->
+                                            when (result) {
+                                                is CheckInResult.Success -> {
+                                                    coinRewardAmount = result.coins
+                                                    bonusMessage = if (result.hasBonus) "连续7天额外奖励！" else ""
+                                                    showCoinReward = true
+                                                }
+                                                is CheckInResult.Cancelled -> {
+                                                    // 取消打卡，不显示动画
+                                                }
+                                                is CheckInResult.Failed -> {
+                                                    // 可以显示错误提示
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                onDelete = { viewModel.deleteHabit(habitStats.habit) },
+                                onClick = { selectedHabit = habitStats }
+                            )
+                        }
+                    }
+                }
+                
+                // 金币奖励动画
+                if (showCoinReward) {
+                    CoinRewardAnimation(
+                        amount = coinRewardAmount,
+                        bonusMessage = bonusMessage,
+                        onDismiss = { showCoinReward = false }
+                    )
+                }
             }
         }
     }
@@ -158,50 +215,60 @@ fun HabitScreen(
 fun EmptyHabitState(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
+        // 可爱的浮动提示 - 位于顶部偏下，不遮挡背景
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 180.dp)  // 增加到180dp，更靠下
         ) {
-            // 动画图标
-            var scale by remember { mutableStateOf(1f) }
+            // 跳动的小图标
+            var offsetY by remember { mutableStateOf(0f) }
             LaunchedEffect(Unit) {
                 while (true) {
-                    animate(1f, 1.2f, animationSpec = tween(1000)) { value, _ -> scale = value }
-                    animate(1.2f, 1f, animationSpec = tween(1000)) { value, _ -> scale = value }
+                    animate(0f, -15f, animationSpec = tween(800, easing = FastOutSlowInEasing)) { value, _ -> 
+                        offsetY = value 
+                    }
+                    animate(-15f, 0f, animationSpec = tween(800, easing = FastOutSlowInEasing)) { value, _ -> 
+                        offsetY = value 
+                    }
                 }
             }
             
+            // 可爱的小卡片提示 - 纯透明无阴影
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
+                    .graphicsLayer { translationY = offsetY }
                     .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                Text("📅", fontSize = (60 * scale).sp)
+                Row(
+                    modifier = Modifier,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🌸", fontSize = 24.sp)  // 可爱的樱花图标
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "还没有习惯哦",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF6B9D),  // 可爱的粉红色
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            "点击右上角 + 开始添加",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFFB6C1),  // 柔和的浅粉色
+                            fontSize = 13.sp
+                        )
+                    }
+                }
             }
-            
-            Text(
-                "还没有习惯",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "点击下方按钮添加第一个习惯\n开始养成好习惯的旅程！",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
@@ -301,17 +368,17 @@ fun EnhancedHabitCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 顶部：图标、名称、统计
             Row(
@@ -320,14 +387,14 @@ fun EnhancedHabitCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
                     // 图标
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
+                            .size(56.dp)
                             .clip(CircleShape)
                             .background(
                                 brush = Brush.linearGradient(
@@ -339,35 +406,36 @@ fun EnhancedHabitCard(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(habit.icon, fontSize = 36.sp)
+                        Text(habit.icon, fontSize = 28.sp)
                     }
                     
                     // 名称
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
                             habit.name,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 18.sp
                         )
                         
                         // 补卡卡片显示
                         if (habit.makeupCards > 0) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = Color(0xFFFFD700).copy(alpha = 0.2f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("🎫", fontSize = 16.sp)
+                                    Text("🎫", fontSize = 14.sp)
                                     Text(
                                         "×${habit.makeupCards}",
-                                        style = MaterialTheme.typography.labelLarge,
+                                        style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFFD700)
                                     )
@@ -380,18 +448,18 @@ fun EnhancedHabitCard(
                 // 右侧按钮组
                 Column(
                     horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // 删除按钮
                     IconButton(
                         onClick = { showDeleteDialog = true },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             Icons.Default.Delete,
                             contentDescription = "删除",
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     
@@ -399,9 +467,9 @@ fun EnhancedHabitCard(
                     Button(
                         onClick = onCheckIn,
                         modifier = Modifier
-                            .height(40.dp)
-                            .widthIn(min = 90.dp),
-                        shape = RoundedCornerShape(20.dp),
+                            .height(36.dp)
+                            .widthIn(min = 80.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (habitStats.todayChecked) 
                                 MaterialTheme.colorScheme.surfaceVariant 
@@ -410,24 +478,24 @@ fun EnhancedHabitCard(
                             contentColor = Color.White
                         ),
                         elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = if (habitStats.todayChecked) 0.dp else 4.dp
+                            defaultElevation = if (habitStats.todayChecked) 0.dp else 3.dp
                         ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 if (habitStats.todayChecked) Icons.Default.Check else Icons.Default.Add,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 if (habitStats.todayChecked) "已打卡" else "打卡",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                fontSize = 12.sp
                             )
                         }
                     }
@@ -437,7 +505,7 @@ fun EnhancedHabitCard(
             // 统计数据行
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 连续天数
                 StatBadge(
@@ -469,27 +537,28 @@ fun EnhancedHabitCard(
             
             // 进度条
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     "最近30天完成率",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp
                 )
                 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(14.dp)
-                        .clip(RoundedCornerShape(7.dp))
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
                         .background(color.copy(alpha = 0.15f))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(habitStats.completionRate)
-                            .clip(RoundedCornerShape(7.dp))
+                            .clip(RoundedCornerShape(5.dp))
                             .background(
                                 brush = Brush.horizontalGradient(
                                     colors = listOf(
@@ -543,25 +612,27 @@ fun StatBadge(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = color.copy(alpha = 0.15f)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Text(icon, fontSize = 20.sp)
+            Text(icon, fontSize = 16.sp)
             Text(
                 value,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = color,
+                fontSize = 14.sp
             )
             Text(
                 label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp
             )
         }
     }

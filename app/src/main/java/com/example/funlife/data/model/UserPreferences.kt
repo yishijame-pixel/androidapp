@@ -38,5 +38,14 @@ data class UserPreferences(
     
     // 🔥 新增：首页少女心面板自定义文字
     val homePanelText: String = "少女心面板",           // 首页面板中间的自定义文字
-    val homePanelTextStyle: String = "pink"             // 艺术字颜色主题：pink, purple, blue, gold, rainbow
+    val homePanelTextStyle: String = "pink",            // 艺术字颜色主题：pink, purple, blue, gold, rainbow
+    
+    // 🔥 新增：转盘结算面板皮肤
+    val spinResultPanelSkin: String = "js_1",            // 转盘结算面板皮肤：js_1, js_2, js_3, js_4, js_5
+    
+    // 🔥 新增：转盘按钮皮肤
+    val spinButtonSkin: String = "pf_1",                 // 转盘按钮皮肤：pf_1 到 pf_27
+    
+    // 🔥 新增：转盘旋转音量
+    val spinRotationVolume: Float = 0.7f                 // 转盘旋转音量：0.0 到 1.0
 )

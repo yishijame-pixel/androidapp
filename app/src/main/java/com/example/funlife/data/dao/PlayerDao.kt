@@ -9,13 +9,13 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PlayerDao {
     
-    // 获取所有玩家（按分数降序排序）
-    @Query("SELECT * FROM players WHERE userId = :userId ORDER BY score DESC")
+    // 获取所有玩家（按添加顺序，即ID升序）
+    @Query("SELECT * FROM players WHERE userId = :userId ORDER BY id ASC")
     fun getAllPlayers(userId: Long): Flow<List<Player>>
     
     // 插入玩家
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPlayer(player: Player)
+    suspend fun insertPlayer(player: Player): Long  // 返回插入的行ID
     
     // 更新玩家
     @Update

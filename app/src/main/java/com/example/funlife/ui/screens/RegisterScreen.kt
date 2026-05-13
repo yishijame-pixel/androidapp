@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -221,7 +222,7 @@ fun RegisterScreen(
                                 Text(
                                     "用户名",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp
                                 ) 
                             },
                             leadingIcon = {
@@ -230,13 +231,12 @@ fun RegisterScreen(
                                     Image(
                                         bitmap = bitmap,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .padding(start = 4.dp),
+                                        modifier = Modifier.size(30.dp),
                                         contentScale = ContentScale.Fit
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             shape = RoundedCornerShape(25.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color.White,
@@ -292,7 +292,7 @@ fun RegisterScreen(
                                 Text(
                                     "昵称（可选）",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 12.sp
                                 ) 
                             },
                             leadingIcon = {
@@ -301,13 +301,12 @@ fun RegisterScreen(
                                     Image(
                                         bitmap = bitmap,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .padding(start = 4.dp),
+                                        modifier = Modifier.size(30.dp),
                                         contentScale = ContentScale.Fit
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             shape = RoundedCornerShape(25.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color.White,
@@ -363,7 +362,7 @@ fun RegisterScreen(
                                 Text(
                                     "密码",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp
                                 ) 
                             },
                             leadingIcon = {
@@ -372,13 +371,12 @@ fun RegisterScreen(
                                     Image(
                                         bitmap = bitmap,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .padding(start = 4.dp),
+                                        modifier = Modifier.size(30.dp),
                                         contentScale = ContentScale.Fit
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             trailingIcon = {
                                 // 可爱的小狗头图标
                                 IconButton(
@@ -573,7 +571,7 @@ fun RegisterScreen(
                                 Text(
                                     "确认密码",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp
                                 ) 
                             },
                             leadingIcon = {
@@ -582,13 +580,12 @@ fun RegisterScreen(
                                     Image(
                                         bitmap = bitmap,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .padding(start = 4.dp),
+                                        modifier = Modifier.size(30.dp),
                                         contentScale = ContentScale.Fit
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             trailingIcon = {
                                 // 可爱的小狗头图标
                                 IconButton(
@@ -774,7 +771,7 @@ fun RegisterScreen(
                                 Text(
                                     "内测码",
                                     color = Color.Gray.copy(alpha = 0.6f),
-                                    fontSize = 15.sp
+                                    fontSize = 13.sp
                                 ) 
                             },
                             leadingIcon = {
@@ -783,13 +780,12 @@ fun RegisterScreen(
                                     Image(
                                         bitmap = bitmap,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .padding(start = 4.dp),
+                                        modifier = Modifier.size(30.dp),
                                         contentScale = ContentScale.Fit
                                     )
                                 }
                             },
+                            textStyle = TextStyle(fontSize = 13.sp),
                             shape = RoundedCornerShape(25.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color.White,

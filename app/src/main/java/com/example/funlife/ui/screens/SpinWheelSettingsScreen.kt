@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.SpinWheelViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,7 +40,44 @@ fun SpinWheelSettingsScreen(
     onOpenStats: () -> Unit,
     onOpenModeManagement: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val showWeightVisualization by viewModel.showWeightVisualization.collectAsState()
+    
+    // 🔥 获取用户偏好设置
+    val userPreferencesRepository = remember {
+        com.example.funlife.repository.UserPreferencesRepository(
+            (context.applicationContext as com.example.funlife.FunLifeApplication).database.userPreferencesDao()
+        )
+    }
+    val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val userSession = authViewModel.getCurrentSession()
+    val userPreferences by userPreferencesRepository.getPreferences(userSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    
+    // 🔥 转盘旋转音量状态
+    var spinRotationVolume by remember { mutableFloatStateOf(0.7f) }
+    
+    // 🔥 从用户偏好加载音量
+    LaunchedEffect(userPreferences) {
+        userPreferences?.let {
+            spinRotationVolume = it.spinRotationVolume
+            android.util.Log.d("SpinWheelSettings", "Loaded volume: ${it.spinRotationVolume}")
+        }
+    }
+    
+    // 🔥 保存音量到用户偏好
+    val scope = rememberCoroutineScope()
+    fun saveVolume(volume: Float) {
+        android.util.Log.d("SpinWheelSettings", "Saving volume: $volume")
+        scope.launch {
+            userPreferences?.let { prefs ->
+                android.util.Log.d("SpinWheelSettings", "Updating preferences with volume: $volume")
+                userPreferencesRepository.update(
+                    prefs.copy(spinRotationVolume = volume)
+                )
+            }
+        }
+    }
     
     Scaffold(
         topBar = {
@@ -104,6 +142,19 @@ fun SpinWheelSettingsScreen(
                 WeightVisualizationCard(
                     checked = showWeightVisualization,
                     onCheckedChange = { viewModel.toggleWeightVisualization() }
+                )
+            }
+            
+            // 🔥 音效设置分组
+            SettingsGroup(title = "音效设置", emoji = "🔊") {
+                android.util.Log.d("SpinWheelSettings", "Rendering VolumeControlCard with volume: $spinRotationVolume")
+                VolumeControlCard(
+                    volume = spinRotationVolume,
+                    onVolumeChange = { newVolume ->
+                        android.util.Log.d("SpinWheelSettings", "Volume changed to: $newVolume")
+                        spinRotationVolume = newVolume
+                        saveVolume(newVolume)
+                    }
                 )
             }
             
@@ -374,6 +425,91 @@ private fun SettingsCard(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+// 🔥 音量控制卡片
+@Composable
+private fun VolumeControlCard(
+    volume: Float,
+    onVolumeChange: (Float) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 音量图标容器
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF00BCD4).copy(alpha = 0.8f),
+                                    Color(0xFF00BCD4)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        when {
+                            volume == 0f -> Icons.Default.VolumeOff
+                            volume < 0.5f -> Icons.Default.VolumeDown
+                            else -> Icons.Default.VolumeUp
+                        },
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        "转盘旋转音量",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${(volume * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // 音量滑块
+            Slider(
+                value = volume,
+                onValueChange = onVolumeChange,
+                valueRange = 0f..1f,
+                steps = 9,  // 10个档位（0%, 10%, 20%, ..., 100%）
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFF00BCD4),
+                    activeTrackColor = Color(0xFF00BCD4),
+                    inactiveTrackColor = Color(0xFF00BCD4).copy(alpha = 0.3f)
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

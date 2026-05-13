@@ -1108,137 +1108,16 @@ private fun PointerIndicator() {
 fun ResultAnimation(
     result: String,
     mode: SpinWheelMode,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    panelSkin: String = "js_1"
 ) {
-    var visible by remember { mutableStateOf(true) }
-    
-    // 多阶段动画控制
-    val flashProgress = remember { Animatable(0f) }      // 闪光
-    val cardScale = remember { Animatable(0.1f) }        // 卡片缩放
-    val cardRotation = remember { Animatable(-180f) }    // 卡片旋转
-    val shakeIntensity = remember { Animatable(0f) }     // 抖动强度
-    val particleBurst = remember { Animatable(0f) }      // 粒子爆发
-    val bgAlpha = remember { Animatable(0f) }            // 背景透明度
-    
-    LaunchedEffect(Unit) {
-        // 阶段1：闪光冲击（0-0.2s）
-        launch {
-            flashProgress.animateTo(1f, tween(200, easing = FastOutSlowInEasing))
-            delay(100)
-            flashProgress.animateTo(0f, tween(300))
-        }
-        
-        // 背景淡入
-        launch {
-            bgAlpha.animateTo(0.9f, tween(300))
-        }
-        
-        // 阶段2：卡片飞入+旋转（0.2-0.6s）
-        delay(200)
-        launch {
-            cardScale.animateTo(
-                1.2f,  // 先放大到1.2倍
-                spring(dampingRatio = 0.6f, stiffness = 300f)
-            )
-            delay(100)
-            // 回弹到1.0
-            cardScale.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 400f))
-        }
-        launch {
-            cardRotation.animateTo(
-                0f,
-                spring(dampingRatio = 0.8f, stiffness = 300f)
-            )
-        }
-        
-        // 阶段3：剧烈抖动（0.6-1.2s）
-        delay(400)
-        launch {
-            shakeIntensity.animateTo(1f, tween(50))
-            delay(600)
-            shakeIntensity.animateTo(0f, tween(300, easing = FastOutSlowInEasing))
-        }
-        
-        // 阶段4：粒子爆发（0.8-1.8s）
-        delay(200)
-        particleBurst.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
-        
-        // 阶段5：稳定展示（1.8-3.0s）
-        delay(1200)
-        
-        // 阶段6：淡出（3.0-3.3s）
-        launch {
-            bgAlpha.animateTo(0f, tween(300))
-        }
-        launch {
-            cardScale.animateTo(0.8f, tween(300))
-        }
-        
-        delay(300)
-        visible = false
-        onDismiss()
-    }
-    
-    if (visible) {
-        Box(
-            Modifier.fillMaxSize(),
-            Alignment.Center
-        ) {
-            // 背景层
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = bgAlpha.value))
-            )
-            
-            // 闪光冲击波
-            if (flashProgress.value > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = flashProgress.value * 0.8f),
-                                    Color.Transparent
-                                ),
-                                radius = 2000f * flashProgress.value
-                            )
-                        )
-                )
-            }
-            
-            // 卡片层
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                when (mode) {
-                    SpinWheelMode.NORMAL -> EnhancedNormalModeCard(
-                        result, 
-                        cardScale.value, 
-                        cardRotation.value,
-                        shakeIntensity.value,
-                        particleBurst.value
-                    )
-                    SpinWheelMode.ADVANCED -> EnhancedAdvancedModeCard(
-                        result, 
-                        cardScale.value, 
-                        cardRotation.value,
-                        shakeIntensity.value,
-                        particleBurst.value
-                    )
-                    SpinWheelMode.LUCKY -> EnhancedLuckyModeCard(
-                        result, 
-                        cardScale.value, 
-                        cardRotation.value,
-                        shakeIntensity.value,
-                        particleBurst.value
-                    )
-                }
-            }
-        }
-    }
+    // 直接使用 SimpleResultAnimation
+    SimpleResultAnimation(
+        result = result,
+        mode = mode,
+        onDismiss = onDismiss,
+        panelSkin = panelSkin
+    )
 }
 
 // 增强版普通模式卡片 - 简化版（确保抖动可见）

@@ -50,6 +50,9 @@ import com.example.funlife.navigation.Screen
 import com.example.funlife.ui.theme.FunLifeTheme
 import com.example.funlife.utils.SoundEffectManager
 import com.example.funlife.utils.SoundEffect
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var soundManager: SoundEffectManager
@@ -59,6 +62,9 @@ class MainActivity : ComponentActivity() {
         
         // 初始化音效管理器
         soundManager = SoundEffectManager.getInstance(this)
+        
+        // 🔥 初始化应用数据（头像框等）
+        initializeAppData()
         
         // 切换到正常主题
         setTheme(R.style.Theme_FunLife)
@@ -74,6 +80,24 @@ class MainActivity : ComponentActivity() {
                 } else {
                     MainScreen(soundManager = soundManager)
                 }
+            }
+        }
+    }
+    
+    /**
+     * 初始化应用数据
+     * 在后台线程执行，不阻塞UI
+     */
+    private fun initializeAppData() {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val database = (application as FunLifeApplication).database
+                com.example.funlife.utils.AppInitializer.initialize(
+                    context = applicationContext,
+                    shopDao = database.shopDao()
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "应用数据初始化失败", e)
             }
         }
     }
@@ -115,30 +139,34 @@ fun MainScreen(soundManager: SoundEffectManager) {
             label = "心情"
         ),
         BottomNavItem(
-            screen = Screen.Profile,
+            screen = Screen.VipProfile,
             icon = Icons.Default.Person,
             iconRes = R.drawable.nav_icon_4,
             label = "我的"
         )
     )
     
-    // 判断是否显示底部导航栏（登录/注册/欢迎页/宠物页/游戏计分页/商城页不显示）
+    // 判断是否显示底部导航栏（登录/注册/欢迎页/宠物页/游戏计分页/商城页/背包页/转盘页/纪念日页/目标页/VIP页/头像框商城不显示）
     val showBottomBar = currentDestination?.route !in listOf(
         Screen.Welcome.route,
         Screen.Login.route,
         Screen.Register.route,
         "pet",
         Screen.ScoreCounter.route,
-        "shop"
+        "shop",
+        Screen.Inventory.route,
+        "spin_wheel",
+        "anniversary",
+        Screen.Goal.route,
+        Screen.Vip.route,
+        Screen.AvatarFrameShop.route
     )
     
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            // 只在个人中心显示全局TopAppBar，其他页面使用自己的 PageHeader 或自定义头部
-            val showTopBar = currentDestination?.route in listOf(
-                Screen.Profile.route
-            )
+            // VipProfile页面不显示TopBar
+            val showTopBar = false  // 不显示TopBar
             
             if (showTopBar) {
                 // 美化的顶部导航栏 - 带装饰元素
@@ -212,7 +240,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
                                 Screen.Habit.route -> "📅" to "打卡"
                                 Screen.Mood.route -> "😊" to "心情"
                                 Screen.Goal.route -> "🎯" to "目标"
-                                Screen.Profile.route -> "👤" to "我的"
+                                Screen.VipProfile.route -> "👤" to "我的"
                                 else -> "🎉" to "FunLife"
                             }
                             

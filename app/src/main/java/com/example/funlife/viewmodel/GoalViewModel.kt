@@ -114,7 +114,7 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    fun addCountdown(title: String, targetDate: String, category: String, icon: String, color: String) {
+    fun addCountdown(title: String, targetDate: String, category: String, icon: String, color: String, note: String = "") {
         viewModelScope.launch {
             // 🔥 新增：输入验证
             val titleValidation = com.example.funlife.utils.ValidationUtils.validateGoalTitle(title)
@@ -131,6 +131,7 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
                 category = category,
                 icon = icon,
                 color = color,
+                note = note,
                 createdAt = LocalDateTime.now().toString()
             )
             repository.insertCountdown(countdown)
@@ -147,5 +148,12 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.deleteCountdown(countdown)
         }
+    }
+    
+    // 🔥 修改：不自动删除已达成目标，保留作为历史记录
+    // 用户可以在"查看更多"页面查看历史目标
+    fun deleteExpiredCountdowns() {
+        // 不再自动删除已达成的目标，保留它们作为历史记录
+        // 用户可以手动删除或在历史页面查看
     }
 }

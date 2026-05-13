@@ -11,18 +11,29 @@ class SoundEffectManager private constructor(context: Context) {
     private val soundPool: SoundPool
     private val soundMap = mutableMapOf<SoundEffect, Int>()
     private val streamMap = mutableMapOf<SoundEffect, Int>()  // 保存正在播放的音效流ID
+    private val loadedSounds = mutableSetOf<Int>()  // 记录已加载完成的音效ID
     private var isEnabled = true
     
     init {
         val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_MEDIA)  // 改用媒体音量通道，而不是系统音量
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
             .build()
         
         soundPool = SoundPool.Builder()
             .setMaxStreams(5)
             .setAudioAttributes(audioAttributes)
             .build()
+        
+        // 设置加载完成监听器
+        soundPool.setOnLoadCompleteListener { _, sampleId, status ->
+            if (status == 0) {
+                loadedSounds.add(sampleId)
+                Log.d(TAG, "Sound loaded successfully: $sampleId (total loaded: ${loadedSounds.size})")
+            } else {
+                Log.e(TAG, "Failed to load sound: $sampleId, status: $status")
+            }
+        }
         
         // 加载音效文件
         loadSounds(context)
@@ -34,11 +45,15 @@ class SoundEffectManager private constructor(context: Context) {
             loadSound(context, SoundEffect.SPIN_ROTATING, "spin_rotating")
             loadSound(context, SoundEffect.RESULT_NORMAL, "result_normal")
             
-            // 导航栏音效（如果文件存在）
-            loadSound(context, SoundEffect.NAV_HOME, "nav_home")
-            loadSound(context, SoundEffect.NAV_HABIT, "nav_habit")
-            loadSound(context, SoundEffect.NAV_MOOD, "nav_mood")
-            loadSound(context, SoundEffect.NAV_PROFILE, "nav_profile")
+            // 导航栏音效 - 都使用 nav_home 作为通用音效
+            val navSoundId = loadSound(context, SoundEffect.NAV_HOME, "nav_home")
+            if (navSoundId != null) {
+                // 其他导航音效复用同一个音效
+                soundMap[SoundEffect.NAV_HABIT] = navSoundId
+                soundMap[SoundEffect.NAV_MOOD] = navSoundId
+                soundMap[SoundEffect.NAV_PROFILE] = navSoundId
+                soundMap[SoundEffect.BUTTON_CLICK] = navSoundId
+            }
             
             // 背景音乐
             loadSound(context, SoundEffect.PET_BGM, "pet")
@@ -49,7 +64,7 @@ class SoundEffectManager private constructor(context: Context) {
         }
     }
     
-    private fun loadSound(context: Context, effect: SoundEffect, fileName: String) {
+    private fun loadSound(context: Context, effect: SoundEffect, fileName: String): Int? {
         try {
             val resId = context.resources.getIdentifier(
                 fileName,
@@ -61,38 +76,54 @@ class SoundEffectManager private constructor(context: Context) {
                 val soundId = soundPool.load(context, resId, 1)
                 soundMap[effect] = soundId
                 Log.d(TAG, "Loaded sound: $fileName (ID: $soundId)")
+                return soundId
             } else {
                 Log.w(TAG, "Sound file not found: $fileName")
+                return null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading sound: $fileName", e)
+            return null
         }
     }
     
     fun play(effect: SoundEffect, volume: Float = 1.0f, loop: Boolean = false) {
-        if (!isEnabled) return
+        if (!isEnabled) {
+            Log.d(TAG, "Sound disabled, not playing: $effect")
+            return
+        }
         
-        soundMap[effect]?.let { soundId ->
-            try {
-                val streamId = soundPool.play(
-                    soundId,
-                    volume,
-                    volume,
-                    1,
-                    if (loop) -1 else 0,  // -1 表示无限循环
-                    1.0f
-                )
-                
+        val soundId = soundMap[effect]
+        if (soundId == null) {
+            Log.w(TAG, "Sound not loaded: $effect")
+            return
+        }
+        
+        if (!loadedSounds.contains(soundId)) {
+            Log.w(TAG, "Sound not ready yet: $effect (ID: $soundId)")
+            return
+        }
+        
+        try {
+            val streamId = soundPool.play(
+                soundId,
+                volume,
+                volume,
+                1,
+                if (loop) -1 else 0,  // -1 表示无限循环
+                1.0f
+            )
+            
+            if (streamId != 0) {
                 if (loop) {
                     streamMap[effect] = streamId  // 保存流ID以便后续停止
                 }
-                
-                Log.d(TAG, "Playing sound: $effect (loop: $loop, streamId: $streamId)")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error playing sound: $effect", e)
+                Log.d(TAG, "Playing sound: $effect (loop: $loop, streamId: $streamId, volume: $volume)")
+            } else {
+                Log.e(TAG, "Failed to play sound: $effect (streamId is 0)")
             }
-        } ?: run {
-            Log.w(TAG, "Sound not loaded: $effect")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing sound: $effect", e)
         }
     }
     
