@@ -93,7 +93,7 @@ import com.example.funlife.data.model.UserRedeemHistory
         com.example.funlife.data.model.UserOwnedBackground::class,
         com.example.funlife.data.model.UserAvatarFrame::class  // 🔥 新增：用户头像框表
     ],
-    version = 36,  // 🔥 升级到版本36 - 添加头像框商城系统
+    version = 38,  // 🔥 升级到版本38 - 修复AvatarFrameInitializer字段
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -1139,6 +1139,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        // 🔥 新增：版本36到37 - 添加头像框商城kapian设计字段
+        private val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 占位迁移，确保版本号连续
+                // 版本37的schema变更已在版本36中完成
+            }
+        }
+        
+        // 🔥 新增：版本37到38 - 修复AvatarFrameInitializer字段
+        private val MIGRATION_37_38 = object : Migration(37, 38) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // 占位迁移，确保版本号连续
+                // 此版本主要修复了AvatarFrameInitializer中移除的不存在字段
+                // 数据库schema没有实际变更
+            }
+        }
+        
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -1181,7 +1198,9 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_32_33,  // 🔥 新增：VIP系统
                     MIGRATION_33_34,  // 🔥 新增：VIP安全签名
                     MIGRATION_34_35,  // 🔥 新增：VIP个人主页系统
-                    MIGRATION_35_36   // 🔥 新增：头像框商城系统
+                    MIGRATION_35_36,  // 🔥 新增：头像框商城系统
+                    MIGRATION_36_37,  // 🔥 新增：头像框商城kapian设计字段
+                    MIGRATION_37_38   // 🔥 新增：修复AvatarFrameInitializer字段
                 )
                 .fallbackToDestructiveMigration()
                 .build()

@@ -187,7 +187,8 @@ fun NavGraph(
         
         composable("shop") {
             ShopScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) }
             )
         }
         
@@ -240,6 +241,12 @@ fun NavGraph(
                     navController.navigate(Screen.Welcome.route) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onNavigateToInventory = {
+                    navController.navigate(Screen.Inventory.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
                 }
             )
         }

@@ -31,7 +31,17 @@ class InventoryViewModel(
     // 🔥 背包容量限制
     val inventoryCapacity: StateFlow<Int> = userVip.map { vip ->
         val isVip = vip?.isVip() == true && vip.isExpired() == false
-        if (isVip) 1000 else 100
+        if (isVip) {
+            // 根据VIP等级设置容量
+            when (vip?.getCurrentVipLevel()) {
+                com.example.funlife.data.model.VipLevel.VIP3 -> Int.MAX_VALUE  // 🔥 终身VIP无限容量
+                com.example.funlife.data.model.VipLevel.VIP2 -> 5000  // VIP2: 5000
+                com.example.funlife.data.model.VipLevel.VIP1 -> 1000  // VIP1: 1000
+                else -> 100  // 普通用户: 100
+            }
+        } else {
+            100  // 普通用户: 100
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -264,4 +274,41 @@ class InventoryViewModel(
                 initialValue = emptyList()
             )
     }
+    
+    /**
+     * 🔥 装备头像框
+     */
+    fun equipAvatarFrame(frameAssetPath: String) {
+        viewModelScope.launch {
+            try {
+                // 先检查用户偏好是否存在
+                val prefs = userPreferencesDao.getPreferencesSync(1L)
+                
+                if (prefs == null) {
+                    // 如果不存在，创建默认偏好
+                    val defaultPrefs = com.example.funlife.data.model.UserPreferences(
+                        userId = 1L,
+                        equippedAvatarFrame = frameAssetPath
+                    )
+                    userPreferencesDao.insertPreferences(defaultPrefs)
+                } else {
+                    // 如果存在，更新头像框
+                    userPreferencesDao.updateEquippedAvatarFrame(1L, frameAssetPath)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("InventoryViewModel", "Error equipping avatar frame", e)
+            }
+        }
+    }
+    
+    /**
+     * 🔥 获取当前装备的头像框
+     */
+    val equippedAvatarFrame: StateFlow<String?> = userPreferencesDao.getPreferences(1L)
+        .map { prefs -> prefs?.equippedAvatarFrame }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
 }

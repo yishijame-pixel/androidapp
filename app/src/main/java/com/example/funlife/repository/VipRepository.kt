@@ -172,7 +172,7 @@ class VipRepository(
                     val expireDate = when (vipLevel) {
                         1 -> null  // VIP1（普通VIP）：永久
                         2 -> LocalDate.now().plusDays(365).toString()  // VIP2（年费VIP）：365天
-                        3 -> null  // VIP3（终生VIP）：永久
+                        3 -> null  // VIP3（终身VIP）：永久
                         99 -> null  // PERMANENT（系统保留）：永久
                         else -> LocalDate.now().plusDays(30).toString()  // 其他：30天
                     }
@@ -212,11 +212,16 @@ class VipRepository(
                     val bonusCoins = when (vipLevel) {
                         1 -> 100   // 普通VIP赠送100金币
                         2 -> 500   // 年费VIP赠送500金币
-                        3 -> 1000  // 终生VIP赠送1000金币
+                        3 -> 1000  // 终身VIP赠送1000金币
                         else -> 0
                     }
                     
                     if (bonusCoins > 0) {
+                        // 🔥 确保用户有金币记录（使用initializeCoins）
+                        coinDao.initializeCoins(userId)
+                        android.util.Log.d("VipRepository", "初始化用户金币记录")
+                        
+                        // 添加金币
                         coinDao.addCoins(userId, bonusCoins)
                         android.util.Log.d("VipRepository", "✓ 赠送金币: $bonusCoins")
                     }
@@ -276,7 +281,7 @@ class VipRepository(
                 RedeemCode(
                     code = "HZ223498",
                     type = "VIP",
-                    value = "3",  // 终生VIP（VIP3）
+                    value = "3",  // 终身VIP（VIP3）
                     maxUses = -1,  // 无限使用
                     currentUses = 0,
                     expiryDate = LocalDate.now().plusYears(10).toString(),
@@ -401,7 +406,7 @@ class VipRepository(
             val bonusCoins = when (vipLevel) {
                 1 -> 100   // 普通VIP赠送100金币
                 2 -> 500   // 年费VIP赠送500金币
-                3 -> 1000  // 终生VIP赠送1000金币
+                3 -> 1000  // 终身VIP赠送1000金币
                 else -> 0
             }
             

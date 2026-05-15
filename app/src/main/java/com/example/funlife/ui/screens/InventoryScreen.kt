@@ -100,10 +100,28 @@ fun InventoryScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(items, key = { it.id }) { item ->
-                        // 判断是否是当前装备的面板或按钮皮肤
+                        // 判断是否是当前装备的面板或按钮皮肤或头像框
                         val equippedButtonSkin by viewModel.equippedButtonSkin.collectAsState()
-                        val isEquipped = item.itemId == "panel_$equippedPanelSkin" || 
-                                        item.itemId == "button_$equippedButtonSkin"
+                        val equippedAvatarFrame by viewModel.equippedAvatarFrame.collectAsState()
+                        
+                        // 🔥 精确匹配头像框路径，避免误判
+                        val isEquipped = when {
+                            // 面板皮肤匹配
+                            item.itemId == "panel_$equippedPanelSkin" -> true
+                            // 按钮皮肤匹配
+                            item.itemId == "button_$equippedButtonSkin" -> true
+                            // 头像框匹配：从description中提取实际路径进行精确匹配
+                            item.itemId.startsWith("avatar_frame_") && equippedAvatarFrame != null -> {
+                                val actualAssetPath = if (item.description.contains("/")) {
+                                    item.description.substringBefore("\n").trim()
+                                } else {
+                                    val frameNum = item.itemId.removePrefix("avatar_frame_")
+                                    "xiangkuang/$frameNum.png"
+                                }
+                                actualAssetPath == equippedAvatarFrame
+                            }
+                            else -> false
+                        }
                         
                         InventoryItemCard(
                             item = item,
@@ -143,6 +161,13 @@ fun InventoryScreen(
                 viewModel.equipButtonSkin(skinName)
                 scope.launch {
                     android.widget.Toast.makeText(context, "已设置为当前转盘按钮", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                showItemDetail = false
+            },
+            onEquipAvatarFrame = { assetPath ->
+                viewModel.equipAvatarFrame(assetPath)
+                scope.launch {
+                    android.widget.Toast.makeText(context, "已装备头像框", android.widget.Toast.LENGTH_SHORT).show()
                 }
                 showItemDetail = false
             }
@@ -229,16 +254,26 @@ fun InventoryTopBar(
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF5D4037)
                     )
-                    Text(
-                        "$totalQuantity / $inventoryCapacity",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (totalQuantity >= inventoryCapacity * 0.9) {
-                            Color(0xFFE53935) // 接近满时显示红色
-                        } else {
-                            Color(0xFF4CAF50)
-                        }
-                    )
+                    // 🔥 终身VIP显示"无限"
+                    if (inventoryCapacity == Int.MAX_VALUE) {
+                        Text(
+                            "$totalQuantity / ∞",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD700)
+                        )
+                    } else {
+                        Text(
+                            "$totalQuantity / $inventoryCapacity",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (totalQuantity >= inventoryCapacity * 0.9) {
+                                Color(0xFFE53935) // 接近满时显示红色
+                            } else {
+                                Color(0xFF4CAF50)
+                            }
+                        )
+                    }
                 }
                 
                 // VIP标识
@@ -279,40 +314,51 @@ fun InventoryTopBar(
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            // 容量进度条
-            val progress = totalQuantity.toFloat() / inventoryCapacity.toFloat()
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFFE0E0E0))
-            ) {
+            // 容量进度条 - 终身VIP不显示进度条
+            if (inventoryCapacity != Int.MAX_VALUE) {
+                val progress = totalQuantity.toFloat() / inventoryCapacity.toFloat()
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(progress.coerceIn(0f, 1f))
-                        .fillMaxHeight()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = if (progress >= 0.9f) {
-                                    listOf(Color(0xFFE53935), Color(0xFFFF5252))
-                                } else {
-                                    listOf(Color(0xFF4CAF50), Color(0xFF66BB6A))
-                                }
-                            ),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                )
-            }
-            
-            // 容量提示
-            if (progress >= 0.9f) {
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFFE0E0E0))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = if (progress >= 0.9f) {
+                                        listOf(Color(0xFFE53935), Color(0xFFFF5252))
+                                    } else {
+                                        listOf(Color(0xFF4CAF50), Color(0xFF66BB6A))
+                                    }
+                                ),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                    )
+                }
+                
+                // 容量提示
+                if (progress >= 0.9f) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        if (isVip) "背包快满了！" else "背包快满了！开通VIP可扩容",
+                        fontSize = 11.sp,
+                        color = Color(0xFFE53935),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else {
+                // 终身VIP显示特殊提示
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    if (isVip) "背包快满了！" else "背包快满了！开通VIP可扩容至1000",
+                    "✨ 终身VIP · 无限容量",
                     fontSize = 11.sp,
-                    color = Color(0xFFE53935),
-                    fontWeight = FontWeight.Medium
+                    color = Color(0xFFFFD700),
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -333,6 +379,8 @@ fun ItemTypeFilter(
         TypeInfo(InventoryItemType.TOY, "玩具", "🎾"),
         TypeInfo(InventoryItemType.DECORATION, "装饰", "🎨"),
         TypeInfo(InventoryItemType.BUTTON_SKIN, "按钮", "🎯"),
+        TypeInfo(InventoryItemType.PANEL_SKIN, "面板", "🎴"),
+        TypeInfo(InventoryItemType.AVATAR_FRAME, "头像框", "🖼️"),
         TypeInfo(InventoryItemType.CONSUMABLE, "消耗", "💊"),
         TypeInfo(InventoryItemType.SPECIAL, "特殊", "✨")
     )
@@ -505,6 +553,46 @@ fun InventoryItemCard(
                             fontSize = 36.sp
                         )
                     }
+                } else if (item.itemId.startsWith("avatar_frame_")) {
+                    // 🔥 显示头像框图片
+                    val context = LocalContext.current
+                    // 从itemId中提取资源路径（存储在description中）
+                    val frameBitmap = remember(item.itemId) {
+                        try {
+                            // 尝试从description中获取路径，或使用默认路径
+                            val assetPath = if (item.description.contains("/")) {
+                                item.description.substringBefore("\n").trim()
+                            } else {
+                                // 从itemId提取数字，构建路径
+                                val frameNum = item.itemId.removePrefix("avatar_frame_")
+                                "xiangkuang/$frameNum.png"
+                            }
+                            context.assets.open(assetPath).use { inputStream ->
+                                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("InventoryItemCard", "Failed to load avatar frame: ${e.message}")
+                            null
+                        }
+                    }
+                    
+                    if (frameBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = frameBitmap,
+                            contentDescription = item.itemName,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(2.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                    } else {
+                        Text(
+                            item.iconEmoji,
+                            fontSize = 36.sp
+                        )
+                    }
                 } else {
                     Text(
                         item.iconEmoji,
@@ -598,7 +686,8 @@ fun ItemDetailDialog(
     onUse: (InventoryItem) -> Unit,
     onDelete: (InventoryItem) -> Unit,
     onEquipPanel: (String) -> Unit = {},
-    onEquipButton: (String) -> Unit = {}
+    onEquipButton: (String) -> Unit = {},
+    onEquipAvatarFrame: (String) -> Unit = {}  // 🔥 新增：装备头像框回调
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -620,6 +709,7 @@ fun ItemDetailDialog(
     // 判断是否是结算面板皮肤或按钮皮肤
     val isPanelSkin = item.itemId.startsWith("panel_")
     val isButtonSkin = item.itemId.startsWith("button_")
+    val isAvatarFrame = item.itemId.startsWith("avatar_frame_")  // 🔥 新增：判断是否是头像框
     
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -691,6 +781,40 @@ fun ItemDetailDialog(
                             if (buttonBitmap != null) {
                                 androidx.compose.foundation.Image(
                                     bitmap = buttonBitmap,
+                                    contentDescription = item.itemName,
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                )
+                            } else {
+                                Text(item.iconEmoji, fontSize = 60.sp)
+                            }
+                        }
+                        item.itemId.startsWith("avatar_frame_") -> {
+                            // 🔥 显示头像框图片
+                            val frameBitmap = remember(item.itemId) {
+                                try {
+                                    // 尝试从description中获取路径，或使用默认路径
+                                    val assetPath = if (item.description.contains("/")) {
+                                        item.description.substringBefore("\n").trim()
+                                    } else {
+                                        // 从itemId提取数字，构建路径
+                                        val frameNum = item.itemId.removePrefix("avatar_frame_")
+                                        "xiangkuang/$frameNum.png"
+                                    }
+                                    context.assets.open(assetPath).use { inputStream ->
+                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("ItemDetailDialog", "Failed to load avatar frame: ${e.message}")
+                                    null
+                                }
+                            }
+                            
+                            if (frameBitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = frameBitmap,
                                     contentDescription = item.itemName,
                                     modifier = Modifier
                                         .size(80.dp)
@@ -780,6 +904,16 @@ fun ItemDetailDialog(
                                         val skinName = item.itemId.removePrefix("button_")
                                         onEquipButton(skinName)
                                     }
+                                    isAvatarFrame -> {
+                                        // 🔥 处理头像框装备
+                                        val assetPath = if (item.description.contains("/")) {
+                                            item.description.substringBefore("\n").trim()
+                                        } else {
+                                            val frameNum = item.itemId.removePrefix("avatar_frame_")
+                                            "xiangkuang/$frameNum.png"
+                                        }
+                                        onEquipAvatarFrame(assetPath)
+                                    }
                                     else -> {
                                         onUse(item)
                                     }
@@ -793,7 +927,7 @@ fun ItemDetailDialog(
                         ) {
                             Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (isPanelSkin || isButtonSkin) "装备" else "使用")
+                            Text(if (isPanelSkin || isButtonSkin || isAvatarFrame) "装备" else "使用")
                         }
                     }
                     

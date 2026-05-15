@@ -47,5 +47,8 @@ data class UserPreferences(
     val spinButtonSkin: String = "pf_1",                 // 转盘按钮皮肤：pf_1 到 pf_27
     
     // 🔥 新增：转盘旋转音量
-    val spinRotationVolume: Float = 0.7f                 // 转盘旋转音量：0.0 到 1.0
+    val spinRotationVolume: Float = 0.7f,                // 转盘旋转音量：0.0 到 1.0
+    
+    // 🔥 新增：装备的头像框
+    val equippedAvatarFrame: String? = null              // 装备的头像框资源路径（如 "xiangkuang/1.png"）
 )

@@ -57,7 +57,7 @@ enum class VipLevel(
     ),
     VIP3(
         level = 3,
-        displayName = "终生VIP",
+        displayName = "终身VIP",
         icon = "👑",
         color = 0xFFFF6B9D,
         inventoryLimit = 0,  // 无限

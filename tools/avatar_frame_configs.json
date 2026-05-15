@@ -1,0 +1,66 @@
+[
+  {
+    "assetPath": "xiangkuang/A4头像框",
+    "originalWidth": 1100,
+    "originalHeight": 1100,
+    "transparentAreaRatio": 0.54,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框1",
+    "originalWidth": 606,
+    "originalHeight": 605,
+    "transparentAreaRatio": 0.66,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框2",
+    "originalWidth": 476,
+    "originalHeight": 476,
+    "transparentAreaRatio": 0.65,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框4",
+    "originalWidth": 233,
+    "originalHeight": 233,
+    "transparentAreaRatio": 0.6,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框5",
+    "originalWidth": 1100,
+    "originalHeight": 1100,
+    "transparentAreaRatio": 0.54,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框6",
+    "originalWidth": 497,
+    "originalHeight": 507,
+    "transparentAreaRatio": 0.67,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框7",
+    "originalWidth": 312,
+    "originalHeight": 348,
+    "transparentAreaRatio": 0.66,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  {
+    "assetPath": "xiangkuang/头像框8",
+    "originalWidth": 400,
+    "originalHeight": 400,
+    "transparentAreaRatio": 0.53,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  }
+]

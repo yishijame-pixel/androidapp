@@ -45,7 +45,7 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             coinRepository.initializeCoins(getCurrentUserId())
             shopRepository.initializeShopItems()
-            // 🔥 初始化头像框
+            // 🔥 初始化头像框（使用真实assets数据）
             shopRepository.initializeAvatarFrames(application)
             checkDailyRewardStatus()
             // 🔥 更新旧的按钮皮肤名称

@@ -109,4 +109,8 @@ interface UserPreferencesDao {
     // 🔥 新增：更新转盘旋转音量
     @Query("UPDATE user_preferences SET spinRotationVolume = :volume WHERE userId = :userId")
     suspend fun updateSpinRotationVolume(userId: Long, volume: Float)
+    
+    // 🔥 新增：更新装备的头像框
+    @Query("UPDATE user_preferences SET equippedAvatarFrame = :frameAssetPath WHERE userId = :userId")
+    suspend fun updateEquippedAvatarFrame(userId: Long, frameAssetPath: String?)
 }

@@ -548,9 +548,24 @@ class ShopRepository(
     }
     
     /**
-     * 初始化头像框商品（需要Context）
+     * 初始化头像框商品（使用真实的assets数据）
+     * 注意：这个方法应该在有Context的地方调用，比如Application或ViewModel
      */
     suspend fun initializeAvatarFrames(context: android.content.Context): Int {
-        return com.example.funlife.utils.AvatarFrameInitializer.initializeAvatarFrames(context, shopDao)
+        // 检查头像框是否已存在
+        val avatarFramesCount = shopDao.getShopItemsByType("avatar_frame").size
+        
+        if (avatarFramesCount > 0) {
+            android.util.Log.d("ShopRepository", "Avatar frames already initialized: $avatarFramesCount items")
+            return avatarFramesCount
+        }
+        
+        // 使用AvatarFrameInitializer从assets目录初始化真实数据
+        return try {
+            com.example.funlife.utils.AvatarFrameInitializer.initializeAvatarFrames(context, shopDao)
+        } catch (e: Exception) {
+            android.util.Log.e("ShopRepository", "Failed to initialize avatar frames", e)
+            0
+        }
     }
 }

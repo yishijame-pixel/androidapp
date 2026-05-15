@@ -1,9 +1,12 @@
-// ProfileScreen.kt - 个人中心页面（精致美化版）
+// ProfileScreen.kt - 个人中心页面（温暖色调设计 - 复刻React版本）
 package com.example.funlife.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,18 +15,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,404 +32,653 @@ import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
 
+// 🎨 调色板 - 温暖色调
+private object WarmPalette {
+    val bg = Color(0xFFFEF3E8)
+    val bgDeep = Color(0xFFFDE8D0)
+    val white = Color(0xFFFFFFFF)
+    val hero1 = Color(0xFFFF5222)
+    val hero2 = Color(0xFFFF8C3A)
+    val hero3 = Color(0xFFFFC55E)
+    val coral = Color(0xFFFF5222)
+    val amber = Color(0xFFF5A623)
+    val rose = Color(0xFFE8505B)
+    val sage = Color(0xFF6DAB8A)
+    val ink = Color(0xFF1E0D06)
+    val brown = Color(0xFF7A3D24)
+    val muted = Color(0xFFB07D66)
+    val border = Color(0x1FC86E46)  // rgba(200,110,70,0.12)
+    val shadow = Color(0x19B4501E)  // rgba(180,80,30,0.1)
+}
+
 @Composable
 fun ProfileScreen(
     authViewModel: AuthViewModel,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToInventory: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val application = context.applicationContext as com.example.funlife.FunLifeApplication
     val currentSession = authViewModel.getCurrentSession()
     var showLogoutDialog by remember { mutableStateOf(false) }
     
+    // 🔥 创建VipProfileViewModel来管理头像
+    val vipProfileViewModel: com.example.funlife.viewmodel.VipProfileViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return com.example.funlife.viewmodel.VipProfileViewModel(
+                    profileRepository = com.example.funlife.repository.ProfileRepository(
+                        application.database.userAvatarDao(),
+                        application.database.userDao(),
+                        application.database.coinDao(),
+                        application.database.dailyRewardDao()
+                    ),
+                    userId = currentSession?.userId ?: 0L,
+                    context = context
+                ) as T
+            }
+        }
+    )
+    
+    val userAvatar by vipProfileViewModel.userAvatar.collectAsState()
+    
+    // 🔥 获取金币数量
+    val userCoins by remember {
+        application.database.coinDao().getUserCoins(currentSession?.userId ?: 0L)
+    }.collectAsState(initial = null)
+    val currentCoins = userCoins?.coins ?: 0
+    
+    // 入场动画
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(100)
         visible = true
     }
     
-    val infiniteTransition = rememberInfiniteTransition(label = "bg")
-    val rotate by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(30000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotate"
-    )
-    
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-    
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF5F2),
-                        Color(0xFFFFFAF8),
-                        Color.White
-                    )
-                )
-            )
+            .background(WarmPalette.bg)
     ) {
-        // 顶部大型装饰背景
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(320.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFFF6B35),
-                            Color(0xFFFF8C61),
-                            Color(0xFFFFA07A).copy(alpha = 0.3f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-        
-        // 动态装饰圆形 - 左上
-        Box(
-            modifier = Modifier
-                .size(200.dp)
-                .offset(x = (-60).dp, y = 40.dp)
-                .scale(scale)
-                .alpha(0.15f)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFF6B6B),
-                            Color.Transparent
-                        )
-                    ),
-                    CircleShape
-                )
-        )
-        
-        // 动态装饰圆形 - 右上
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 50.dp, y = 80.dp)
-                .rotate(rotate * 0.5f)
-                .alpha(0.12f)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFB74D),
-                            Color.Transparent
-                        )
-                    ),
-                    CircleShape
-                )
-        )
-        
-        // 小装饰点
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .offset(x = 40.dp, y = 200.dp)
-                .rotate(-rotate * 0.3f)
-                .alpha(0.08f)
-                .background(
-                    Color(0xFFFF8E53),
-                    CircleShape
-                )
-        )
-        
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp)
         ) {
-            Spacer(Modifier.height(50.dp))
-            
-            // 用户信息卡片 - 全新设计
-            AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600)) + slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = tween(600, easing = FastOutSlowInEasing)
-                )
+            // ══════════════════════════════════════════════════════════
+            // 🎨 HERO BANNER - 渐变顶部横幅（带波浪底部）
+            // ══════════════════════════════════════════════════════════
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(250.dp)  // 🔥 调整Banner高度到250dp
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White
-                    ),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 8.dp
-                    )
+                // 渐变背景
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    WarmPalette.hero1,
+                                    WarmPalette.hero2,
+                                    WarmPalette.hero3
+                                ),
+                                start = Offset(0f, 0f),
+                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                            )
+                        )
+                )
+                
+                // 装饰圆形 - 右上
+                Box(
+                    modifier = Modifier
+                        .size(200.dp)
+                        .offset(x = (-50).dp, y = (-50).dp)
+                        .align(Alignment.TopStart)
+                        .background(
+                            Color.White.copy(alpha = 0.2f),
+                            CircleShape
+                        )
+                )
+                
+                // 装饰圆形 - 左上
+                Box(
+                    modifier = Modifier
+                        .size(130.dp)
+                        .offset(x = (-30).dp, y = 30.dp)
+                        .align(Alignment.TopStart)
+                        .background(
+                            Color.White.copy(alpha = 0.15f),
+                            CircleShape
+                        )
+                )
+                
+                // 装饰圆形 - 右下
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .offset(x = (-60).dp, y = (-30).dp)
+                        .align(Alignment.BottomEnd)
+                        .background(
+                            Color.White.copy(alpha = 0.1f),
+                            CircleShape
+                        )
+                )
+                
+                // 状态栏区域
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, top = 48.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        "PROFILE",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 2.sp
+                    )
+                    
+                    // 通知按钮
                     Box(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(
+                                Color.White.copy(alpha = 0.18f),
+                                RoundedCornerShape(11.dp)
+                            )
+                            .clickable { /* TODO: 通知 */ },
+                        contentAlignment = Alignment.Center
                     ) {
-                        // 卡片内部渐变背景
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = "通知",
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        // 红点提示
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(140.dp)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFFFF6B35).copy(alpha = 0.1f),
-                                            Color(0xFFFF8E53).copy(alpha = 0.05f)
-                                        )
-                                    )
-                                )
+                                .size(8.dp)
+                                .offset(x = 6.dp, y = (-6).dp)
+                                .background(Color(0xFFFDE68A), CircleShape)
+                        )
+                    }
+                }
+                
+                // 波浪底部（使用Canvas绘制）
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)  // 🔥 增加波浪高度：40dp → 60dp
+                        .align(Alignment.BottomCenter)
+                ) {
+                    val path = Path().apply {
+                        val width = size.width
+                        val height = size.height
+                        
+                        // 起点
+                        moveTo(0f, height * 0.5f)
+                        
+                        // 波浪曲线
+                        cubicTo(
+                            width * 0.2f, height * 1.25f,
+                            width * 0.45f, 0f,
+                            width * 0.65f, height * 0.625f
+                        )
+                        cubicTo(
+                            width * 0.8f, height * 1.05f,
+                            width * 0.9f, height * 0.375f,
+                            width, height * 0.5f
                         )
                         
-                        Column(
-                            modifier = Modifier.padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        // 封闭路径
+                        lineTo(width, height)
+                        lineTo(0f, height)
+                        close()
+                    }
+                    
+                    drawPath(
+                        path = path,
+                        color = WarmPalette.bg
+                    )
+                }
+                
+                // 头像（重叠在波浪上）
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(y = 52.dp)  // 🔥 往下移动（从42dp增加到52dp）
+                ) {
+                    // 🔥 获取装备的头像框（从商城购买的）
+                    val userPreferencesDao = remember { application.database.userPreferencesDao() }
+                    val userPrefs by userPreferencesDao.getPreferences(currentSession?.userId ?: 0L)
+                        .collectAsState(initial = null)
+                    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
+                    
+                    var showAvatarUploadDialog by remember { mutableStateOf(false) }
+                    
+                    if (equippedAvatarFrame != null) {
+                        // ═══════════════════════════════════════════════════════
+                        // 🎨 使用商城购买的头像框（完全替代橙色边框）
+                        // ═══════════════════════════════════════════════════════
+                        Box(
+                            modifier = Modifier
+                                .clickable { showAvatarUploadDialog = true },
+                            contentAlignment = Alignment.Center
                         ) {
-                            // 头像 - 带光晕效果
-                            Box(
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // 外层光晕
-                                Box(
-                                    modifier = Modifier
-                                        .size(120.dp)
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(
-                                                    Color(0xFFFF6B35).copy(alpha = 0.2f),
-                                                    Color.Transparent
-                                                )
-                                            ),
-                                            CircleShape
-                                        )
-                                )
-                                
-                                // 头像主体
-                                Box(
-                                    modifier = Modifier
-                                        .size(90.dp)
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors = listOf(
-                                                    Color(0xFFFF6B35),
-                                                    Color(0xFFFF8E53),
-                                                    Color(0xFFFFA07A)
-                                                )
-                                            ),
-                                            CircleShape
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(50.dp)
-                                    )
-                                }
-                            }
-                            
-                            Spacer(Modifier.height(24.dp))
-                            
-                            // 用户名
-                            Text(
-                                currentSession?.username ?: "未登录",
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2C3E50)
+                            com.example.funlife.ui.components.AvatarWithFrame(
+                                avatarUri = userAvatar?.avatarUri,
+                                frameAssetPath = equippedAvatarFrame,
+                                frameSize = 150.dp,
+                                defaultText = currentSession?.username?.firstOrNull()?.toString()?.uppercase() ?: "U",
+                                vipLevel = com.example.funlife.data.model.VipLevel.VIP3  // 终身VIP
                             )
                             
-                            Spacer(Modifier.height(12.dp))
+                            // 编辑按钮 - 右下角
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = (-8).dp, y = (-8).dp)  // 🔥 更大的负偏移，紧贴头像框
+                                    .background(WarmPalette.white, CircleShape)
+                                    .border(2.dp, WarmPalette.hero2, CircleShape)
+                                    .clickable { showAvatarUploadDialog = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = "编辑头像",
+                                    tint = WarmPalette.coral,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        // ═══════════════════════════════════════════════════════
+                        // 🟠 使用默认的橙色圆形边框
+                        // ═══════════════════════════════════════════════════════
+                        Box(
+                            modifier = Modifier.size(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // 橙色圆形边框（外层）
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .border(
+                                        width = 4.dp,
+                                        color = WarmPalette.hero2,
+                                        shape = CircleShape
+                                    )
+                            )
                             
-                            // 昵称标签
-                            if (!currentSession?.nickname.isNullOrEmpty()) {
-                                Surface(
-                                    shape = RoundedCornerShape(20.dp),
-                                    color = Color(0xFFFF6B35).copy(alpha = 0.12f)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                            // 白色间隔环
+                            Box(
+                                modifier = Modifier
+                                    .size(92.dp)
+                                    .border(
+                                        width = 3.dp,
+                                        color = WarmPalette.white,
+                                        shape = CircleShape
+                                    )
+                            )
+                            
+                            // 头像主体
+                            Box(
+                                modifier = Modifier
+                                    .size(84.dp)
+                                    .clip(CircleShape)
+                                    .clickable { showAvatarUploadDialog = true }
+                            ) {
+                                if (userAvatar?.avatarUri != null) {
+                                    // 显示用户上传的头像
+                                    coil.compose.AsyncImage(
+                                        model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                            .data(userAvatar?.avatarUri)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "头像",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    // 默认头像
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(
+                                                        WarmPalette.hero3,
+                                                        WarmPalette.hero2
+                                                    )
+                                                ),
+                                                CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            Icons.Default.Star,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFF6B35),
-                                            modifier = Modifier.size(16.dp)
-                                        )
                                         Text(
-                                            currentSession?.nickname ?: "",
-                                            fontSize = 15.sp,
-                                            color = Color(0xFFFF6B35),
-                                            fontWeight = FontWeight.SemiBold
+                                            "🐱",
+                                            fontSize = 44.sp
                                         )
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-            
-            Spacer(Modifier.height(32.dp))
-            
-            // 功能列表 - 分组设计
-            AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600, delayMillis = 200)) + slideInVertically(
-                    initialOffsetY = { it / 3 },
-                    animationSpec = tween(600, delayMillis = 200)
-                )
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    // 账户设置组
-                    Text(
-                        "账户设置",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF95A5A6),
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.White
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 4.dp
-                        )
-                    ) {
-                        Column {
-                            ProfileMenuItem(
-                                icon = Icons.Outlined.AccountCircle,
-                                title = "个人资料",
-                                subtitle = "查看和编辑个人信息",
-                                iconColor = Color(0xFFFF6B35),
-                                onClick = { /* TODO */ },
-                                showDivider = true
-                            )
                             
-                            ProfileMenuItem(
-                                icon = Icons.Outlined.Notifications,
-                                title = "通知设置",
-                                subtitle = "管理通知偏好",
-                                iconColor = Color(0xFFFF8E53),
-                                onClick = { /* TODO */ },
-                                showDivider = false
-                            )
-                        }
-                    }
-                    
-                    // 应用设置组
-                    Text(
-                        "应用设置",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF95A5A6),
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.White
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 4.dp
-                        )
-                    ) {
-                        Column {
-                            ProfileMenuItem(
-                                icon = Icons.Outlined.Settings,
-                                title = "偏好设置",
-                                subtitle = "主题、语言等",
-                                iconColor = Color(0xFFFFB74D),
-                                onClick = { /* TODO */ },
-                                showDivider = true
-                            )
-                            
-                            ProfileMenuItem(
-                                icon = Icons.Outlined.Info,
-                                title = "关于应用",
-                                subtitle = "版本 1.0.0",
-                                iconColor = Color(0xFF9C27B0),
-                                onClick = { /* TODO */ },
-                                showDivider = false
-                            )
-                        }
-                    }
-                    
-                    Spacer(Modifier.height(8.dp))
-                    
-                    // 退出登录按钮 - 全新设计
-                    Button(
-                        onClick = { showLogoutDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(60.dp),
-                        shape = RoundedCornerShape(30.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent
-                        ),
-                        contentPadding = PaddingValues(0.dp),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 0.dp
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFEBEE),
-                                            Color(0xFFFFF5F5)
-                                        )
-                                    ),
-                                    RoundedCornerShape(30.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            // 编辑按钮
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = (-8).dp, y = (-8).dp)  // 🔥 更大的负偏移，紧贴头像框
+                                    .background(WarmPalette.white, CircleShape)
+                                    .border(2.dp, WarmPalette.hero2, CircleShape)
+                                    .clickable { showAvatarUploadDialog = true },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Outlined.ExitToApp,
-                                    contentDescription = null,
-                                    tint = Color(0xFFE74C3C),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Text(
-                                    "退出登录",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFE74C3C)
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = "编辑头像",
+                                    tint = WarmPalette.coral,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
                     }
+                    
+                    // 头像上传对话框
+                    if (showAvatarUploadDialog) {
+                        com.example.funlife.ui.components.AvatarUploadDialog(
+                            onDismiss = { showAvatarUploadDialog = false },
+                            onAvatarSelected = { uri ->
+                                vipProfileViewModel.updateAvatarUri(uri)
+                                showAvatarUploadDialog = false
+                            }
+                        )
+                    }
                 }
             }
             
-            Spacer(Modifier.height(40.dp))
+            // ══════════════════════════════════════════════════════════
+            // 👤 用户名 + 标签
+            // ══════════════════════════════════════════════════════════
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 用户名
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        currentSession?.username ?: "yishiya",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = WarmPalette.ink,
+                        letterSpacing = (-0.5).sp
+                    )
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "编辑",
+                        tint = WarmPalette.muted,
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clickable { /* TODO: 编辑用户名 */ }
+                    )
+                }
+                
+                Spacer(Modifier.height(10.dp))
+                
+                // 徽章行
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // VIP徽章
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = WarmPalette.white,
+                        border = BorderStroke(1.5.dp, WarmPalette.border),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                tint = WarmPalette.coral,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                "普通用户",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = WarmPalette.brown
+                            )
+                        }
+                    }
+                    
+                    // 金币徽章
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFFFF8EB),
+                        border = BorderStroke(1.5.dp, Color(0x4DF5A623)),
+                        shadowElevation = 4.dp,
+                        modifier = Modifier.clickable { /* TODO: 金币详情 */ }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Diamond,
+                                contentDescription = null,
+                                tint = WarmPalette.amber,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                currentCoins.toString(),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF92600A)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            
+            // ══════════════════════════════════════════════════════════
+            // 📊 统计卡片
+            // ══════════════════════════════════════════════════════════
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(600, delayMillis = 150)) + 
+                        slideInVertically(initialOffsetY = { it / 4 })
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StatCard(
+                        icon = Icons.Default.LocalFireDepartment,
+                        value = "86",
+                        unit = "天",
+                        label = "累计打卡",
+                        color = WarmPalette.coral,
+                        bgColor = Color(0xFFFFF4F0),
+                        borderColor = Color(0x2EFF5222),
+                        modifier = Modifier.weight(1f),
+                        delay = 0
+                    )
+                    StatCard(
+                        icon = Icons.Default.Bolt,
+                        value = "5",
+                        unit = "天",
+                        label = "连续打卡",
+                        color = WarmPalette.amber,
+                        bgColor = Color(0xFFFFFBF0),
+                        borderColor = Color(0x38F5A623),
+                        modifier = Modifier.weight(1f),
+                        delay = 80
+                    )
+                    StatCard(
+                        icon = Icons.Default.EmojiEvents,
+                        value = "12",
+                        unit = "个",
+                        label = "习惯总数",
+                        color = WarmPalette.sage,
+                        bgColor = Color(0xFFF1FBF5),
+                        borderColor = Color(0x386DAB8A),
+                        modifier = Modifier.weight(1f),
+                        delay = 160
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            
+            // ══════════════════════════════════════════════════════════
+            // 📋 功能菜单列表
+            // ══════════════════════════════════════════════════════════
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(600, delayMillis = 280)) + 
+                        slideInVertically(initialOffsetY = { it / 4 })
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MenuItemCard(
+                        icon = Icons.Default.Inventory,
+                        label = "背包",
+                        subtitle = "道具与收藏",
+                        color = WarmPalette.coral,
+                        bgColor = Color(0xFFFFF4F1),
+                        borderColor = Color(0x26FF5222),
+                        tag = "NEW",
+                        onClick = onNavigateToInventory,
+                        delay = 0
+                    )
+                    MenuItemCard(
+                        icon = Icons.Default.Image,
+                        label = "头像框",
+                        subtitle = "外观个性定制",
+                        color = WarmPalette.rose,
+                        bgColor = Color(0xFFFFF2F3),
+                        borderColor = Color(0x26E8505B),
+                        tag = null,
+                        onClick = { /* TODO */ },
+                        delay = 60
+                    )
+                    MenuItemCard(
+                        icon = Icons.Default.Wallpaper,
+                        label = "背景",
+                        subtitle = "主题皮肤管理",
+                        color = WarmPalette.amber,
+                        bgColor = Color(0xFFFFFBF0),
+                        borderColor = Color(0x2EF5A623),
+                        tag = null,
+                        onClick = { /* TODO */ },
+                        delay = 120
+                    )
+                    MenuItemCard(
+                        icon = Icons.Default.CalendarMonth,
+                        label = "签到",
+                        subtitle = "每日领取奖励",
+                        color = WarmPalette.sage,
+                        bgColor = Color(0xFFF1FBF5),
+                        borderColor = Color(0x2E6DAB8A),
+                        tag = "今日",
+                        onClick = { /* TODO */ },
+                        delay = 180
+                    )
+                    MenuItemCard(
+                        icon = Icons.Default.BarChart,
+                        label = "统计",
+                        subtitle = "习惯数据报告",
+                        color = Color(0xFF8B6CF7),
+                        bgColor = Color(0xFFF7F4FF),
+                        borderColor = Color(0x268B6CF7),
+                        tag = null,
+                        onClick = { /* TODO */ },
+                        delay = 240
+                    )
+                    MenuItemCard(
+                        icon = Icons.Default.Settings,
+                        label = "设置",
+                        subtitle = "账户与偏好",
+                        color = WarmPalette.muted,
+                        bgColor = Color(0xFFFDF8F6),
+                        borderColor = Color(0x1FB07D66),
+                        tag = null,
+                        onClick = onNavigateToSettings,
+                        delay = 300
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            
+            // ══════════════════════════════════════════════════════════
+            // 🚪 退出登录按钮
+            // ══════════════════════════════════════════════════════════
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(600, delayMillis = 700))
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clickable { showLogoutDialog = true },
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0x0FE8505B),
+                    border = BorderStroke(1.5.dp, Color(0x2EE8505B))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Logout,
+                            contentDescription = null,
+                            tint = WarmPalette.rose,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "退出登录",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = WarmPalette.rose
+                        )
+                    }
+                }
+            }
+            
+            Spacer(Modifier.height(100.dp))  // 底部导航栏空间
         }
     }
     
@@ -440,13 +690,13 @@ fun ProfileScreen(
                 Text(
                     "退出登录",
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2C3E50)
+                    color = WarmPalette.ink
                 )
             },
             text = {
                 Text(
                     "确定要退出登录吗？",
-                    color = Color(0xFF7F8C8D)
+                    color = WarmPalette.muted
                 )
             },
             confirmButton = {
@@ -459,7 +709,7 @@ fun ProfileScreen(
                 ) {
                     Text(
                         "确定",
-                        color = Color(0xFFE74C3C),
+                        color = WarmPalette.rose,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -470,91 +720,207 @@ fun ProfileScreen(
                 ) {
                     Text(
                         "取消",
-                        color = Color(0xFF95A5A6)
+                        color = WarmPalette.muted
                     )
                 }
             },
-            containerColor = Color.White,
+            containerColor = WarmPalette.white,
             shape = RoundedCornerShape(24.dp)
         )
     }
 }
 
+// ══════════════════════════════════════════════════════════
+// 📊 统计卡片组件
+// ══════════════════════════════════════════════════════════
 @Composable
-fun ProfileMenuItem(
+fun StatCard(
     icon: ImageVector,
-    title: String,
-    subtitle: String,
-    iconColor: Color,
-    onClick: () -> Unit,
-    showDivider: Boolean = false
+    value: String,
+    unit: String,
+    label: String,
+    color: Color,
+    bgColor: Color,
+    borderColor: Color,
+    modifier: Modifier = Modifier,
+    delay: Int = 0
 ) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delay.toLong())
+        visible = true
+    }
+    
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(400)) + scaleIn(tween(400), initialScale = 0.8f)
+    ) {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(18.dp),
+            color = bgColor,
+            border = BorderStroke(1.5.dp, borderColor),
+            shadowElevation = 4.dp
         ) {
-            // 图标容器 - 渐变背景
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                iconColor.copy(alpha = 0.15f),
-                                iconColor.copy(alpha = 0.08f)
-                            )
-                        ),
-                        RoundedCornerShape(16.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-            
-            // 文字内容
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // 图标
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(bgColor, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+                
+                // 数值
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        value,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = WarmPalette.ink,
+                        lineHeight = 22.sp
+                    )
+                    Text(
+                        unit,
+                        fontSize = 11.sp,
+                        color = WarmPalette.muted
+                    )
+                }
+                
+                // 标签
                 Text(
-                    title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF2C3E50)
-                )
-                Text(
-                    subtitle,
-                    fontSize = 13.sp,
-                    color = Color(0xFF95A5A6)
+                    label,
+                    fontSize = 10.sp,
+                    color = WarmPalette.muted
                 )
             }
-            
-            // 箭头
-            Icon(
-                Icons.Default.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Color(0xFFBDC3C7),
-                modifier = Modifier.size(24.dp)
-            )
         }
-        
-        // 分隔线
-        if (showDivider) {
-            Divider(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                color = Color(0xFFF0F0F0),
-                thickness = 1.dp
-            )
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+// 📋 菜单项卡片组件
+// ══════════════════════════════════════════════════════════
+@Composable
+fun MenuItemCard(
+    icon: ImageVector,
+    label: String,
+    subtitle: String,
+    color: Color,
+    bgColor: Color,
+    borderColor: Color,
+    tag: String?,
+    onClick: () -> Unit,
+    delay: Int = 0
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delay.toLong())
+        visible = true
+    }
+    
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(400)) + slideInHorizontally(
+            initialOffsetX = { -it / 5 },
+            animationSpec = tween(400)
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+            shape = RoundedCornerShape(18.dp),
+            color = WarmPalette.white,
+            border = BorderStroke(1.5.dp, borderColor),
+            shadowElevation = 3.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 图标气泡
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(bgColor, RoundedCornerShape(14.dp))
+                        .border(1.5.dp, borderColor, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                
+                // 文字内容
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            label,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = WarmPalette.ink
+                        )
+                        if (tag != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = bgColor,
+                                border = BorderStroke(1.dp, borderColor)
+                            ) {
+                                Text(
+                                    tag,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = color,
+                                    letterSpacing = 0.5.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        subtitle,
+                        fontSize = 11.sp,
+                        color = WarmPalette.muted
+                    )
+                }
+                
+                // 箭头
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = Color(0x59B46E50),  // rgba(180,110,80,0.35)
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }

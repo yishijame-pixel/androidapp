@@ -557,6 +557,14 @@ fun WelcomeHeader(
         else -> "⭐"
     }
     
+    // 🔥 获取装备的头像框
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val database = remember { (context.applicationContext as com.example.funlife.FunLifeApplication).database }
+    val userPreferencesDao = remember { database.userPreferencesDao() }
+    val userPrefs by userPreferencesDao.getPreferences(userSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -572,7 +580,7 @@ fun WelcomeHeader(
                             Color(0xFFE1BEE7),  // 顶部浅紫色
                             Color(0xFFF3E5F5),  // 中间更浅
                             Color(0xFFFCE4EC).copy(alpha = 0.7f),  // 底部开始透明
-                            Color.Transparent   // 完全透明，融合到下面
+                                                              Color.Transparent   // 完全透明，融合到下面
                         )
                     )
                 )
@@ -604,63 +612,14 @@ fun WelcomeHeader(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 用户头像 - 带VIP光环
-                    Box(
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // VIP光环（在头像后面）
-                        if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
-                            com.example.funlife.ui.components.VipAvatarHalo(
-                                vipLevel = vipLevel,
-                                modifier = Modifier.size(64.dp)
-                            )
-                        }
-                        
-                        // 头像 - 显示真实头像或默认头像
-                        if (avatarUri != null) {
-                            // 显示用户上传的头像
-                            coil.compose.AsyncImage(
-                                model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                                    .data(avatarUri)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "用户头像",
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            // 默认头像
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = userSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "0",
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF9C27B0)
-                                )
-                            }
-                        }
-                        
-                        // VIP徽章（在头像右下角）
-                        if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .offset(x = 4.dp, y = 4.dp)
-                            ) {
-                                com.example.funlife.ui.components.VipBadgeIcon(
-                                    vipLevel = vipLevel
-                                )
-                            }
-                        }
-                    }
+                    // 🔥 使用带头像框的头像组件
+                    com.example.funlife.ui.components.AvatarWithFrame(
+                        avatarUri = avatarUri,
+                        frameAssetPath = equippedAvatarFrame,
+                        frameSize = if (equippedAvatarFrame != null) 90.dp else 54.dp,
+                        defaultText = userSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "U",
+                        vipLevel = vipLevel
+                    )
                     
                     // 用户名和昵称 - VIP用户名发光
                     Column {

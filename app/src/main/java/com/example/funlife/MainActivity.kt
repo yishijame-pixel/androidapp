@@ -139,7 +139,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
             label = "心情"
         ),
         BottomNavItem(
-            screen = Screen.VipProfile,
+            screen = Screen.Profile,
             icon = Icons.Default.Person,
             iconRes = R.drawable.nav_icon_4,
             label = "我的"

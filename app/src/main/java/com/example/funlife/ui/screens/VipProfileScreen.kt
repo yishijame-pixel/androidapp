@@ -108,6 +108,12 @@ fun VipProfileScreen(
     val currentBackground = allBackgrounds.find { it.id == userAvatar?.backgroundId }
     val currentFrame = allFrames.find { it.id == userAvatar?.frameId }
     
+    // 🔥 获取装备的头像框（从商城购买的）
+    val userPreferencesDao = remember { application.database.userPreferencesDao() }
+    val userPrefs by userPreferencesDao.getPreferences(currentSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
+    
     Box(modifier = Modifier.fillMaxSize()) {
         // VIP背景
         VipProfileBackground(
@@ -161,16 +167,28 @@ fun VipProfileScreen(
                             // 头像和边框层
                             Box(
                                 contentAlignment = Alignment.Center,
-                                modifier = Modifier.size(130.dp)
+                                modifier = Modifier.size(160.dp)  // 🔥 外层容器尺寸（从130dp增加到160dp）
                             ) {
-                                VipAvatarFrame(frame = currentFrame) {
-                                    AvatarUploader(
-                                        currentAvatarUri = userAvatar?.avatarUri,
-                                        onAvatarSelected = { uri ->
-                                            vipProfileViewModel.updateAvatarUri(uri)
-                                        },
-                                        modifier = Modifier.size(100.dp)
+                                // 🔥 如果有装备的头像框，使用AvatarWithFrame组件
+                                if (equippedAvatarFrame != null) {
+                                    com.example.funlife.ui.components.AvatarWithFrame(
+                                        avatarUri = userAvatar?.avatarUri,
+                                        frameAssetPath = equippedAvatarFrame,
+                                        frameSize = 150.dp,  // 🔥 头像框尺寸（从120dp增加到150dp）
+                                        defaultText = currentSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "U",
+                                        vipLevel = com.example.funlife.data.model.VipLevel.fromLevel(vipLevel)
                                     )
+                                } else {
+                                    // 使用原来的VipAvatarFrame（个人资料页面的装饰框）
+                                    VipAvatarFrame(frame = currentFrame) {
+                                        AvatarUploader(
+                                            currentAvatarUri = userAvatar?.avatarUri,
+                                            onAvatarSelected = { uri ->
+                                                vipProfileViewModel.updateAvatarUri(uri)
+                                            },
+                                            modifier = Modifier.size(100.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

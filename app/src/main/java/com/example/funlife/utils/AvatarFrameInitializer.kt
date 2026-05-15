@@ -293,6 +293,31 @@ object AvatarFrameInitializer {
     }
     
     /**
+     * 根据稀有度和类型获取emoji
+     */
+    private fun getEmojiForRarity(rarity: ItemRarity, isAnimated: Boolean): String {
+        return when (rarity) {
+            ItemRarity.COMMON -> if (isAnimated) "🌸" else "🖼️"
+            ItemRarity.RARE -> if (isAnimated) "✨" else "⭐"
+            ItemRarity.EPIC -> if (isAnimated) "💎" else "👑"
+            ItemRarity.LEGENDARY -> if (isAnimated) "🐉" else "🌌"
+        }
+    }
+    
+    /**
+     * 根据稀有度获取渐变颜色
+     * @param isStart true返回起始颜色，false返回结束颜色
+     */
+    private fun getColorForRarity(rarity: ItemRarity, isStart: Boolean): String {
+        return when (rarity) {
+            ItemRarity.COMMON -> if (isStart) "#ffd6e7" else "#ffacc7"
+            ItemRarity.RARE -> if (isStart) "#c6f0e8" else "#88ddcc"
+            ItemRarity.EPIC -> if (isStart) "#f0d6ff" else "#d899ff"
+            ItemRarity.LEGENDARY -> if (isStart) "#ffe8d6" else "#ffbb88"
+        }
+    }
+    
+    /**
      * 生成商品描述
      * 根据稀有度和类型生成吸引人的描述
      */

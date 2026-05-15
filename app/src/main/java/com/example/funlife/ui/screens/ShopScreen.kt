@@ -8,15 +8,20 @@ package com.example.funlife.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,14 +40,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.R
@@ -97,7 +106,8 @@ enum class ShopCategory(val displayNameResId: Int, val icon: String) {
 fun ShopScreen(
     shopViewModel: ShopViewModel = viewModel(),
     vipViewModel: com.example.funlife.viewmodel.VipViewModel = viewModel(),
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigate: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val database = (context.applicationContext as com.example.funlife.FunLifeApplication).database
@@ -239,6 +249,65 @@ fun ShopScreen(
         filtered
     }
 
+    // 🎯 滚动状态（用于折叠效果）
+    val gridState = rememberLazyGridState()
+    
+    // 🎯 计算滚动偏移量
+    val scrollOffset = remember {
+        derivedStateOf {
+            val firstVisibleIndex = gridState.firstVisibleItemIndex
+            val firstVisibleOffset = gridState.firstVisibleItemScrollOffset
+            (firstVisibleIndex * 1000f + firstVisibleOffset).coerceAtLeast(0f)
+        }
+    }
+    
+    // 🎯 VIP卡片折叠进度（0.0 = 完全展开，1.0 = 完全折叠）
+    val vipCardCollapseProgress = remember {
+        derivedStateOf {
+            val maxScroll = 200f  // 滚动200px后完全折叠
+            (scrollOffset.value / maxScroll).coerceIn(0f, 1f)
+        }
+    }
+    
+    // 🎯 VIP卡片高度动画（140dp -> 60dp）
+    val vipCardHeight = remember {
+        derivedStateOf {
+            val expandedHeight = 140f
+            val collapsedHeight = 60f
+            val progress = vipCardCollapseProgress.value
+            (expandedHeight - (expandedHeight - collapsedHeight) * progress).dp
+        }
+    }
+    
+    // 🎯 VIP卡片外边距动画（8dp -> 4dp）
+    val vipCardPadding = remember {
+        derivedStateOf {
+            val expandedPadding = 8f
+            val collapsedPadding = 4f
+            val progress = vipCardCollapseProgress.value
+            (expandedPadding - (expandedPadding - collapsedPadding) * progress).dp
+        }
+    }
+    
+    // 🎯 VIP卡片内边距动画（16dp -> 8dp）
+    val vipCardInnerPadding = remember {
+        derivedStateOf {
+            val expandedPadding = 16f
+            val collapsedPadding = 8f
+            val progress = vipCardCollapseProgress.value
+            (expandedPadding - (expandedPadding - collapsedPadding) * progress).dp
+        }
+    }
+    
+    // 🎯 VIP卡片总高度（包括padding）
+    val vipCardTotalHeight = remember {
+        derivedStateOf {
+            val cardHeight = vipCardHeight.value
+            val verticalPadding = vipCardPadding.value * 2  // 上下padding
+            cardHeight + verticalPadding
+        }
+    }
+
     
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -266,6 +335,7 @@ fun ShopScreen(
                     .fillMaxSize()
                     .padding(top = 8.dp)
             ) {
+                // 顶部栏（不折叠，始终可见）
                 ShopTopBar(
                     userCoins = userCoins?.coins ?: 0,
                     onNavigateBack = onNavigateBack
@@ -273,79 +343,132 @@ fun ShopScreen(
                 
                 CategorySelector(
                     selectedCategory = selectedCategory,
-                    onCategorySelected = { selectedCategory = it }
+                    onCategorySelected = { selectedCategory = it },
+                    collapseProgress = vipCardCollapseProgress.value  // 🎯 传递折叠进度
                 )
                 
-                // VIP价格提示卡片
-                if (vipLevel.level > 0) {
+                // ═══════════════════════════════════════════════════════
+                // 🎨 精美深色金色VIP卡片 + 🎯 缩放简化显示 + ✨ 闪烁星星动画
+                // ═══════════════════════════════════════════════════════
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(vertical = vipCardPadding.value)  // 🎯 动态垂直padding
+                        .clickable(
+                            enabled = vipLevel.level == 0,
+                            onClick = { onNavigate("vip") }
+                        )
+                ) {
+                    
+                    // 卡片主体
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(vipLevel.color).copy(alpha = 0.15f)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(vipLevel.icon, fontSize = 24.sp)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "VIP专属优惠",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(vipLevel.color)
+                            .height(vipCardHeight.value)  // 🎯 动态高度
+                            .animateContentSize(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
                                 )
-                                Text(
-                                    "所有商品仅需1金币！",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
+                            ),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.Transparent
+                        ),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp,
+                            focusedElevation = 0.dp,
+                            hoveredElevation = 0.dp
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFF1A0A00),
+                                            Color(0xFF2D1500),
+                                            Color(0xFF1C1008),
+                                            Color(0xFF2A1200),
+                                            Color(0xFF0F0600)
+                                        ),
+                                        start = Offset(0f, 0f),
+                                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                                    )
+                                )
+                                .border(
+                                    width = 1.5.dp,
+                                    color = Color(0x80FBB024),
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                                .clip(RoundedCornerShape(20.dp))
+                        ) {
+                            // ✨ 闪烁星星粒子效果
+                            SparkleParticles()
+                            
+                            // ✨ 扫光效果
+                            SweepLightEffect()
+                            
+                            // 顶部金色边框线
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp)
+                                    .align(Alignment.TopCenter)
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color(0xFFFDE68A),
+                                                Color(0xFFFBBF24),
+                                                Color(0xFFFDE68A),
+                                                Color.Transparent
+                                            )
+                                        )
+                                    )
+                            )
+                            
+                            // 🎯 根据折叠进度显示不同内容
+                            if (vipCardCollapseProgress.value < 0.5f) {
+                                // 展开状态：显示完整内容
+                                VipCardExpandedContent(
+                                    vipLevel = vipLevel,
+                                    padding = vipCardInnerPadding.value
+                                )
+                            } else {
+                                // 折叠状态：显示简化内容
+                                VipCardCollapsedContent(
+                                    vipLevel = vipLevel,
+                                    padding = vipCardInnerPadding.value
                                 )
                             }
-                        }
-                    }
-                } else {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFFFFE0B2)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("💡", fontSize = 24.sp)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "开通VIP享受超值优惠",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "VIP用户商品仅需1金币，立省99%！",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
-                                )
-                            }
+                            
+                            // 底部金色边框线
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color(0x4DFBB024),
+                                                Color.Transparent
+                                            )
+                                        )
+                                    )
+                            )
                         }
                     }
                 }
                 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    state = gridState,  // 🎯 添加滚动状态
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -560,12 +683,18 @@ fun ShopTopBar(
 @Composable
 fun CategorySelector(
     selectedCategory: ShopCategory,
-    onCategorySelected: (ShopCategory) -> Unit
+    onCategorySelected: (ShopCategory) -> Unit,
+    collapseProgress: Float = 0f  // 🎯 新增：折叠进度参数
 ) {
+    // 🎯 计算分类选择器的高度变化
+    val categoryHeight = 80f - (collapseProgress * 25f)  // 从80dp缩小到55dp
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .height(categoryHeight.dp)
+            .padding(horizontal = 16.dp)
+            .padding(vertical = (12f - collapseProgress * 6f).dp),  // 动态垂直padding：12dp -> 6dp
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ShopCategory.values().forEach { category ->
@@ -591,21 +720,54 @@ fun CategorySelector(
                 ),
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp, horizontal = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(category.icon, fontSize = 22.sp)
-                    Text(
-                        stringResource(category.displayNameResId),
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else Color(0xFF424242),
-                        maxLines = 1
-                    )
+                // 🎯 根据折叠进度决定显示模式
+                if (collapseProgress < 0.5f) {
+                    // 展开状态：显示图标 + 文字
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        // 🎯 图标逐渐淡出
+                        Text(
+                            category.icon,
+                            fontSize = 20.sp,
+                            modifier = Modifier
+                                .padding(bottom = 2.dp)
+                                .graphicsLayer {
+                                    alpha = 1f - (collapseProgress * 2f)  // 快速淡出
+                                }
+                        )
+                        // 🎯 文字始终清晰
+                        Text(
+                            stringResource(category.displayNameResId),
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else Color(0xFF424242),
+                            maxLines = 1,
+                            overflow = TextOverflow.Visible
+                        )
+                    }
+                } else {
+                    // 折叠状态：只显示文字（图标已完全淡出）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            stringResource(category.displayNameResId),
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else Color(0xFF424242),
+                            maxLines = 1,
+                            overflow = TextOverflow.Visible,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -621,11 +783,39 @@ fun ProductCard(
     isPurchased: Boolean = false,
     onClick: () -> Unit
 ) {
+    // 添加动画状态
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "scale"
+    )
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.75f)
-            .clickable(onClick = onClick),
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        tryAwaitRelease()
+                        isPressed = false
+                    }
+                )
+            },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -1643,4 +1833,463 @@ fun ShopItemPurchaseDialog(
         shape = RoundedCornerShape(24.dp),
         containerColor = Color.White
     )
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 🎯 VIP卡片展开状态内容
+// ═══════════════════════════════════════════════════════
+@Composable
+fun VipCardExpandedContent(
+    vipLevel: com.example.funlife.data.model.VipLevel,
+    padding: Dp
+) {
+    // 内部纹理
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0x0FFBB024),
+                        Color.Transparent
+                    ),
+                    center = Offset(0.3f, 0.5f),
+                    radius = 1000f
+                )
+            )
+    )
+    
+    // 卡片内容
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = padding)
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 皇冠图标容器（带摇晃动画）
+            val infiniteTransition = rememberInfiniteTransition(label = "crown_shake")
+            val crownRotation by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 2000
+                        0f at 0
+                        -8f at 200
+                        8f at 400
+                        -4f at 600
+                        0f at 800
+                        0f at 2000
+                    },
+                    repeatMode = RepeatMode.Restart,
+                    initialStartOffset = StartOffset(500)
+                ),
+                label = "crown_rotation"
+            )
+            
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .graphicsLayer {
+                        rotationZ = crownRotation
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                // 图标光晕
+                Box(
+                    modifier = Modifier
+                        .size(78.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0x99FBB024),
+                                    Color.Transparent
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                )
+                
+                // 图标背景
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF7C3408),
+                                    Color(0xFFB45309),
+                                    Color(0xFFD97706),
+                                    Color(0xFF92400E)
+                                )
+                            ),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color(0xB3FBB024),
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("👑", fontSize = 28.sp)
+                }
+            }
+            
+            // 文字内容
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // VIP徽章 + 标题
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // VIP徽章
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFFB45309),
+                                        Color(0xFFFBBF24),
+                                        Color(0xFFB45309)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            "VIP",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF1A0A00),
+                            letterSpacing = 1.5.sp
+                        )
+                    }
+                    
+                    // 标题
+                    Text(
+                        if (vipLevel.level > 0) "专属优惠特权" else "开通VIP享特权",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFDE68A),
+                                    Color(0xFFFBBF24),
+                                    Color(0xFFFDE68A),
+                                    Color(0xFFF59E0B)
+                                )
+                            )
+                        ),
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                
+                // 描述文字
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "所有商品仅",
+                        fontSize = 12.sp,
+                        color = Color(0xBFFDE68A),
+                        letterSpacing = 0.3.sp
+                    )
+                    Text(
+                        "¥1",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFBBF24),
+                        style = TextStyle(
+                            shadow = Shadow(
+                                color = Color(0xCCFBB024),
+                                blurRadius = 8f
+                            )
+                        )
+                    )
+                    Text(
+                        "金币！",
+                        fontSize = 12.sp,
+                        color = Color(0xBFFDE68A),
+                        letterSpacing = 0.3.sp
+                    )
+                }
+            }
+            
+            // 右侧箭头
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFFFBBF24),
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        
+        // 分隔线
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0x40FBB024),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        
+        // 底部特权标签
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            listOf("超值折扣", "专属特权", "优先体验").forEach { perk ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .background(
+                                color = Color(0xFFFBBF24),
+                                shape = CircleShape
+                            )
+                    )
+                    Text(
+                        perk,
+                        fontSize = 11.sp,
+                        color = Color(0xA6FDE68A),
+                        letterSpacing = 0.3.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// 🎯 VIP卡片折叠状态内容（简化显示）
+// ═══════════════════════════════════════════════════════
+@Composable
+fun VipCardCollapsedContent(
+    vipLevel: com.example.funlife.data.model.VipLevel,
+    padding: Dp
+) {
+    // 简化版：只显示核心信息
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = padding),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 小图标
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF7C3408),
+                            Color(0xFFB45309),
+                            Color(0xFFD97706),
+                            Color(0xFF92400E)
+                        )
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color(0xB3FBB024),
+                    shape = RoundedCornerShape(10.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("👑", fontSize = 20.sp)
+        }
+        
+        // VIP徽章
+        Box(
+            modifier = Modifier
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFB45309),
+                            Color(0xFFFBBF24),
+                            Color(0xFFB45309)
+                        )
+                    ),
+                    shape = RoundedCornerShape(6.dp)
+                )
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                "VIP",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF1A0A00),
+                letterSpacing = 1.5.sp
+            )
+        }
+        
+        // 标题
+        Text(
+            if (vipLevel.level > 0) "专属优惠" else "开通VIP",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            style = TextStyle(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFFFDE68A),
+                        Color(0xFFFBBF24),
+                        Color(0xFFFDE68A),
+                        Color(0xFFF59E0B)
+                    )
+                )
+            ),
+            modifier = Modifier.weight(1f)
+        )
+        
+        // 右侧箭头
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color(0xFFFBBF24),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+
+// ✨ 闪烁星星粒子效果（改进版：使用BoxWithConstraints获取实际尺寸）
+@Composable
+fun SparkleParticles() {
+    val density = LocalDensity.current
+    
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val containerWidthPx = with(density) { maxWidth.toPx() }
+        val containerHeightPx = with(density) { maxHeight.toPx() }
+        
+        // 创建16个随机位置的星星粒子
+        val particles = remember {
+            List(16) { index ->
+                Triple(
+                    kotlin.random.Random.nextFloat(), // x position (0-1)
+                    kotlin.random.Random.nextFloat(), // y position (0-1)
+                    kotlin.random.Random.nextFloat() * 2f + 1.5f // duration (1.5-3.5s)
+                )
+            }
+        }
+        
+        particles.forEachIndexed { index, (xPos, yPos, duration) ->
+            val infiniteTransition = rememberInfiniteTransition(label = "sparkle_$index")
+            
+            val alpha by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = (duration * 1000).toInt()
+                        0f at 0
+                        1f at (duration * 333).toInt()
+                        0f at (duration * 1000).toInt()
+                    },
+                    repeatMode = RepeatMode.Restart,
+                    initialStartOffset = StartOffset((kotlin.random.Random.nextFloat() * 3000).toInt())
+                ),
+                label = "alpha_$index"
+            )
+            
+            val scale by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = (duration * 1000).toInt()
+                        0f at 0
+                        1f at (duration * 333).toInt()
+                        0f at (duration * 1000).toInt()
+                    },
+                    repeatMode = RepeatMode.Restart,
+                    initialStartOffset = StartOffset((kotlin.random.Random.nextFloat() * 3000).toInt())
+                ),
+                label = "scale_$index"
+            )
+            
+            // 使用绝对位置，确保星星分布在整个卡片上
+            Box(
+                modifier = Modifier
+                    .size((kotlin.random.Random.nextFloat() * 2f + 1f).dp)
+                    .offset(
+                        x = with(density) { (xPos * containerWidthPx).toDp() },
+                        y = with(density) { (yPos * containerHeightPx).toDp() }
+                    )
+                    .graphicsLayer {
+                        this.alpha = alpha
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .background(
+                        color = Color(0xFFFDE68A),
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+}
+
+// ✨ 扫光效果
+@Composable
+fun SweepLightEffect() {
+    val infiniteTransition = rememberInfiniteTransition(label = "sweep_light")
+    
+    val offsetX by infiniteTransition.animateFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+            initialStartOffset = StartOffset(1000)
+        ),
+        label = "sweep_offset"
+    )
+    
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val width = constraints.maxWidth.toFloat()
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = offsetX * width
+                }
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0x1FFDE68A),
+                            Color.Transparent
+                        ),
+                        startX = 0f,
+                        endX = width * 0.3f
+                    )
+                )
+        )
+    }
 }

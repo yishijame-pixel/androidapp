@@ -99,7 +99,7 @@ fun VipScreen(
                     
                     // 确定VIP等级
                     val vipLevel = when {
-                        vipName.contains("终生") || vipName.contains("VIP3") -> VipLevel.VIP3
+                        vipName.contains("终身") || vipName.contains("VIP3") -> VipLevel.VIP3
                         vipName.contains("年费") || vipName.contains("VIP2") -> VipLevel.VIP2
                         vipName.contains("普通") || vipName.contains("VIP1") -> VipLevel.VIP1
                         else -> null
@@ -168,7 +168,7 @@ fun VipScreen(
             icon = VipLevel.VIP3.icon,
             benefits = VipLevel.VIP3.benefits,
             price = "399",
-            period = "终生",
+            period = "终身",
             gradient = listOf(
                 Color(0xFFFF00FF), Color(0xFFBB00FF), Color(0xFF7700FF)
             ),
@@ -379,36 +379,6 @@ fun VipScreen(
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.5f),
                 fontWeight = FontWeight.Medium
-            )
-            
-            Spacer(modifier = Modifier.height(40.dp))
-            
-            // 测试按钮区域
-            TestButtonsSection(
-                onTestVip1 = {
-                    activatedVipLevel = VipLevel.VIP1
-                    bonusCoins = 100
-                    showVipAnimation = true
-                },
-                onTestVip2 = {
-                    activatedVipLevel = VipLevel.VIP2
-                    bonusCoins = 500
-                    showVipAnimation = true
-                },
-                onTestVip3 = {
-                    activatedVipLevel = VipLevel.VIP3
-                    bonusCoins = 1000
-                    showVipAnimation = true
-                },
-                onTestBeamEffect = {
-                    // 设置标记，让HomeScreen显示能量光束动画
-                    val prefs = navController.context.getSharedPreferences("vip_animation", android.content.Context.MODE_PRIVATE)
-                    prefs.edit().putBoolean("show_beam_animation", true).apply()
-                    // 导航回首页
-                    navController.navigate("home") {
-                        popUpTo("home") { inclusive = true }
-                    }
-                }
             )
             
             Spacer(modifier = Modifier.height(50.dp))
@@ -635,15 +605,15 @@ fun RedeemCodeSection(
                                 )
                             ),
                             shape = RoundedCornerShape(28.dp)
-                        )
-                        .padding(horizontal = 20.dp),
+                        ),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    // 流光效果
+                    // 流光效果 - 使用圆角矩形，填充整个Box
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val shimmerOffset = shimmer * size.width * 2.5f
+                        val cornerRadius = 28.dp.toPx()
                         
-                        drawRect(
+                        drawRoundRect(
                             brush = Brush.horizontalGradient(
                                 colors = listOf(
                                     Color.Transparent,
@@ -652,44 +622,53 @@ fun RedeemCodeSection(
                                 ),
                                 startX = shimmerOffset - size.width * 0.8f,
                                 endX = shimmerOffset + size.width * 0.2f
-                            )
+                            ),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius)
                         )
                     }
                     
-                    androidx.compose.foundation.text.BasicTextField(
-                        value = redeemCode,
-                        onValueChange = { redeemCode = it },
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        singleLine = true,
-                        decorationBox = { innerTextField ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "兑换码",
-                                    tint = Color(0xFFFFD700).copy(alpha = 0.7f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Box(modifier = Modifier.weight(1f)) {
-                                    if (redeemCode.isEmpty()) {
-                                        Text(
-                                            text = "请输入兑换码",
-                                            color = Color.White.copy(alpha = 0.4f),
-                                            fontSize = 16.sp
-                                        )
+                    // 输入框内容（带padding）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 20.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = redeemCode,
+                            onValueChange = { redeemCode = it },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "兑换码",
+                                        tint = Color(0xFFFFD700).copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        if (redeemCode.isEmpty()) {
+                                            Text(
+                                                text = "请输入兑换码",
+                                                color = Color.White.copy(alpha = 0.4f),
+                                                fontSize = 16.sp
+                                            )
+                                        }
+                                        innerTextField()
                                     }
-                                    innerTextField()
                                 }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -2854,169 +2833,6 @@ fun CuteLoadingAnimation() {
                         blurRadius = 10f
                     )
                 )
-            )
-        }
-    }
-}
-
-// 测试按钮区域 - 用于测试VIP动画效果
-@Composable
-fun TestButtonsSection(
-    onTestVip1: () -> Unit,
-    onTestVip2: () -> Unit,
-    onTestVip3: () -> Unit,
-    onTestBeamEffect: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // 标题
-        Text(
-            text = "🧪 动画测试区",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.7f)
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // 测试按钮1：普通VIP
-        TestButton(
-            text = "测试普通VIP动画",
-            subtitle = "VIP1 + 100金币",
-            gradient = listOf(Color(0xFFFFD700), Color(0xFFFF9500)),
-            icon = "⭐",
-            onClick = onTestVip1
-        )
-        
-        // 测试按钮2：年费VIP
-        TestButton(
-            text = "测试年费VIP动画",
-            subtitle = "VIP2 + 500金币",
-            gradient = listOf(Color(0xFF00D9FF), Color(0xFF6B5FFF)),
-            icon = "💎",
-            onClick = onTestVip2
-        )
-        
-        // 测试按钮3：终生VIP
-        TestButton(
-            text = "测试终生VIP动画",
-            subtitle = "VIP3 + 1000金币",
-            gradient = listOf(Color(0xFFFF00FF), Color(0xFF7700FF)),
-            icon = "👑",
-            onClick = onTestVip3
-        )
-        
-        // 测试按钮4：能量光束效果
-        TestButton(
-            text = "测试能量光束效果",
-            subtitle = "回到首页查看边框动画",
-            gradient = listOf(Color(0xFF00FF88), Color(0xFF00DDFF)),
-            icon = "⚡",
-            onClick = onTestBeamEffect
-        )
-    }
-}
-
-@Composable
-fun TestButton(
-    text: String,
-    subtitle: String,
-    gradient: List<Color>,
-    icon: String,
-    onClick: () -> Unit
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "test_button")
-    
-    val shimmer by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmer"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(70.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = gradient.map { it.copy(alpha = 0.3f) }
-                )
-            )
-            .border(
-                width = 2.dp,
-                brush = Brush.horizontalGradient(
-                    colors = gradient.map { it.copy(alpha = 0.6f) }
-                ),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable(onClick = onClick)
-    ) {
-        // 流光效果
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val shimmerOffset = shimmer * size.width * 2f
-            
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color.White.copy(alpha = 0.15f),
-                        Color.Transparent
-                    ),
-                    startX = shimmerOffset - size.width * 0.5f,
-                    endX = shimmerOffset + size.width * 0.5f
-                )
-            )
-        }
-        
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 图标
-                Text(
-                    text = icon,
-                    fontSize = 32.sp
-                )
-                
-                // 文字
-                Column {
-                    Text(
-                        text = text,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = subtitle,
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
-            }
-            
-            // 箭头
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "测试",
-                tint = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.size(24.dp)
             )
         }
     }
