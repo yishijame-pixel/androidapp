@@ -13,11 +13,16 @@ import kotlinx.coroutines.launch
 class InventoryViewModel(
     private val repository: InventoryRepository,
     private val userPreferencesDao: com.example.funlife.data.dao.UserPreferencesDao,
-    private val userVipDao: com.example.funlife.data.dao.UserVipDao // 🔥 新增VIP DAO
+    private val userVipDao: com.example.funlife.data.dao.UserVipDao, // 🔥 新增VIP DAO
+    private val userAvatarDao: com.example.funlife.data.dao.UserAvatarDao // 🔥 新增UserAvatar DAO用于检查头像
 ) : ViewModel() {
     
     // 🔥 当前用户ID
     private val _userId = MutableStateFlow(1L)
+    
+    // 🔥 消息提示
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
     
     // 🔥 用户VIP状态
     val userVip = _userId.flatMapLatest { userId ->
@@ -281,24 +286,46 @@ class InventoryViewModel(
     fun equipAvatarFrame(frameAssetPath: String) {
         viewModelScope.launch {
             try {
+                val userId = _userId.value
+                
+                // 🔥 检查用户是否上传了头像（从user_avatars表检查）
+                val userAvatar = userAvatarDao.getUserAvatar(userId).first()
+                if (userAvatar?.avatarUri.isNullOrEmpty()) {
+                    android.util.Log.w("InventoryViewModel", "Cannot equip frame: user has no avatar")
+                    _message.value = "请先上传头像后再装备头像框"
+                    return@launch
+                }
+                
                 // 先检查用户偏好是否存在
-                val prefs = userPreferencesDao.getPreferencesSync(1L)
+                val prefs = userPreferencesDao.getPreferencesSync(userId)
                 
                 if (prefs == null) {
                     // 如果不存在，创建默认偏好
                     val defaultPrefs = com.example.funlife.data.model.UserPreferences(
-                        userId = 1L,
+                        userId = userId,
                         equippedAvatarFrame = frameAssetPath
                     )
                     userPreferencesDao.insertPreferences(defaultPrefs)
+                    android.util.Log.d("InventoryViewModel", "Created preferences and equipped frame: $frameAssetPath")
                 } else {
                     // 如果存在，更新头像框
-                    userPreferencesDao.updateEquippedAvatarFrame(1L, frameAssetPath)
+                    userPreferencesDao.updateEquippedAvatarFrame(userId, frameAssetPath)
+                    android.util.Log.d("InventoryViewModel", "Updated equipped frame: $frameAssetPath")
                 }
+                
+                _message.value = "装备成功！"
             } catch (e: Exception) {
                 android.util.Log.e("InventoryViewModel", "Error equipping avatar frame", e)
+                _message.value = "装备失败: ${e.message}"
             }
         }
+    }
+    
+    /**
+     * 清除消息
+     */
+    fun clearMessage() {
+        _message.value = null
     }
     
     /**

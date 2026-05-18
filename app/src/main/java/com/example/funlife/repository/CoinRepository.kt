@@ -74,4 +74,16 @@ class CoinRepository(
         // 使用 spendCoins 的安全机制
         return spendCoins(userId, amount)
     }
+    
+    // 商城积分相关方法
+    suspend fun getShopPoints(userId: Long): Int = coinDao.getShopPoints(userId) ?: 0
+    
+    suspend fun addShopPoints(userId: Long, amount: Int) {
+        coinDao.addShopPoints(userId, amount)
+    }
+    
+    suspend fun spendShopPoints(userId: Long, amount: Int): Boolean {
+        val rowsAffected = coinDao.spendShopPointsAtomic(userId, amount)
+        return rowsAffected > 0
+    }
 }

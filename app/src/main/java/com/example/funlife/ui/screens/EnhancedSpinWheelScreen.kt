@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -42,6 +43,8 @@ import com.example.funlife.viewmodel.SpinResult
 import kotlinx.coroutines.launch
 import com.example.funlife.utils.SoundEffectManager
 import com.example.funlife.utils.SoundEffect
+import com.example.funlife.ui.components.ProductSpinWheel
+import com.example.funlife.viewmodel.ProductSpinResult
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Suppress("DEPRECATION")
@@ -63,6 +66,12 @@ fun EnhancedSpinWheelScreen(
     val multiSpinCount by viewModel.multiSpinCount.collectAsState()
     val currentMultiSpinProgress by viewModel.currentMultiSpinProgress.collectAsState()
     val saveMessage by viewModel.saveMessage.collectAsState()
+    
+    // 商品转盘相关状态
+    val userShopPoints by viewModel.userShopPoints.collectAsState()
+    var isProductWheelMode by remember { mutableStateOf(false) }
+    var isProductSpinning by remember { mutableStateOf(false) }
+    var productSpinResult by remember { mutableStateOf<SpinWheelViewModel.ProductPrize?>(null) }
     
     // 加载状态 - 显示1秒加载动画
     var isLoading by remember { mutableStateOf(true) }
@@ -352,6 +361,204 @@ fun EnhancedSpinWheelScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                
+                // ═══════════════════════════════════════════════════════
+                // 🎯 转盘模式切换 - 带动画滑块的分段控制器
+                // ═══════════════════════════════════════════════════════
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // 外框容器
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(23.dp))
+                            .background(Color(0xFFF3E8FF).copy(alpha = 0.8f))
+                    ) {
+                        // 动画滑动指示器
+                        val indicatorFraction by animateFloatAsState(
+                            targetValue = if (isProductWheelMode) 1f else 0f,
+                            animationSpec = spring(
+                                dampingRatio = 0.7f,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
+                            label = "tabSlide"
+                        )
+                        
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            val halfWidth = maxWidth / 2
+                            val indicatorPadding = 3.dp
+                            
+                            // 滑动色块
+                            Box(
+                                modifier = Modifier
+                                    .padding(indicatorPadding)
+                                    .width(halfWidth - indicatorPadding * 2)
+                                    .fillMaxHeight()
+                                    .offset(
+                                        x = (halfWidth - indicatorPadding) * indicatorFraction
+                                    )
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = if (isProductWheelMode) listOf(
+                                                Color(0xFFFF6B6B), Color(0xFFFF8E53)
+                                            ) else listOf(
+                                                Color(0xFF7C3AED), Color(0xFF9333EA)
+                                            )
+                                        )
+                                    )
+                                    .shadow(6.dp, RoundedCornerShape(20.dp))
+                            )
+                        }
+                        
+                        // 标签文字层
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            // 幸运转盘
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) { isProductWheelMode = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val textColor by animateColorAsState(
+                                    targetValue = if (!isProductWheelMode) Color.White else Color(0xFF7C3AED),
+                                    animationSpec = tween(300),
+                                    label = "luckyColor"
+                                )
+                                Text(
+                                    "🎯 幸运转盘",
+                                    color = textColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            
+                            // 商品转盘
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) { isProductWheelMode = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val textColor by animateColorAsState(
+                                    targetValue = if (isProductWheelMode) Color.White else Color(0xFFFF6B6B),
+                                    animationSpec = tween(300),
+                                    label = "productColor"
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        "🎁 商品转盘",
+                                        color = textColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    if (userShopPoints >= 10) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .background(
+                                                    if (isProductWheelMode) Color.White.copy(alpha = 0.3f) 
+                                                    else Color(0xFFFF6B6B).copy(alpha = 0.12f),
+                                                    CircleShape
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                "${userShopPoints / 10}",
+                                                color = if (isProductWheelMode) Color.White else Color(0xFFFF6B6B),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // ═══════════════════════════════════════════════════════
+                // 📦 内容区域 - 使用AnimatedContent实现平滑切换
+                // ═══════════════════════════════════════════════════════
+                AnimatedContent(
+                    targetState = isProductWheelMode,
+                    transitionSpec = {
+                        if (targetState) {
+                            // 切换到商品转盘：从右滑入
+                            (slideInHorizontally(
+                                animationSpec = tween(400, easing = FastOutSlowInEasing)
+                            ) { it } + fadeIn(tween(300)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(400, easing = FastOutSlowInEasing)
+                                    ) { -it } + fadeOut(tween(200))
+                                )
+                        } else {
+                            // 切换到幸运转盘：从左滑入
+                            (slideInHorizontally(
+                                animationSpec = tween(400, easing = FastOutSlowInEasing)
+                            ) { -it } + fadeIn(tween(300)))
+                                .togetherWith(
+                                    slideOutHorizontally(
+                                        animationSpec = tween(400, easing = FastOutSlowInEasing)
+                                    ) { it } + fadeOut(tween(200))
+                                )
+                        }
+                    },
+                    label = "wheelSwitch"
+                ) { isProduct ->
+                    if (isProduct) {
+                        // 商品转盘内容
+                        ProductSpinWheel(
+                            prizes = viewModel.productPrizes,
+                            shopPoints = userShopPoints,
+                            userCoins = userCoins,
+                            onSpin = {
+                                isProductSpinning = true
+                                scope.launch {
+                                    val result = viewModel.performProductSpin()
+                                    kotlinx.coroutines.delay(4500) // 等待动画完成
+                                    when (result) {
+                                        is ProductSpinResult.Success -> {
+                                            productSpinResult = result.prize
+                                            isProductSpinning = false
+                                        }
+                                        is ProductSpinResult.InsufficientPoints -> {
+                                            isProductSpinning = false
+                                            snackbarHostState.showSnackbar("积分不足，需要10积分")
+                                        }
+                                    }
+                                }
+                            },
+                            isSpinning = isProductSpinning,
+                            resultPrize = productSpinResult,
+                            onResultDismiss = {
+                                productSpinResult = null
+                            },
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                    } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                 
                 // 幸运值进度条 - 使用原型图图片
                 com.example.funlife.ui.components.LuckyValueImageBar(
@@ -1079,6 +1286,9 @@ fun EnhancedSpinWheelScreen(
                         }  // else 结束
                     }  // Box (button container) 结束
                 }  // key 结束
+                }  // Column (幸运转盘内容) 结束
+                }  // else (AnimatedContent) 结束
+                }  // AnimatedContent 结束
             }  // Column 结束
             
             // 🔥 浮动的连抽进度条和结果显示（不挤压转盘）
@@ -1365,9 +1575,34 @@ fun EnhancedSpinWheelScreen(
     
     // 模式选择对话框
     if (showModeDialog) {
+        // 🔥 获取VIP状态，进阶/幸运模式需VIP
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val vipViewModel: com.example.funlife.viewmodel.VipViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+        val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+            factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                    @Suppress("UNCHECKED_CAST")
+                    return com.example.funlife.viewmodel.AuthViewModel(context.applicationContext as android.app.Application) as T
+                }
+            }
+        )
+        
+        // 🔥 设置用户ID
+        val userSession = authViewModel.getCurrentSession()
+        LaunchedEffect(userSession) {
+            userSession?.let {
+                vipViewModel.setUserId(it.userId)
+            }
+        }
+        
+        val userVip by vipViewModel.userVip.collectAsState()
+        val vipLevel = userVip?.getCurrentVipLevel() ?: com.example.funlife.data.model.VipLevel.NORMAL
+        val isVip = vipLevel != com.example.funlife.data.model.VipLevel.NORMAL
+        
         ModeSelectionDialog(
             currentMode = currentMode,
             userCoins = userCoins,
+            isVip = isVip,
             onModeSelected = { mode ->
                 viewModel.setMode(mode)
                 showModeDialog = false
@@ -1651,6 +1886,7 @@ fun EnhancedSpinWheelScreen(
 fun ModeSelectionDialog(
     currentMode: SpinWheelMode,
     userCoins: Int,
+    isVip: Boolean = false,
     onModeSelected: (SpinWheelMode) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1706,16 +1942,20 @@ fun ModeSelectionDialog(
                 SpinWheelMode.values().forEach { mode ->
                     val canAfford = mode.canAfford(userCoins)
                     val isSelected = mode == currentMode
+                    // 🔥 VIP限制：进阶和幸运模式需要VIP
+                    val isVipLocked = !isVip && mode != SpinWheelMode.NORMAL
+                    val isEnabled = canAfford && !isVipLocked
                     
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = canAfford) {
+                            .clickable(enabled = isEnabled) {
                                 onModeSelected(mode)
                             },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = when {
+                                isVipLocked -> Color(0xFFF5F5F5)
                                 isSelected -> when(mode) {
                                     SpinWheelMode.NORMAL -> Color(0xFFFFE5E5)
                                     SpinWheelMode.ADVANCED -> Color(0xFFE5F3FF)
@@ -1767,7 +2007,7 @@ fun ModeSelectionDialog(
                                             text = mode.displayName,
                                             fontSize = 18.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (canAfford) {
+                                            color = if (isEnabled) {
                                                 when(mode) {
                                                     SpinWheelMode.NORMAL -> Color(0xFFFF1493)
                                                     SpinWheelMode.ADVANCED -> Color(0xFF00CED1)
@@ -1875,8 +2115,36 @@ fun ModeSelectionDialog(
                                 }
                             }
                             
+                            // 🔥 VIP专属提示
+                            if (mode != SpinWheelMode.NORMAL) {
+                                Spacer(Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isVip) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            if (isVip) "✅" else "🔒",
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            if (isVip) "VIP专属模式，已解锁" else "VIP专属模式，开通任意VIP即可解锁",
+                                            fontSize = 11.sp,
+                                            color = if (isVip) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            
                             // 金币不足提示
-                            if (!canAfford) {
+                            if (!canAfford && !isVipLocked) {
                                 Spacer(Modifier.height(4.dp))
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
@@ -3515,6 +3783,30 @@ fun CustomModeManagementDialog(
     val allModes by viewModel.allModes.collectAsState()
     val currentMode by viewModel.currentCustomMode.collectAsState()
     
+    // 🔥 获取VIP状态
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val vipViewModel: com.example.funlife.viewmodel.VipViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return com.example.funlife.viewmodel.AuthViewModel(context.applicationContext as android.app.Application) as T
+            }
+        }
+    )
+    
+    // 🔥 设置用户ID
+    val userSession = authViewModel.getCurrentSession()
+    LaunchedEffect(userSession) {
+        userSession?.let {
+            vipViewModel.setUserId(it.userId)
+        }
+    }
+    
+    val userVip by vipViewModel.userVip.collectAsState()
+    val vipLevel = userVip?.getCurrentVipLevel() ?: com.example.funlife.data.model.VipLevel.NORMAL
+    val isVip = vipLevel != com.example.funlife.data.model.VipLevel.NORMAL
+    
     var showCreateDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingMode by remember { mutableStateOf<com.example.funlife.data.model.CustomSpinMode?>(null) }
@@ -3564,10 +3856,20 @@ fun CustomModeManagementDialog(
                         )
                         
                         defaultModes.forEach { mode ->
+                            // 🔥 检查是否为VIP专属模式
+                            val isVipMode = mode.name == "进阶模式" || mode.name == "幸运模式"
+                            val isLocked = isVipMode && !isVip
+                            
                             ModeCard(
                                 mode = mode,
                                 isSelected = mode.id == currentMode?.id,
-                                onSelect = { viewModel.setCustomMode(mode) },
+                                isVip = isVip,
+                                isLocked = isLocked,
+                                onSelect = { 
+                                    if (!isLocked) {
+                                        viewModel.setCustomMode(mode)
+                                    }
+                                },
                                 onEdit = null, // 预设模式不可编辑
                                 onDelete = null
                             )
@@ -3588,6 +3890,8 @@ fun CustomModeManagementDialog(
                             ModeCard(
                                 mode = mode,
                                 isSelected = mode.id == currentMode?.id,
+                                isVip = isVip,
+                                isLocked = false, // 自定义模式不锁定
                                 onSelect = { viewModel.setCustomMode(mode) },
                                 onEdit = {
                                     editingMode = mode
@@ -3634,6 +3938,8 @@ fun CustomModeManagementDialog(
 fun ModeCard(
     mode: com.example.funlife.data.model.CustomSpinMode,
     isSelected: Boolean,
+    isVip: Boolean = false,
+    isLocked: Boolean = false,
     onSelect: () -> Unit,
     onEdit: (() -> Unit)?,
     onDelete: (() -> Unit)?
@@ -3641,12 +3947,13 @@ fun ModeCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelect),
+            .clickable(enabled = !isLocked, onClick = onSelect),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
+            containerColor = when {
+                isLocked -> Color(0xFFF5F5F5)
+                isSelected -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
         )
     ) {
         Row(
@@ -3665,7 +3972,8 @@ fun ModeCard(
                     Text(
                         mode.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = if (isLocked) Color.Gray else Color.Unspecified
                     )
                 }
                 
@@ -3674,7 +3982,7 @@ fun ModeCard(
                 Text(
                     mode.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isLocked) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
                 Spacer(Modifier.height(8.dp))
@@ -3683,8 +3991,52 @@ fun ModeCard(
                     Text(
                         "• $feature",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isLocked) Color.Gray else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                
+                // 🔥 VIP锁定提示
+                if (isLocked) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFFFF3E0)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🔒", fontSize = 12.sp)
+                            Text(
+                                "VIP专属模式",
+                                fontSize = 10.sp,
+                                color = Color(0xFFE65100),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else if (mode.name == "进阶模式" || mode.name == "幸运模式") {
+                    // VIP用户显示已解锁
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFE8F5E9)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("✅", fontSize = 12.sp)
+                            Text(
+                                "VIP已解锁",
+                                fontSize = 10.sp,
+                                color = Color(0xFF2E7D32),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
                 
                 if (mode.usageCount > 0) {

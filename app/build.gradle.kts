@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,6 +22,15 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // AI API Key from local.properties
+        val localProps = File(rootProject.projectDir, "local.properties")
+        val aiKey = if (localProps.exists()) {
+            val props = Properties()
+            props.load(FileInputStream(localProps))
+            props.getProperty("AI_API_KEY", "")
+        } else ""
+        buildConfigField("String", "AI_API_KEY", "\"$aiKey\"")
     }
 
     buildTypes {
@@ -48,6 +60,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
@@ -94,6 +107,12 @@ dependencies {
     
     // Security - EncryptedSharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    
+    // Retrofit + Gson (AI Service)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

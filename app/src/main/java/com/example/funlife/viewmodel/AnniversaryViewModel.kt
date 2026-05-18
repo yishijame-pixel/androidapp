@@ -232,6 +232,12 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 kotlinx.coroutines.delay(200)
                 
                 android.util.Log.d("AnniversaryViewModel", "✅ 纪念日添加成功，当前列表数量: ${_anniversaries.value.size}")
+                
+                // 🔔 调度精确闹钟提醒
+                _anniversaries.value.firstOrNull { it.name == name && it.date == date }?.let {
+                    com.example.funlife.utils.AnniversaryReminderScheduler.schedule(context, it)
+                }
+                
                 onSuccess()
             } catch (e: Exception) {
                 android.util.Log.e("AnniversaryViewModel", "❌ 添加纪念日失败", e)
@@ -251,7 +257,9 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 com.example.funlife.utils.ImageHelper.deleteImage(anniversary.imageUri)
             }
             repository.delete(anniversary)
-            // 🔥 主动重新加载
+            // � 取消已调度的提醒闹钟
+            com.example.funlife.utils.AnniversaryReminderScheduler.cancel(context, anniversary.id)
+            // � 主动重新加载
             loadAnniversaries()
         }
     }
@@ -322,6 +330,9 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 importance = importance
             )
             repository.update(updatedAnniversary)
+            // 🔔 重新调度提醒闹钟（先取消再重新调度）
+            com.example.funlife.utils.AnniversaryReminderScheduler.cancel(context, updatedAnniversary.id)
+            com.example.funlife.utils.AnniversaryReminderScheduler.schedule(context, updatedAnniversary)
             // 🔥 主动重新加载
             loadAnniversaries()
         }

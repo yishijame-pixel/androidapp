@@ -27,6 +27,7 @@ object PetImageLoader {
             PetType.DOG -> "pet/pet_cat_baby_idle_01.png" // 暂时用猫代替
             PetType.RABBIT -> "pet/pet_cat_baby_idle_01.png"
             PetType.HAMSTER -> "pet/pet_cat_baby_idle_01.png"
+            PetType.PANDA -> ""  // 🐼 由 Canvas 绘制，不需要图片资源
         }
     }
     

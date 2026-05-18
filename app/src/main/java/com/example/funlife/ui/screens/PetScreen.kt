@@ -46,45 +46,77 @@ fun PetScreen(
     viewModel: PetViewModel
 ) {
     val pet by viewModel.pet.collectAsState()
-    val uiState by viewModel.uiState.collectAsState()
     val animationState by viewModel.animationState.collectAsState()
+    val coins by viewModel.userCoins.collectAsState()
+    val missions by viewModel.missions.collectAsState()
+    val items by viewModel.items.collectAsState()
+    val toast by viewModel.toast.collectAsState()
     
-    // 商城对话框状态
     var showShopDialog by remember { mutableStateOf(false) }
+    var showInventoryDialog by remember { mutableStateOf(false) }
+    var showMissionsDialog by remember { mutableStateOf(false) }
+    
+    // 🎯 Toast 反馈
+    val context = LocalContext.current
+    LaunchedEffect(toast) {
+        toast?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.consumeToast()
+        }
+    }
     
     when {
         pet == null -> {
-            // 没有宠物，显示领养界面
             AdoptPetScreen(
-                onAdopt = { name, type ->
-                    viewModel.createPet(name, type)
-                },
+                onAdopt = { name, type -> viewModel.createPet(name, type) },
                 onBack = { navController.popBackStack() }
             )
         }
         else -> {
-            // 显示宠物主页
             PetHomeScreen(
                 pet = pet!!,
                 animationState = animationState,
-                onFeed = { viewModel.feedPet(PetItems.BASIC_FOOD.id) },
+                coins = coins?.coins ?: 0,
+                missions = missions,
+                onFeed = {
+                    // 有高级食物先用高级，没有就用普通免费食物
+                    val premium = items.firstOrNull {
+                        it.itemId == PetItems.PREMIUM_FOOD.id || it.itemId == PetItems.SNACK.id
+                    }
+                    if (premium != null) viewModel.feedPet(premium.itemId)
+                    else viewModel.feedPet(PetItems.BASIC_FOOD.id)
+                },
                 onClean = { viewModel.cleanPet() },
                 onPlay = { viewModel.playWithPet() },
                 onPet = { viewModel.petPet() },
                 onShop = { showShopDialog = true },
+                onInventory = { showInventoryDialog = true },
+                onMissions = { showMissionsDialog = true },
                 onBack = { navController.popBackStack() }
             )
         }
     }
     
-    // 宠物商城对话框
     if (showShopDialog) {
         PetShopDialog(
             onDismiss = { showShopDialog = false },
-            onPurchase = { itemId ->
-                // TODO: 实现购买逻辑
-                showShopDialog = false
+            onPurchase = { item ->
+                viewModel.purchaseShopItem(item.id, item.name, item.type, item.price)
             }
+        )
+    }
+    if (showInventoryDialog) {
+        PetInventoryDialog(
+            items = items,
+            onDismiss = { showInventoryDialog = false },
+            onUseFood = { id -> viewModel.feedPet(id); showInventoryDialog = false }
+        )
+    }
+    if (showMissionsDialog) {
+        PetMissionsDialog(
+            missions = missions,
+            onDismiss = { showMissionsDialog = false },
+            onClaim = { viewModel.claimMission(it) }
         )
     }
 }
@@ -93,11 +125,15 @@ fun PetScreen(
 fun PetHomeScreen(
     pet: Pet,
     animationState: AnimationState,
+    coins: Int,
+    missions: List<com.example.funlife.utils.PetMissionHelper.MissionState>,
     onFeed: () -> Unit,
     onClean: () -> Unit,
     onPlay: () -> Unit,
     onPet: () -> Unit,
     onShop: () -> Unit,
+    onInventory: () -> Unit,
+    onMissions: () -> Unit,
     onBack: () -> Unit
 ) {
     // 加载背景图片
@@ -146,14 +182,21 @@ fun PetHomeScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // 顶部栏
-            PetTopBar(
+            // 顶部栏 - 含金币、任务、背包入口
+            PetTopBarPro(
                 petName = pet.name,
-                onBack = onBack
+                coins = coins,
+                missionUnclaimed = missions.count { it.completed && !it.claimed },
+                onBack = onBack,
+                onMissions = onMissions,
+                onInventory = onInventory
             )
             
             // 状态栏
             PetStatusBar(pet = pet)
+            
+            // 每日任务条
+            DailyMissionStrip(missions = missions, onClick = onMissions)
             
             // 宠物展示区
             Box(
@@ -263,41 +306,55 @@ fun StatusIndicator(
     color: Color,
     label: String
 ) {
+    val isLow = value < 30
+    // 低值脉冲警告
+    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
+        initialValue = if (isLow) 0.9f else 1f,
+        targetValue = if (isLow) 1.1f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+    val actualColor = if (isLow) Color(0xFFFF3B30) else color
+    
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(70.dp)
     ) {
-        Text(
-            text = icon,
-            fontSize = 24.sp
-        )
+        Text(text = icon, fontSize = 22.sp, modifier = Modifier.scale(pulse))
         Spacer(modifier = Modifier.height(4.dp))
-        
-        // 圆形进度条
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(50.dp)
+            modifier = Modifier.size(52.dp).scale(pulse)
         ) {
+            // 背景圆
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(actualColor.copy(alpha = 0.12f), CircleShape)
+            )
             CircularProgressIndicator(
                 progress = value / 100f,
                 modifier = Modifier.fillMaxSize(),
-                color = color,
-                strokeWidth = 4.dp,
-                trackColor = color.copy(alpha = 0.2f)
+                color = actualColor,
+                strokeWidth = 5.dp,
+                trackColor = actualColor.copy(alpha = 0.15f)
             )
             Text(
                 text = "$value",
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = color
+                fontWeight = FontWeight.ExtraBold,
+                color = actualColor
             )
         }
-        
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = label,
+            text = if (isLow) "$label ⚠️" else label,
             fontSize = 10.sp,
-            color = Color.Gray
+            color = if (isLow) Color(0xFFFF3B30) else Color.Gray,
+            fontWeight = if (isLow) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
@@ -357,6 +414,14 @@ fun PetCharacter(
         (currentIdleAction == IdleAction.LICKING || currentIdleAction == IdleAction.HAPPY)
     
     when {
+        // 🐼 熊猫使用纯 Canvas 绘制，独立的动画路径
+        pet.type == PetType.PANDA -> {
+            com.example.funlife.ui.components.PandaPet(
+                animationState = animationState,
+                onClick = onPet,
+                modifier = Modifier
+            )
+        }
         shouldWalk -> {
             // 显示行走动画
             PetWalkingAnimation(
@@ -615,6 +680,7 @@ fun PetStaticCharacter(
                             PetType.RABBIT -> "🐰"
                             PetType.HAMSTER -> "🐹"
                             PetType.TIGER -> "🐯"
+                            PetType.PANDA -> "🐼"
                         },
                         fontSize = 120.sp
                     )
@@ -1239,10 +1305,10 @@ fun AdoptPetScreen(
                         onClick = { selectedType = PetType.RABBIT }
                     )
                     PetTypeButton(
-                        emoji = "🐹",
-                        type = PetType.HAMSTER,
-                        selected = selectedType == PetType.HAMSTER,
-                        onClick = { selectedType = PetType.HAMSTER }
+                        emoji = "�",
+                        type = PetType.PANDA,
+                        selected = selectedType == PetType.PANDA,
+                        onClick = { selectedType = PetType.PANDA }
                     )
                 }
                 
@@ -1308,10 +1374,17 @@ fun PetTypeButton(
             .clickable(onClick = onClick)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = emoji,
-                fontSize = 40.sp
-            )
+            // 🐼 熊猫用 Canvas 绘制（避免设备字体不支持 emoji）
+            if (type == PetType.PANDA) {
+                com.example.funlife.ui.components.MiniPandaIcon(
+                    modifier = Modifier.size(50.dp)
+                )
+            } else {
+                Text(
+                    text = emoji,
+                    fontSize = 40.sp
+                )
+            }
         }
     }
 }
@@ -1331,7 +1404,7 @@ data class PetShopItem(
 @Composable
 fun PetShopDialog(
     onDismiss: () -> Unit,
-    onPurchase: (String) -> Unit
+    onPurchase: (PetShopItem) -> Unit
 ) {
     val context = LocalContext.current
     
@@ -1569,7 +1642,7 @@ fun PetShopDialog(
                         val item = filteredItems[index]
                         PetShopItemCard(
                             item = item,
-                            onPurchase = { onPurchase(item.id) }
+                            onPurchase = { onPurchase(item) }
                         )
                     }
                 }
@@ -1706,3 +1779,369 @@ fun PetShopItemCard(
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎮 增强版顶部栏 - 含金币、任务红点、背包入口
+// ═══════════════════════════════════════════════════════════════════
+@Composable
+fun PetTopBarPro(
+    petName: String,
+    coins: Int,
+    missionUnclaimed: Int,
+    onBack: () -> Unit,
+    onMissions: () -> Unit,
+    onInventory: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // 返回 + 宠物名字
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(40.dp).clickable(onClick = onBack)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.ArrowBack, "返回",
+                        tint = Color(0xFF5D4037),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White.copy(alpha = 0.85f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🐾 ", fontSize = 16.sp)
+                    Text(petName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5D4037))
+                }
+            }
+        }
+        // 金币 + 任务 + 背包
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 金币显示
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = Color(0xFFFFF3C7),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFD700))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("💰", fontSize = 14.sp)
+                    Spacer(Modifier.width(4.dp))
+                    Text("$coins", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFB8860B))
+                }
+            }
+            // 任务按钮（含红点）
+            Box {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(40.dp).clickable(onClick = onMissions)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("📋", fontSize = 18.sp)
+                    }
+                }
+                if (missionUnclaimed > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .align(Alignment.TopEnd)
+                            .background(Color(0xFFFF3B30), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("$missionUnclaimed", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            // 背包按钮
+            Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(40.dp).clickable(onClick = onInventory)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("🎒", fontSize = 18.sp)
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 📋 每日任务条 - 横向显示任务进度
+// ═══════════════════════════════════════════════════════════════════
+@Composable
+fun DailyMissionStrip(
+    missions: List<com.example.funlife.utils.PetMissionHelper.MissionState>,
+    onClick: () -> Unit
+) {
+    if (missions.isEmpty()) return
+    val claimable = missions.count { it.completed && !it.claimed }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.88f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("📋", fontSize = 18.sp)
+            Text(
+                if (claimable > 0) "每日任务 · $claimable 项可领取" else "每日任务",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (claimable > 0) Color(0xFFE53935) else Color(0xFF5D4037)
+            )
+            Spacer(Modifier.weight(1f))
+            missions.forEach { m ->
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(
+                            if (m.claimed) Color(0xFFE0E0E0)
+                            else if (m.completed) Color(0xFFFFD700)
+                            else Color(0xFFFFF0F0),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (m.claimed) "✓" else m.type.icon,
+                        fontSize = if (m.claimed) 14.sp else 14.sp,
+                        color = if (m.claimed) Color.Gray else Color(0xFF5D4037)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 📋 每日任务详细对话框 - 显示进度并可领取奖励
+// ═══════════════════════════════════════════════════════════════════
+@Composable
+fun PetMissionsDialog(
+    missions: List<com.example.funlife.utils.PetMissionHelper.MissionState>,
+    onDismiss: () -> Unit,
+    onClaim: (com.example.funlife.utils.PetMissionHelper.MissionType) -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(0.92f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1))
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("📋 每日任务", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5D4037))
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "关闭", tint = Color.Gray) }
+                }
+                Text("陪伴宠物，完成任务领取金币奖励", fontSize = 12.sp, color = Color.Gray)
+                Spacer(Modifier.height(12.dp))
+                missions.forEach { m ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color(0xFFFFF3C7), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(m.type.icon, fontSize = 22.sp)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(m.type.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5D4037))
+                                Text(
+                                    "${m.progress}/${m.type.target} · 奖励 ${m.type.reward} 💰",
+                                    fontSize = 11.sp, color = Color.Gray
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = m.percent,
+                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                    color = if (m.completed) Color(0xFFFFD700) else Color(0xFFFF6B9D),
+                                    trackColor = Color(0xFFFFE0E0)
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            when {
+                                m.claimed -> Text(
+                                    "已领取", fontSize = 12.sp, color = Color.Gray,
+                                    modifier = Modifier
+                                        .background(Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                                m.completed -> Button(
+                                    onClick = { onClaim(m.type) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text("领取", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                                else -> Text(
+                                    "进行中", fontSize = 12.sp, color = Color(0xFFFF6B9D),
+                                    modifier = Modifier
+                                        .background(Color(0xFFFFF0F5), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎒 宠物背包 - 显示拥有的食物/玩具/药品，可使用食物喂食
+// ═══════════════════════════════════════════════════════════════════
+@Composable
+fun PetInventoryDialog(
+    items: List<PetItem>,
+    onDismiss: () -> Unit,
+    onUseFood: (Int) -> Unit
+) {
+    var category by remember { mutableStateOf("all") }
+    val filtered = when (category) {
+        "food" -> items.filter { it.itemType == ItemType.FOOD }
+        "toy" -> items.filter { it.itemType == ItemType.TOY }
+        "medicine" -> items.filter { it.itemType == ItemType.MEDICINE }
+        else -> items
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.75f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1))
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(listOf(Color(0xFFFFB347), Color(0xFFFFC85F)))
+                        )
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🎒 我的背包", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "关闭", tint = Color.White) }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    CategoryChip("全部", category == "all") { category = "all" }
+                    CategoryChip("食物", category == "food") { category = "food" }
+                    CategoryChip("玩具", category == "toy") { category = "toy" }
+                    CategoryChip("药品", category == "medicine") { category = "medicine" }
+                }
+                if (filtered.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("📦", fontSize = 60.sp)
+                            Text("背包空空如也", fontSize = 16.sp, color = Color.Gray)
+                            Spacer(Modifier.height(4.dp))
+                            Text("去商城购买物品吧！", fontSize = 12.sp, color = Color.Gray)
+                        }
+                    }
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(filtered.size) { idx ->
+                            val it = filtered[idx]
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .background(Color(0xFFFFF3E0), RoundedCornerShape(10.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            when (it.itemType) {
+                                                ItemType.FOOD -> "🍖"
+                                                ItemType.TOY -> "🎾"
+                                                ItemType.MEDICINE -> "💊"
+                                                ItemType.DECORATION -> "🎀"
+                                            }, fontSize = 24.sp
+                                        )
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(it.itemName, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5D4037))
+                                        Text("数量：${it.quantity}", fontSize = 12.sp, color = Color.Gray)
+                                    }
+                                    if (it.itemType == ItemType.FOOD) {
+                                        Button(
+                                            onClick = { onUseFood(it.itemId) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B9D)),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                        ) {
+                                            Text("喂食", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

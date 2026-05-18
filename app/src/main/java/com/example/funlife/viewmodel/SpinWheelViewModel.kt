@@ -1297,6 +1297,130 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         return csv.toString()
     }
     
+    // ========== 商品转盘功能 ==========
+    
+    // 商品转盘奖品定义
+    data class ProductPrize(
+        val name: String,
+        val icon: String,
+        val type: String,  // "coins", "item"
+        val value: Int,    // 金币数量或商品value
+        val weight: Int = 1  // 权重
+    )
+    
+    // 商品转盘奖品列表（8个奖品）
+    val productPrizes = listOf(
+        ProductPrize("10金币", "💰", "coins", 10, weight = 30),
+        ProductPrize("补卡卡片", "🎫", "item", 1, weight = 15),
+        ProductPrize("50金币", "💰", "coins", 50, weight = 12),
+        ProductPrize("宠物食物", "🍖", "item", 1, weight = 18),
+        ProductPrize("20金币", "💰", "coins", 20, weight = 20),
+        ProductPrize("幸运符", "🍀", "item", 1, weight = 5),
+        ProductPrize("宠物玩具", "🎾", "item", 1, weight = 15),
+        ProductPrize("100金币", "💰", "coins", 100, weight = 3)
+    )
+    
+    // 用户积分
+    val userShopPoints: StateFlow<Int> = coinRepository.getUserCoins(getCurrentUserId())
+        .map { it?.shopPoints ?: 0 }
+        .catch { e ->
+            android.util.Log.e("SpinWheelViewModel", "Error loading shop points", e)
+            emit(0)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    
+    // 商品转盘结果消息
+    private val _productSpinMessage = MutableStateFlow<String?>(null)
+    val productSpinMessage: StateFlow<String?> = _productSpinMessage.asStateFlow()
+    
+    fun clearProductSpinMessage() {
+        _productSpinMessage.value = null
+    }
+    
+    // 检查积分是否足够（10积分一次）
+    fun canAffordProductSpin(): Boolean {
+        return userShopPoints.value >= 10
+    }
+    
+    // 执行商品转盘抽取
+    suspend fun performProductSpin(): ProductSpinResult {
+        val userId = getCurrentUserId()
+        val points = userShopPoints.value
+        
+        if (points < 10) {
+            return ProductSpinResult.InsufficientPoints
+        }
+        
+        // 扣除10积分
+        val success = coinRepository.spendShopPoints(userId, 10)
+        if (!success) {
+            return ProductSpinResult.InsufficientPoints
+        }
+        
+        // 根据权重随机选择奖品
+        val totalWeight = productPrizes.sumOf { it.weight }
+        var random = Random.nextInt(totalWeight)
+        var selectedPrize = productPrizes.last()
+        
+        for (prize in productPrizes) {
+            random -= prize.weight
+            if (random < 0) {
+                selectedPrize = prize
+                break
+            }
+        }
+        
+        // 发放奖励
+        when (selectedPrize.type) {
+            "coins" -> {
+                coinRepository.addCoins(userId, selectedPrize.value)
+            }
+            "item" -> {
+                // 添加到背包
+                val database = com.example.funlife.data.database.AppDatabase.getDatabase(getApplication())
+                val inventoryDao = database.inventoryDao()
+                
+                val itemTypeMap = mapOf(
+                    "补卡卡片" to Pair("makeup_card_spin", com.example.funlife.data.model.InventoryItemType.CONSUMABLE),
+                    "宠物食物" to Pair("pet_food_spin", com.example.funlife.data.model.InventoryItemType.CONSUMABLE),
+                    "幸运符" to Pair("lucky_charm_spin", com.example.funlife.data.model.InventoryItemType.CONSUMABLE),
+                    "宠物玩具" to Pair("pet_toy_spin", com.example.funlife.data.model.InventoryItemType.CONSUMABLE)
+                )
+                
+                val (itemId, itemType) = itemTypeMap[selectedPrize.name] ?: Pair("unknown_spin", com.example.funlife.data.model.InventoryItemType.CONSUMABLE)
+                
+                // 检查是否已有该物品，有则增加数量
+                val existingItem = inventoryDao.getItemByItemId(userId, itemId)
+                if (existingItem != null) {
+                    inventoryDao.increaseQuantity(existingItem.id, 1)
+                } else {
+                    val rarityMap = mapOf(
+                        "补卡卡片" to com.example.funlife.data.model.ItemRarity.COMMON,
+                        "宠物食物" to com.example.funlife.data.model.ItemRarity.COMMON,
+                        "宠物玩具" to com.example.funlife.data.model.ItemRarity.COMMON,
+                        "幸运符" to com.example.funlife.data.model.ItemRarity.RARE
+                    )
+                    val inventoryItem = com.example.funlife.data.model.InventoryItem(
+                        userId = userId,
+                        itemId = itemId,
+                        itemName = selectedPrize.name,
+                        itemType = itemType,
+                        itemRarity = rarityMap[selectedPrize.name] ?: com.example.funlife.data.model.ItemRarity.COMMON,
+                        iconEmoji = selectedPrize.icon,
+                        description = "商品转盘抽取获得",
+                        quantity = 1,
+                        purchasePrice = 0,
+                        obtainedTime = System.currentTimeMillis()
+                    )
+                    inventoryDao.insertItem(inventoryItem)
+                }
+            }
+        }
+        
+        android.util.Log.d("SpinWheelViewModel", "商品转盘结果: ${selectedPrize.name}")
+        return ProductSpinResult.Success(selectedPrize)
+    }
+    
     // 导出历史记录为 JSON
     fun exportHistoryToJson(): String {
         val history = recentHistory.value
@@ -1349,4 +1473,10 @@ sealed class MultiSpinResult {
     data class Success(val results: List<String>, val totalReward: Int) : MultiSpinResult()
     object InsufficientCoins : MultiSpinResult()
     data class Error(val message: String) : MultiSpinResult()
+}
+
+// 商品转盘结果
+sealed class ProductSpinResult {
+    data class Success(val prize: SpinWheelViewModel.ProductPrize) : ProductSpinResult()
+    object InsufficientPoints : ProductSpinResult()
 }

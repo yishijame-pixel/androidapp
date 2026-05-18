@@ -12,6 +12,10 @@ interface AnniversaryDao {
     @Query("SELECT * FROM anniversaries WHERE userId = :userId ORDER BY isPinned DESC, date ASC")
     fun getAllAnniversaries(userId: Long): Flow<List<Anniversary>>
     
+    // 同步一次性查询（用于闹钟调度器，非 Flow）
+    @Query("SELECT * FROM anniversaries WHERE userId = :userId")
+    suspend fun getAllForUserOnce(userId: Long): List<Anniversary>
+    
     // 获取置顶的纪念日
     @Query("SELECT * FROM anniversaries WHERE userId = :userId AND isPinned = 1 ORDER BY date ASC LIMIT 1")
     fun getPinnedAnniversary(userId: Long): Flow<Anniversary?>

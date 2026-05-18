@@ -18,11 +18,11 @@ enum class VipLevel(
         color = 0xFF9E9E9E,
         inventoryLimit = 100,
         minShopPrice = 100,
-        dailyCoins = 0,
+        dailyCoins = 10,
         benefits = listOf(
             "背包容量：100个",
             "商品价格：100金币起",
-            "无每日金币奖励"
+            "每日领取：10金币"
         )
     ),
     VIP1(
@@ -32,11 +32,11 @@ enum class VipLevel(
         color = 0xFFFFD700,
         inventoryLimit = 100,
         minShopPrice = 50,
-        dailyCoins = 20,
+        dailyCoins = 50,
         benefits = listOf(
             "背包容量：100个",
             "商品价格：50金币起",
-            "每日领取：20金币",
+            "每日领取：50金币",
             "永久有效"
         )
     ),
@@ -47,11 +47,11 @@ enum class VipLevel(
         color = 0xFF00BCD4,
         inventoryLimit = 1000,
         minShopPrice = 20,
-        dailyCoins = 50,
+        dailyCoins = 100,
         benefits = listOf(
             "背包容量：1000个",
             "商品价格：20金币起",
-            "每日领取：50金币",
+            "每日领取：100金币",
             "年费有效"
         )
     ),
@@ -62,11 +62,11 @@ enum class VipLevel(
         color = 0xFFFF6B9D,
         inventoryLimit = 0,  // 无限
         minShopPrice = 1,
-        dailyCoins = 100,
+        dailyCoins = 500,
         benefits = listOf(
             "背包容量：无限",
             "商品价格：1金币起",
-            "每日领取：100金币",
+            "每日领取：500金币",
             "后续功能优先使用权",
             "专属至尊标识"
         )
@@ -78,11 +78,11 @@ enum class VipLevel(
         color = 0xFFFF4081,
         inventoryLimit = 0,  // 无限
         minShopPrice = 1,
-        dailyCoins = 100,
+        dailyCoins = 500,
         benefits = listOf(
             "背包容量：无限",
             "商品价格：1金币起",
-            "每日领取：100金币",
+            "每日领取：500金币",
             "永久有效",
             "所有VIP特权",
             "专属永久标识"

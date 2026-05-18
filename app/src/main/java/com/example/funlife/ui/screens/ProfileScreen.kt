@@ -84,11 +84,25 @@ fun ProfileScreen(
     
     val userAvatar by vipProfileViewModel.userAvatar.collectAsState()
     
-    // 🔥 获取金币数量
+    // 🔥 获取VIP状态
+    val vipRepository = remember {
+        com.example.funlife.repository.VipRepository(
+            application.database.userVipDao(),
+            application.database.redeemCodeDao(),
+            application.database.coinDao(),
+            context
+        )
+    }
+    val userVip by vipRepository.getUserVip(currentSession?.userId ?: 0L)
+        .collectAsState(initial = null)
+    val vipLevel = userVip?.getCurrentVipLevel() ?: com.example.funlife.data.model.VipLevel.NORMAL
+    
+    // 🔥 获取金币数量和积分
     val userCoins by remember {
         application.database.coinDao().getUserCoins(currentSession?.userId ?: 0L)
     }.collectAsState(initial = null)
     val currentCoins = userCoins?.coins ?: 0
+    val currentShopPoints = userCoins?.shopPoints ?: 0
     
     // 入场动画
     var visible by remember { mutableStateOf(false) }
@@ -96,6 +110,26 @@ fun ProfileScreen(
         delay(100)
         visible = true
     }
+    
+    // 🎨 Hero 自定义背景 URI (从 SharedPreferences 读取，写入后立即刷新 UI)
+    var heroBgUri by remember(currentSession?.userId) {
+        mutableStateOf(
+            currentSession?.userId?.let {
+                com.example.funlife.utils.HeroBackgroundHelper.getHeroBackgroundUri(context, it)
+            }
+        )
+    }
+    val heroPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        val uid = currentSession?.userId ?: return@rememberLauncherForActivityResult
+        if (uri != null) {
+            val saved = com.example.funlife.utils.HeroBackgroundHelper
+                .saveHeroBackground(context, uri, uid)
+            if (saved != null) heroBgUri = saved
+        }
+    }
+    var showHeroBgMenu by remember { mutableStateOf(false) }
     
     Box(
         modifier = Modifier
@@ -115,22 +149,48 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .height(250.dp)  // 🔥 调整Banner高度到250dp
             ) {
-                // 渐变背景
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    WarmPalette.hero1,
-                                    WarmPalette.hero2,
-                                    WarmPalette.hero3
-                                ),
-                                start = Offset(0f, 0f),
-                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                // 渐变背景 / 自定义图片
+                if (heroBgUri != null) {
+                    coil.compose.AsyncImage(
+                        model = coil.request.ImageRequest.Builder(context)
+                            .data(heroBgUri)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "自定义背景",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                    // 暗色蒙版让顶部文字更易读
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Black.copy(alpha = 0.30f),
+                                        Color.Black.copy(alpha = 0.10f),
+                                        Color.Transparent
+                                    )
+                                )
                             )
-                        )
-                )
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        WarmPalette.hero1,
+                                        WarmPalette.hero2,
+                                        WarmPalette.hero3
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                                )
+                            )
+                    )
+                }
                 
                 // 装饰圆形 - 右上
                 Box(
@@ -184,30 +244,78 @@ fun ProfileScreen(
                         letterSpacing = 2.sp
                     )
                     
-                    // 通知按钮
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .background(
-                                Color.White.copy(alpha = 0.18f),
-                                RoundedCornerShape(11.dp)
-                            )
-                            .clickable { /* TODO: 通知 */ },
-                        contentAlignment = Alignment.Center
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Notifications,
-                            contentDescription = "通知",
-                            tint = Color.White,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        // 红点提示
+                        // 🎨 编辑背景按钮
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
-                                .offset(x = 6.dp, y = (-6).dp)
-                                .background(Color(0xFFFDE68A), CircleShape)
-                        )
+                                .size(34.dp)
+                                .background(
+                                    Color.White.copy(alpha = 0.22f),
+                                    RoundedCornerShape(11.dp)
+                                )
+                                .clickable { showHeroBgMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Wallpaper,
+                                contentDescription = "更换背景",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            DropdownMenu(
+                                expanded = showHeroBgMenu,
+                                onDismissRequest = { showHeroBgMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("📷  上传自定义背景") },
+                                    onClick = {
+                                        showHeroBgMenu = false
+                                        heroPickerLauncher.launch("image/*")
+                                    }
+                                )
+                                if (heroBgUri != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("🔄  恢复默认渐变") },
+                                        onClick = {
+                                            showHeroBgMenu = false
+                                            currentSession?.userId?.let { uid ->
+                                                com.example.funlife.utils.HeroBackgroundHelper
+                                                    .clearHeroBackground(context, uid)
+                                                heroBgUri = null
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        // 通知按钮
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(
+                                    Color.White.copy(alpha = 0.18f),
+                                    RoundedCornerShape(11.dp)
+                                )
+                                .clickable { /* TODO: 通知 */ },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "通知",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            // 红点提示
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .offset(x = 6.dp, y = (-6).dp)
+                                    .background(Color(0xFFFDE68A), CircleShape)
+                            )
+                        }
                     }
                 }
                 
@@ -277,7 +385,7 @@ fun ProfileScreen(
                                 frameAssetPath = equippedAvatarFrame,
                                 frameSize = 150.dp,
                                 defaultText = currentSession?.username?.firstOrNull()?.toString()?.uppercase() ?: "U",
-                                vipLevel = com.example.funlife.data.model.VipLevel.VIP3  // 终身VIP
+                                vipLevel = vipLevel  // 🔥 动态读取实际VIP等级
                             )
                             
                             // 编辑按钮 - 右下角
@@ -455,16 +563,32 @@ fun ProfileScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.Star,
+                                if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL)
+                                    Icons.Default.Diamond else Icons.Default.Star,
                                 contentDescription = null,
-                                tint = WarmPalette.coral,
+                                tint = when (vipLevel) {
+                                    com.example.funlife.data.model.VipLevel.VIP3 -> Color(0xFFFFD700)
+                                    com.example.funlife.data.model.VipLevel.VIP2 -> Color(0xFF00D9FF)
+                                    com.example.funlife.data.model.VipLevel.VIP1 -> Color(0xFFFFB800)
+                                    else -> WarmPalette.coral
+                                },
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                "普通用户",
+                                when (vipLevel) {
+                                    com.example.funlife.data.model.VipLevel.VIP3 -> "终身VIP"
+                                    com.example.funlife.data.model.VipLevel.VIP2 -> "VIP2"
+                                    com.example.funlife.data.model.VipLevel.VIP1 -> "VIP1"
+                                    else -> "普通用户"
+                                },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = WarmPalette.brown
+                                color = when (vipLevel) {
+                                    com.example.funlife.data.model.VipLevel.VIP3 -> Color(0xFFDAA520)
+                                    com.example.funlife.data.model.VipLevel.VIP2 -> Color(0xFF00AACC)
+                                    com.example.funlife.data.model.VipLevel.VIP1 -> Color(0xFFCC8800)
+                                    else -> WarmPalette.brown
+                                }
                             )
                         }
                     }
@@ -496,62 +620,35 @@ fun ProfileScreen(
                             )
                         }
                     }
+                    
+                    // 积分徽章
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFFFF0F0),
+                        border = BorderStroke(1.5.dp, Color(0x4DFF6B6B)),
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "⭐",
+                                fontSize = 11.sp
+                            )
+                            Text(
+                                "${currentShopPoints}积分",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFCC3333)
+                            )
+                        }
+                    }
                 }
             }
             
-            Spacer(Modifier.height(16.dp))
-            
-            // ══════════════════════════════════════════════════════════
-            // 📊 统计卡片
-            // ══════════════════════════════════════════════════════════
-            AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600, delayMillis = 150)) + 
-                        slideInVertically(initialOffsetY = { it / 4 })
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    StatCard(
-                        icon = Icons.Default.LocalFireDepartment,
-                        value = "86",
-                        unit = "天",
-                        label = "累计打卡",
-                        color = WarmPalette.coral,
-                        bgColor = Color(0xFFFFF4F0),
-                        borderColor = Color(0x2EFF5222),
-                        modifier = Modifier.weight(1f),
-                        delay = 0
-                    )
-                    StatCard(
-                        icon = Icons.Default.Bolt,
-                        value = "5",
-                        unit = "天",
-                        label = "连续打卡",
-                        color = WarmPalette.amber,
-                        bgColor = Color(0xFFFFFBF0),
-                        borderColor = Color(0x38F5A623),
-                        modifier = Modifier.weight(1f),
-                        delay = 80
-                    )
-                    StatCard(
-                        icon = Icons.Default.EmojiEvents,
-                        value = "12",
-                        unit = "个",
-                        label = "习惯总数",
-                        color = WarmPalette.sage,
-                        bgColor = Color(0xFFF1FBF5),
-                        borderColor = Color(0x386DAB8A),
-                        modifier = Modifier.weight(1f),
-                        delay = 160
-                    )
-                }
-            }
-            
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             
             // ══════════════════════════════════════════════════════════
             // 📋 功能菜单列表

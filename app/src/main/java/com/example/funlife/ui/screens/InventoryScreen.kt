@@ -46,12 +46,21 @@ fun InventoryScreen(
     val equippedPanelSkin by viewModel.equippedPanelSkin.collectAsState()
     val inventoryCapacity by viewModel.inventoryCapacity.collectAsState() // 🔥 背包容量
     val userVip by viewModel.userVip.collectAsState() // 🔥 VIP状态
+    val message by viewModel.message.collectAsState() // 🔥 消息提示
     
     var showItemDetail by remember { mutableStateOf(false) }
     var selectedItem by remember { mutableStateOf<InventoryItem?>(null) }
     
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    
+    // 🔥 显示消息提示
+    LaunchedEffect(message) {
+        message?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearMessage()
+        }
+    }
     
     // 🔥 计算是否是VIP
     val isVip = userVip?.isVip() == true && userVip?.isExpired() == false
@@ -166,9 +175,6 @@ fun InventoryScreen(
             },
             onEquipAvatarFrame = { assetPath ->
                 viewModel.equipAvatarFrame(assetPath)
-                scope.launch {
-                    android.widget.Toast.makeText(context, "已装备头像框", android.widget.Toast.LENGTH_SHORT).show()
-                }
                 showItemDetail = false
             }
         )
@@ -539,6 +545,37 @@ fun InventoryItemCard(
                     if (buttonBitmap != null) {
                         androidx.compose.foundation.Image(
                             bitmap = buttonBitmap,
+                            contentDescription = item.itemName,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(2.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                    } else {
+                        Text(
+                            item.iconEmoji,
+                            fontSize = 36.sp
+                        )
+                    }
+                } else if (item.itemId.startsWith("jinian_card_")) {
+                    // 🔥 显示纪念日相框图片
+                    val context = LocalContext.current
+                    val frameBitmap = remember(item.itemId) {
+                        try {
+                            context.assets.open("login/${item.itemId}.png").use { inputStream ->
+                                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("InventoryItemCard", "Failed to load jinian frame: ${e.message}")
+                            null
+                        }
+                    }
+                    
+                    if (frameBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = frameBitmap,
                             contentDescription = item.itemName,
                             modifier = Modifier
                                 .fillMaxWidth()

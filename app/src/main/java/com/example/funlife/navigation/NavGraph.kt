@@ -4,6 +4,7 @@ package com.example.funlife.navigation
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -27,6 +28,7 @@ import com.example.funlife.viewmodel.AuthViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
 import com.example.funlife.viewmodel.GoalViewModel
 import com.example.funlife.viewmodel.PetViewModel
+import com.example.funlife.viewmodel.ChatViewModel
 
 sealed class Screen(val route: String, val title: String) {
     object Welcome : Screen("welcome", "欢迎")
@@ -46,7 +48,9 @@ sealed class Screen(val route: String, val title: String) {
     object Inventory : Screen("inventory", "背包")
     object Vip : Screen("vip", "VIP会员")
     object VipProfile : Screen("vip_profile", "VIP个人主页")
-    object AvatarFrameShop : Screen("avatar_frame_shop", "头像框商城")  // 🔥 新增：头像框商城
+    object AvatarFrameShop : Screen("avatar_frame_shop", "头像框商城")
+    object ChatBill : Screen("chat_bill", "聊天记账")
+    object BillDetail : Screen("bill_detail", "记账详情")
 }
 
 @Composable
@@ -203,7 +207,8 @@ fun NavGraph(
                         petRepository = PetRepository(application.database.petDao()),
                         petItemRepository = PetItemRepository(application.database.petItemDao()),
                         coinRepository = CoinRepository(application.database.coinDao()),
-                        userId = userSession.userId
+                        userId = userSession.userId,
+                        appContext = context.applicationContext
                     )
                 }
                 PetScreen(
@@ -211,6 +216,12 @@ fun NavGraph(
                     viewModel = petViewModel
                 )
             }
+        }
+        
+        composable("dice_game") {
+            com.example.funlife.ui.screens.DiceGameScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
         
         composable("riddle_game") {
@@ -260,6 +271,7 @@ fun NavGraph(
             }
             val userPreferencesDao = remember { database.userPreferencesDao() }
             val userVipDao = remember { database.userVipDao() } // 🔥 新增VIP DAO
+            val userAvatarDao = remember { database.userAvatarDao() } // 🔥 新增UserAvatar DAO
             val inventoryViewModel: com.example.funlife.viewmodel.InventoryViewModel = viewModel(
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -267,7 +279,8 @@ fun NavGraph(
                         return com.example.funlife.viewmodel.InventoryViewModel(
                             inventoryRepository,
                             userPreferencesDao,
-                            userVipDao // 🔥 传递VIP DAO
+                            userVipDao, // 🔥 传递VIP DAO
+                            userAvatarDao // 🔥 传递UserAvatar DAO
                         ) as T
                     }
                 }
@@ -298,6 +311,58 @@ fun NavGraph(
                     }
                 }
             )
+        }
+        
+        // 🔥 聊天记账
+        composable(Screen.ChatBill.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            
+            if (userSession != null) {
+                val database = application.database
+                val userAvatarDao = remember { database.userAvatarDao() }
+                val userAvatar by userAvatarDao.getUserAvatar(userSession.userId)
+                    .collectAsState(initial = null)
+                val chatViewModel = remember {
+                    ChatViewModel(application, userSession.userId)
+                }
+                ChatBillScreen(
+                    viewModel = chatViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToBillDetail = { navController.navigate(Screen.BillDetail.route) },
+                    avatarUri = userAvatar?.avatarUri
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+
+        // 🔥 记账详情
+        composable(Screen.BillDetail.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+
+            if (userSession != null) {
+                val chatViewModel = remember {
+                    ChatViewModel(application, userSession.userId)
+                }
+                BillDetailScreen(
+                    viewModel = chatViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
         }
         
         // 🔥 头像框商城

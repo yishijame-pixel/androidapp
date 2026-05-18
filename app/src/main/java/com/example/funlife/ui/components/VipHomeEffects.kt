@@ -128,63 +128,87 @@ fun VipAvatarHalo(
 }
 
 /**
- * VIP徽章小图标 - 显示在头像角落
+ * VIP徽章小图标 - 显示在头像角落（无背景，创意动画）
  */
 @Composable
 fun VipBadgeIcon(
     vipLevel: VipLevel,
     modifier: Modifier = Modifier
 ) {
-    val (emoji, bgColor) = when (vipLevel) {
-        VipLevel.VIP3 -> "👑" to Color(0xFFFFD700)
-        VipLevel.VIP2 -> "💎" to Color(0xFF00D9FF)
-        VipLevel.VIP1 -> "⭐" to Color(0xFFFFB800)
+    val emoji = when (vipLevel) {
+        VipLevel.VIP3 -> "👑"
+        VipLevel.VIP2 -> "💎"
+        VipLevel.VIP1 -> "⭐"
         else -> return
     }
     
     val infiniteTransition = rememberInfiniteTransition(label = "badge")
     
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
+    // 🔥 钟摆式摇摆（左右±12°，像挂件晃动）
+    val swing by infiniteTransition.animateFloat(
+        initialValue = -12f,
+        targetValue = 12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
+            animation = tween(2000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "scale"
+        label = "swing"
+    )
+    
+    // 🔥 呼吸光晕（透明度脉冲）
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.0f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow"
+    )
+    
+    // 🔥 微弹跳（上下浮动2dp）
+    val bounce by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bounce"
     )
     
     Box(
         modifier = modifier
-            .size(24.dp)
+            .size(26.dp)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .drawBehind {
-                // 背景圆形
-                drawCircle(
-                    color = bgColor,
-                    radius = size.width / 2
-                )
-                
-                // 外发光
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            bgColor.copy(alpha = 0.5f),
-                            Color.Transparent
-                        ),
-                        radius = size.width / 2 + 5f
-                    ),
-                    radius = size.width / 2 + 5f
-                )
+                rotationZ = swing
+                translationY = bounce.dp.toPx()
+                // 从顶部中心为旋转锚点（像挂件）
+                transformOrigin = TransformOrigin(0.5f, 0f)
             },
         contentAlignment = Alignment.Center
     ) {
+        // 底层：柔和光晕
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer { alpha = glowAlpha }
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700).copy(alpha = 0.5f),
+                                Color.Transparent
+                            )
+                        ),
+                        radius = size.width
+                    )
+                }
+        )
+        // 图标本体（无背景）
         Text(
             text = emoji,
-            fontSize = 14.sp
+            fontSize = 16.sp
         )
     }
 }

@@ -14,35 +14,27 @@ class AnniversaryReminderReceiver : BroadcastReceiver() {
     
     override fun onReceive(context: Context, intent: Intent) {
         val anniversaryId = intent.getIntExtra("anniversary_id", -1)
-        val daysBefore = intent.getIntExtra("days_before", 0)
-        
         if (anniversaryId == -1) return
         
-        // 在协程中查询纪念日信息并显示通知
+        android.util.Log.d("AnniversaryReceiver", "纪念日闹钟触发 #$anniversaryId")
+        
+        // 标记已触发
+        AnniversaryReminderManager.markTriggered(anniversaryId)
+        
+        // 触发完整的提醒：循环震动 + 循环铃声 + Heads-up + App内Banner + 全局悬浮窗
+        AnniversaryReminderManager.triggerAlarm(context)
+        
+        // 如果是每年重复型，自动调度明年的同一天
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val database = AppDatabase.getDatabase(context)
-                val anniversaryDao = database.anniversaryDao()
-                
-                // 这里需要一个同步查询方法，暂时使用简单的通知
-                val notificationManager = AnniversaryNotificationManager(context)
-                
-                // 创建临时 Anniversary 对象用于通知
-                val anniversaryName = intent.getStringExtra("anniversary_name") ?: "纪念日"
-                val tempAnniversary = Anniversary(
-                    id = anniversaryId,
-                    name = anniversaryName,
-                    date = "",
-                    userId = 0
-                )
-                
-                notificationManager.showNotification(
-                    tempAnniversary,
-                    daysBefore.toLong(),
-                    anniversaryId
-                )
+                val dao = AppDatabase.getDatabase(context).anniversaryDao()
+                val list = dao.getAllForUserOnce(intent.getLongExtra("user_id", 1L))
+                val target = list.firstOrNull { it.id == anniversaryId }
+                if (target != null && target.isYearly) {
+                    AnniversaryReminderScheduler.schedule(context, target)
+                }
             } catch (e: Exception) {
-                android.util.Log.e("AnniversaryReminder", "Error showing notification", e)
+                android.util.Log.e("AnniversaryReceiver", "重新调度失败", e)
             }
         }
     }

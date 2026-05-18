@@ -192,6 +192,10 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 shopRepository.insertPurchaseHistory(purchase)
                 
+                // 🔥 购买商品获得5积分
+                coinRepository.addShopPoints(userId, 5)
+                android.util.Log.d("ShopViewModel", "购买商品获得5积分")
+                
                 // 根据商品类型执行相应操作
                 when (item.type) {
                     "makeup_card" -> {
@@ -218,7 +222,13 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
     // 简单的购买方法（仅扣除金币）
     suspend fun purchaseItem(price: Int): Boolean {
         val userId = getCurrentUserId()
-        return coinRepository.spendCoins(userId, price)
+        val success = coinRepository.spendCoins(userId, price)
+        if (success) {
+            // 🔥 购买商品获得5积分
+            coinRepository.addShopPoints(userId, 5)
+            android.util.Log.d("ShopViewModel", "简单购买获得5积分")
+        }
+        return success
     }
     
     // 🔥 ========== 头像框相关方法 ==========
@@ -293,8 +303,33 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                 // 扣除金币
                 val success = coinRepository.spendCoins(userId, price)
                 if (success) {
-                    // 添加到用户背包
+                    // 添加到用户背包（user_avatar_frames表）
                     shopRepository.addUserFrame(userId, frame.id)
+                    
+                    // 🔥 同时添加到inventory_items表，让背包能显示
+                    val rarityMap = mapOf(
+                        "COMMON" to com.example.funlife.data.model.ItemRarity.COMMON,
+                        "RARE" to com.example.funlife.data.model.ItemRarity.RARE,
+                        "EPIC" to com.example.funlife.data.model.ItemRarity.EPIC,
+                        "LEGENDARY" to com.example.funlife.data.model.ItemRarity.LEGENDARY
+                    )
+                    val inventoryItem = com.example.funlife.data.model.InventoryItem(
+                        userId = userId,
+                        itemId = "avatar_frame_${frame.id}",
+                        itemName = frame.name,
+                        itemType = com.example.funlife.data.model.InventoryItemType.AVATAR_FRAME,
+                        itemRarity = rarityMap[frame.rarity] ?: com.example.funlife.data.model.ItemRarity.COMMON,
+                        iconEmoji = frame.icon,
+                        description = "${frame.assetPath}\n${frame.description}",
+                        quantity = 1,
+                        purchasePrice = price,
+                        obtainedTime = System.currentTimeMillis()
+                    )
+                    database.inventoryDao().insertItem(inventoryItem)
+                    
+                    // 🔥 不再自动装备，只是放入背包
+                    // shopRepository.equipFrame(userId, frame.id)
+                    // userDao.updateEquippedFrame(userId, frame.id)
                     
                     // 记录购买历史
                     val purchase = PurchaseHistory(
@@ -306,8 +341,11 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     shopRepository.insertPurchaseHistory(purchase)
                     
-                    _message.value = "购买成功！"
-                    android.util.Log.d("ShopViewModel", "Purchased frame: ${frame.name}")
+                    // 🔥 购买头像框获得5积分
+                    coinRepository.addShopPoints(userId, 5)
+                    
+                    _message.value = "购买成功！已放入背包 (+5积分)"
+                    android.util.Log.d("ShopViewModel", "Purchased frame: ${frame.name}, added to inventory, +5 points")
                 } else {
                     _message.value = "购买失败"
                 }
@@ -325,6 +363,14 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val userId = getCurrentUserId()
+                
+                // 🔥 检查用户是否上传了头像（从user_avatars表检查）
+                val userAvatarDao = database.userAvatarDao()
+                val userAvatar = userAvatarDao.getUserAvatar(userId).first()
+                if (userAvatar?.avatarUri.isNullOrEmpty()) {
+                    _message.value = "请先上传头像后再装备头像框"
+                    return@launch
+                }
                 
                 // 检查是否拥有
                 val owned = shopRepository.isFrameOwned(userId, frameId)

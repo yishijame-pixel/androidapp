@@ -68,7 +68,8 @@ enum class PetType {
     DOG,      // 狗
     RABBIT,   // 兔子
     HAMSTER,  // 仓鼠
-    TIGER     // 老虎
+    TIGER,    // 老虎
+    PANDA     // 🐼 熊猫（Canvas 手绘 + 全套动画）
 }
 
 // 成长阶段

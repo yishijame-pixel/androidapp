@@ -1,12 +1,14 @@
 // PetViewModel.kt - 宠物视图模型
 package com.example.funlife.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.funlife.data.model.*
 import com.example.funlife.repository.PetRepository
 import com.example.funlife.repository.PetItemRepository
 import com.example.funlife.repository.CoinRepository
+import com.example.funlife.utils.PetMissionHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -14,8 +16,38 @@ class PetViewModel(
     private val petRepository: PetRepository,
     private val petItemRepository: PetItemRepository,
     private val coinRepository: CoinRepository,
-    private val userId: Long
+    private val userId: Long,
+    private val appContext: Context
 ) : ViewModel() {
+    
+    // ━━━━━━━━━━━━━━━━━ 每日任务 ━━━━━━━━━━━━━━━━━
+    private val _missions = MutableStateFlow<List<PetMissionHelper.MissionState>>(emptyList())
+    val missions: StateFlow<List<PetMissionHelper.MissionState>> = _missions.asStateFlow()
+    
+    // 操作反馈
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+    fun consumeToast() { _toast.value = null }
+    
+    private fun refreshMissions() {
+        _missions.value = PetMissionHelper.getMissions(appContext)
+    }
+    
+    private fun trackMission(type: PetMissionHelper.MissionType) {
+        PetMissionHelper.increment(appContext, type)
+        refreshMissions()
+    }
+    
+    /** 领取任务奖励 */
+    fun claimMission(type: PetMissionHelper.MissionType) {
+        viewModelScope.launch {
+            if (PetMissionHelper.claim(appContext, type)) {
+                coinRepository.addCoins(userId, type.reward)
+                _toast.value = "🎉 领取了 ${type.reward} 金币！"
+                refreshMissions()
+            }
+        }
+    }
     
     // 宠物状态
     val pet: StateFlow<Pet?> = petRepository.getPetByUserId(userId)
@@ -39,6 +71,8 @@ class PetViewModel(
     
     init {
         loadPet()
+        refreshMissions()
+        startStatusTicker()
     }
     
     private fun loadPet() {
@@ -50,6 +84,16 @@ class PetViewModel(
                 // 更新宠物状态（时间衰减）
                 petRepository.updatePetStatus(existingPet.id)
                 _uiState.value = PetUiState.Success
+            }
+        }
+    }
+    
+    /** 每 30 秒触发一次状态衰减计算（基于真实分钟数，所以不会过快） */
+    private fun startStatusTicker() {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000L)
+                pet.value?.let { petRepository.updatePetStatus(it.id) }
             }
         }
     }
@@ -67,21 +111,32 @@ class PetViewModel(
         }
     }
     
-    // 喂食
-    fun feedPet(itemId: Int) {
+    // 喂食（可选择不同食物 itemId，仅 itemId in [2,3] 时消耗库存）
+    fun feedPet(itemId: Int = PetItems.BASIC_FOOD.id) {
         viewModelScope.launch {
             val currentPet = pet.value ?: return@launch
             val item = PetItems.getItemById(itemId) ?: return@launch
             
-            // 播放喂食动画
-            _animationState.value = AnimationState.Feeding
+            // 高级/零食需要消耗库存，普通食物免费
+            if (itemId != PetItems.BASIC_FOOD.id) {
+                val ok = petItemRepository.useItem(userId, itemId)
+                if (!ok) {
+                    _toast.value = "背包里没有这个食物"
+                    return@launch
+                }
+            }
             
-            // 更新宠物状态
-            petRepository.feed(currentPet.id, item.hungerBonus)
+            _animationState.value = AnimationState.Feeding
+            petRepository.feed(currentPet.id, item.hungerBonus.coerceAtLeast(20))
+            if (item.moodBonus > 0) petRepository.play(currentPet.id, item.moodBonus)
             petRepository.addExperience(currentPet.id, 5)
             petRepository.addIntimacy(currentPet.id, 2)
             
-            // 重置动画状态
+            // 奖励 + 任务
+            coinRepository.addCoins(userId, 1)
+            trackMission(PetMissionHelper.MissionType.FEED)
+            _toast.value = "${item.name} 好好吃 ＋1 💰"
+            
             kotlinx.coroutines.delay(2000)
             _animationState.value = AnimationState.Idle
         }
@@ -91,16 +146,15 @@ class PetViewModel(
     fun cleanPet() {
         viewModelScope.launch {
             val currentPet = pet.value ?: return@launch
-            
-            // 播放洗澡动画
             _animationState.value = AnimationState.Cleaning
-            
-            // 更新宠物状态
             petRepository.clean(currentPet.id, 50)
             petRepository.addExperience(currentPet.id, 5)
             petRepository.addIntimacy(currentPet.id, 3)
             
-            // 重置动画状态
+            coinRepository.addCoins(userId, 2)
+            trackMission(PetMissionHelper.MissionType.CLEAN)
+            _toast.value = "清爽满满！＋2 💰"
+            
             kotlinx.coroutines.delay(2500)
             _animationState.value = AnimationState.Idle
         }
@@ -110,16 +164,15 @@ class PetViewModel(
     fun playWithPet() {
         viewModelScope.launch {
             val currentPet = pet.value ?: return@launch
-            
-            // 播放玩耍动画
             _animationState.value = AnimationState.Playing
-            
-            // 更新宠物状态
             petRepository.play(currentPet.id, 20)
             petRepository.addExperience(currentPet.id, 10)
             petRepository.addIntimacy(currentPet.id, 5)
             
-            // 重置动画状态
+            coinRepository.addCoins(userId, 3)
+            trackMission(PetMissionHelper.MissionType.PLAY)
+            _toast.value = "玩得开心！＋3 💰"
+            
             kotlinx.coroutines.delay(3000)
             _animationState.value = AnimationState.Idle
         }
@@ -129,17 +182,42 @@ class PetViewModel(
     fun petPet() {
         viewModelScope.launch {
             val currentPet = pet.value ?: return@launch
-            
-            // 播放抚摸动画
             _animationState.value = AnimationState.Petting
-            
-            // 更新宠物状态
             petRepository.play(currentPet.id, 5)
             petRepository.addIntimacy(currentPet.id, 1)
+            trackMission(PetMissionHelper.MissionType.PET)
             
-            // 重置动画状态
             kotlinx.coroutines.delay(500)
             _animationState.value = AnimationState.Idle
+        }
+    }
+    
+    /**
+     * 通用商城购买接口 (供 PetShopDialog 使用)
+     * 根据价格扣金币，按 type 映射到 ItemType 存入库存。
+     */
+    fun purchaseShopItem(itemKey: String, name: String, type: String, price: Int) {
+        viewModelScope.launch {
+            val coins = coinRepository.getCoinsAmount(userId)
+            if (coins < price) {
+                _toast.value = "金币不足！还差 ${price - coins} 💰"
+                return@launch
+            }
+            val ok = coinRepository.spendCoins(userId, price)
+            if (!ok) {
+                _toast.value = "购买失败"
+                return@launch
+            }
+            val itemType = when (type) {
+                "food" -> ItemType.FOOD
+                "toy" -> ItemType.TOY
+                "medicine" -> ItemType.MEDICINE
+                else -> ItemType.DECORATION
+            }
+            // 使用名字 hash 作为 itemId (保证同名不重复)
+            val stableId = (itemKey.hashCode() and 0x7fffffff) or 0x10000  // 避免与 PetItems 冲突
+            petItemRepository.addItem(userId, stableId, name, itemType)
+            _toast.value = "购买成功：$name"
         }
     }
     

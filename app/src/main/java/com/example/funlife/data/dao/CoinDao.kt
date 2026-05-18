@@ -23,6 +23,15 @@ interface CoinDao {
     @Query("UPDATE user_coins SET coins = coins - :amount WHERE userId = :userId AND coins >= :amount")
     suspend fun spendCoinsAtomic(userId: Long, amount: Int): Int  // 返回受影响的行数
     
-    @Query("INSERT OR IGNORE INTO user_coins (userId, coins, totalEarned) VALUES (:userId, 0, 0)")
+    @Query("INSERT OR IGNORE INTO user_coins (userId, coins, totalEarned, shopPoints) VALUES (:userId, 0, 0, 0)")
     suspend fun initializeCoins(userId: Long)
+    
+    @Query("SELECT shopPoints FROM user_coins WHERE userId = :userId")
+    suspend fun getShopPoints(userId: Long): Int?
+    
+    @Query("UPDATE user_coins SET shopPoints = shopPoints + :amount WHERE userId = :userId")
+    suspend fun addShopPoints(userId: Long, amount: Int)
+    
+    @Query("UPDATE user_coins SET shopPoints = shopPoints - :amount WHERE userId = :userId AND shopPoints >= :amount")
+    suspend fun spendShopPointsAtomic(userId: Long, amount: Int): Int
 }

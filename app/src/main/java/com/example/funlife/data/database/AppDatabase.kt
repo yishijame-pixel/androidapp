@@ -52,6 +52,13 @@ import com.example.funlife.data.model.ScoreOperation
 import com.example.funlife.data.model.UserVip
 import com.example.funlife.data.model.RedeemCode
 import com.example.funlife.data.model.UserRedeemHistory
+import com.example.funlife.data.model.Bill
+import com.example.funlife.data.model.ChatMessage
+import com.example.funlife.data.model.ChatPersona
+import com.example.funlife.data.model.ChatPersonaState
+import com.example.funlife.data.dao.BillDao
+import com.example.funlife.data.dao.ChatMessageDao
+import com.example.funlife.data.dao.ChatPersonaDao
 
 @Database(
     entities = [
@@ -91,9 +98,13 @@ import com.example.funlife.data.model.UserRedeemHistory
         com.example.funlife.data.model.ProfileBackground::class,
         com.example.funlife.data.model.UserOwnedFrame::class,
         com.example.funlife.data.model.UserOwnedBackground::class,
-        com.example.funlife.data.model.UserAvatarFrame::class  // 🔥 新增：用户头像框表
+        com.example.funlife.data.model.UserAvatarFrame::class,  // 🔥 新增：用户头像框表
+        Bill::class,
+        ChatMessage::class,
+        ChatPersona::class,
+        ChatPersonaState::class
     ],
-    version = 38,  // 🔥 升级到版本38 - 修复AvatarFrameInitializer字段
+    version = 42,  // 🔥 升级到版本42 - 人格自定义头像
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -128,6 +139,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun redeemCodeDao(): com.example.funlife.data.dao.RedeemCodeDao
     abstract fun userAvatarDao(): com.example.funlife.data.dao.UserAvatarDao
     abstract fun userAvatarFrameDao(): com.example.funlife.data.dao.UserAvatarFrameDao  // 🔥 新增：用户头像框DAO
+    abstract fun billDao(): BillDao
+    abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun chatPersonaDao(): ChatPersonaDao
     
     companion object {
         @Volatile
@@ -1156,6 +1170,133 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
         
+        // 🔥 新增：版本38到39 - 添加商城积分系统（商品转盘）
+        private val MIGRATION_38_39 = object : Migration(38, 39) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    ALTER TABLE user_coins ADD COLUMN shopPoints INTEGER NOT NULL DEFAULT 0
+                """)
+            }
+        }
+        
+        // 🔥 新增：版本39到40 - 聊天记账系统
+        private val MIGRATION_39_40 = object : Migration(39, 40) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS bills (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        category TEXT NOT NULL,
+                        note TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        linkedMessageId INTEGER
+                    )
+                """)
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        personaId TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        billId INTEGER,
+                        timestamp INTEGER NOT NULL
+                    )
+                """)
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_personas (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        avatar TEXT NOT NULL,
+                        bubbleColor INTEGER NOT NULL,
+                        systemPrompt TEXT NOT NULL,
+                        isBuiltin INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL
+                    )
+                """)
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_persona_state (
+                        personaId TEXT PRIMARY KEY NOT NULL,
+                        userId INTEGER NOT NULL,
+                        affection INTEGER NOT NULL,
+                        mood TEXT NOT NULL,
+                        interactionCount INTEGER NOT NULL
+                    )
+                """)
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_bills_userId ON bills(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_chat_messages_userId ON chat_messages(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp DESC)")
+            }
+        }
+        
+        // 🔥 新增：版本41到42 - 人格自定义头像
+        private val MIGRATION_41_42 = object : Migration(41, 42) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE chat_personas ADD COLUMN customAvatarUri TEXT")
+            }
+        }
+
+        // 🔥 新增：版本40到41 - 修复聊天记账表DEFAULT不匹配
+        private val MIGRATION_40_41 = object : Migration(40, 41) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DROP TABLE IF EXISTS bills")
+                database.execSQL("DROP TABLE IF EXISTS chat_messages")
+                database.execSQL("DROP TABLE IF EXISTS chat_personas")
+                database.execSQL("DROP TABLE IF EXISTS chat_persona_state")
+                database.execSQL("DROP INDEX IF EXISTS idx_bills_userId")
+                database.execSQL("DROP INDEX IF EXISTS idx_chat_messages_userId")
+                database.execSQL("DROP INDEX IF EXISTS idx_chat_messages_timestamp")
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS bills (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        category TEXT NOT NULL,
+                        note TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        linkedMessageId INTEGER
+                    )
+                """)
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        userId INTEGER NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        personaId TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        billId INTEGER,
+                        timestamp INTEGER NOT NULL
+                    )
+                """)
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_personas (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        avatar TEXT NOT NULL,
+                        bubbleColor INTEGER NOT NULL,
+                        systemPrompt TEXT NOT NULL,
+                        isBuiltin INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL
+                    )
+                """)
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_persona_state (
+                        personaId TEXT PRIMARY KEY NOT NULL,
+                        userId INTEGER NOT NULL,
+                        affection INTEGER NOT NULL,
+                        mood TEXT NOT NULL,
+                        interactionCount INTEGER NOT NULL
+                    )
+                """)
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_bills_userId ON bills(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_chat_messages_userId ON chat_messages(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp DESC)")
+            }
+        }
+        
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -1200,7 +1341,11 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_34_35,  // 🔥 新增：VIP个人主页系统
                     MIGRATION_35_36,  // 🔥 新增：头像框商城系统
                     MIGRATION_36_37,  // 🔥 新增：头像框商城kapian设计字段
-                    MIGRATION_37_38   // 🔥 新增：修复AvatarFrameInitializer字段
+                    MIGRATION_37_38,  // 🔥 新增：修复AvatarFrameInitializer字段
+                    MIGRATION_38_39,  // 🔥 新增：商城积分系统
+                    MIGRATION_39_40,  // 🔥 新增：聊天记账系统
+                    MIGRATION_40_41,  // 🔥 新增：修复聊天记账表DEFAULT不匹配
+                    MIGRATION_41_42   // 🔥 新增：人格自定义头像
                 )
                 .fallbackToDestructiveMigration()
                 .build()

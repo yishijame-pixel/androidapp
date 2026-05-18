@@ -156,6 +156,25 @@ fun ShopScreen(
     val claimSuccessMsg = stringResource(R.string.shop_claim_success)
     val claimedTodayMsg = stringResource(R.string.shop_claimed_today)
     
+    // 🔥 每日活动奖励状态
+    val dailyCoinManager = remember { com.example.funlife.security.DailyCoinManager(context) }
+    val currentUserId = remember { (context.applicationContext as FunLifeApplication).let {
+        com.example.funlife.utils.UserSessionManager(it).getCurrentUserId().takeIf { id -> id > 0 } ?: 0L
+    }}
+    var canClaimDailyActivity by remember { mutableStateOf(false) }
+    var dailyCooldownSeconds by remember { mutableStateOf(0L) }
+    var showDailyClaimSuccess by remember { mutableStateOf(false) }
+    
+    // 🔥 每秒刷新冷却倒计时
+    LaunchedEffect(currentUserId) {
+        while (true) {
+            val remaining = dailyCoinManager.getTimeUntilNextClaim(currentUserId)
+            dailyCooldownSeconds = remaining
+            canClaimDailyActivity = remaining <= 0L
+            delay(1000L)
+        }
+    }
+    
     // 🔥 从数据库读取商品
     val dbShopItems by shopViewModel.shopItems.collectAsState()
     
@@ -466,6 +485,43 @@ fun ShopScreen(
                     }
                 }
                 
+                // ═══════════════════════════════════════════════════════
+                // 🎁 每日活动奖励卡片（领取后隐藏，冷却结束后再显示）
+                // ═══════════════════════════════════════════════════════
+                if (canClaimDailyActivity || showDailyClaimSuccess)
+                DailyActivityCard(
+                    vipLevel = vipLevel,
+                    canClaim = canClaimDailyActivity,
+                    cooldownSeconds = dailyCooldownSeconds,
+                    showSuccess = showDailyClaimSuccess,
+                    onClaim = {
+                        if (canClaimDailyActivity) {
+                            scope.launch {
+                                // 🔥 安全校验：使用DailyCoinManager防盗刷
+                                if (!dailyCoinManager.canClaimCoins(currentUserId)) {
+                                    snackbarHostState.showSnackbar("领取冷却中，请稍后再试")
+                                    return@launch
+                                }
+                                val reward = vipLevel.dailyCoins
+                                // 加金币
+                                val coinRepo = com.example.funlife.repository.CoinRepository(
+                                    (context.applicationContext as FunLifeApplication).database.coinDao()
+                                )
+                                coinRepo.addCoins(currentUserId, reward)
+                                // 记录领取（加密时间戳）
+                                dailyCoinManager.recordClaim(currentUserId)
+                                // 刷新状态
+                                canClaimDailyActivity = false
+                                dailyCooldownSeconds = 24 * 3600L
+                                showDailyClaimSuccess = true
+                                delay(2500)
+                                showDailyClaimSuccess = false
+                                snackbarHostState.showSnackbar("🎉 成功领取 $reward 金币！")
+                            }
+                        }
+                    }
+                )
+                
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     state = gridState,  // 🎯 添加滚动状态
@@ -501,7 +557,7 @@ fun ShopScreen(
                             isPurchased = isPurchased,
                             onClick = {
                                 if (product.price == 0 && product.dbItem?.type == "coins") {
-                                    // 免费领取金币
+                                    // 免费领取金币（旧逻辑保留）
                                     if (canClaimFreeCoins) {
                                         scope.launch {
                                             val success = shopViewModel.claimFreeCoins()
@@ -512,8 +568,57 @@ fun ShopScreen(
                                             }
                                         }
                                     }
+                                } else if (product.price == 0 && product.dbItem != null) {
+                                    // 🔥 免费商品：直接领取到背包，每人限领一次
+                                    if (isPurchased) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("您已领取过此物品")
+                                        }
+                                    } else {
+                                        scope.launch {
+                                            val db = (context.applicationContext as com.example.funlife.FunLifeApplication).database
+                                            val invDao = db.inventoryDao()
+                                            val item = product.dbItem
+                                            val itemId = when (item.type) {
+                                                "avatar_frame" -> "avatar_frame_${item.id}"
+                                                "button_skin" -> "button_pf_${item.value}"
+                                                "anniversary_frame" -> "jinian_card_${item.value}"
+                                                else -> "${item.type}_${item.id}"
+                                            }
+                                            // 二次检查防重复
+                                            if (invDao.getItemByItemId(1L, itemId) != null) {
+                                                snackbarHostState.showSnackbar("您已领取过此物品")
+                                                return@launch
+                                            }
+                                            val itemType = when (item.type) {
+                                                "avatar_frame" -> com.example.funlife.data.model.InventoryItemType.AVATAR_FRAME
+                                                "button_skin" -> com.example.funlife.data.model.InventoryItemType.BUTTON_SKIN
+                                                "anniversary_frame" -> com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME
+                                                else -> com.example.funlife.data.model.InventoryItemType.CONSUMABLE
+                                            }
+                                            val inventoryItem = com.example.funlife.data.model.InventoryItem(
+                                                userId = 1L,
+                                                itemId = itemId,
+                                                itemName = item.name,
+                                                itemType = itemType,
+                                                itemRarity = com.example.funlife.data.model.ItemRarity.COMMON,
+                                                iconEmoji = item.icon,
+                                                description = item.description,
+                                                quantity = 1,
+                                                isUsable = true,
+                                                effectValue = 0,
+                                                purchasePrice = 0,
+                                                obtainedTime = System.currentTimeMillis()
+                                            )
+                                            invDao.insertItem(inventoryItem)
+                                            showSuccessAnimation = true
+                                            delay(2000)
+                                            showSuccessAnimation = false
+                                            snackbarHostState.showSnackbar("🎁 领取成功！已放入背包")
+                                        }
+                                    }
                                 } else if (product.dbItem != null) {
-                                    // 所有数据库商品统一处理
+                                    // 付费商品：显示购买对话框
                                     selectedShopItem = product.dbItem
                                     showShopItemDialog = true
                                 }
@@ -1072,17 +1177,25 @@ fun ProductCard(
                 
                 // 按钮
                 if (product.price == 0) {
+                    // 🔥 区分金币类免费商品和普通免费商品
+                    val isCoinType = product.dbItem?.type == "coins"
+                    val isClaimable = if (isCoinType) canClaim else !isPurchased
+                    val buttonText = if (isCoinType) {
+                        stringResource(if (canClaim) R.string.shop_button_free else R.string.shop_claimed_today)
+                    } else {
+                        if (isPurchased) "已领取" else "免费领取"
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(32.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (canClaim) Color(0xFF4CAF50) else Color(0xFF9E9E9E))
-                            .clickable(onClick = onClick),
+                            .background(if (isClaimable) Color(0xFF4CAF50) else Color(0xFF9E9E9E))
+                            .clickable(enabled = isClaimable, onClick = onClick),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            stringResource(if (canClaim) R.string.shop_button_free else R.string.shop_claimed_today),
+                            buttonText,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -2250,6 +2363,266 @@ fun SparkleParticles() {
                         shape = CircleShape
                     )
             )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// 🎁 每日活动奖励卡片
+// ═══════════════════════════════════════════════════════
+@Composable
+fun DailyActivityCard(
+    vipLevel: com.example.funlife.data.model.VipLevel,
+    canClaim: Boolean,
+    cooldownSeconds: Long,
+    showSuccess: Boolean,
+    onClaim: () -> Unit
+) {
+    val reward = vipLevel.dailyCoins
+    val hours = cooldownSeconds / 3600
+    val minutes = (cooldownSeconds % 3600) / 60
+    val seconds = cooldownSeconds % 60
+    val cooldownText = String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    
+    // 动画
+    val infiniteTransition = rememberInfiniteTransition(label = "daily_activity")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+        label = "glow"
+    )
+    val coinBounce by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = -8f,
+        animationSpec = infiniteRepeatable(tween(600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "bounce"
+    )
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = -1f, targetValue = 2f,
+        animationSpec = infiniteRepeatable(tween(2500, easing = LinearEasing), RepeatMode.Restart),
+        label = "shimmer"
+    )
+    
+    // VIP等级对应的主题色
+    val themeColors = when (vipLevel) {
+        com.example.funlife.data.model.VipLevel.VIP3, 
+        com.example.funlife.data.model.VipLevel.PERMANENT -> listOf(Color(0xFFFF6B9D), Color(0xFFFF8FB3), Color(0xFFFFB3D0))
+        com.example.funlife.data.model.VipLevel.VIP2 -> listOf(Color(0xFF00BCD4), Color(0xFF26C6DA), Color(0xFF4DD0E1))
+        com.example.funlife.data.model.VipLevel.VIP1 -> listOf(Color(0xFFFFD700), Color(0xFFFFE44D), Color(0xFFFFF176))
+        else -> listOf(Color(0xFFFF9800), Color(0xFFFFB74D), Color(0xFFFFCC80))
+    }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            themeColors[0].copy(alpha = 0.15f),
+                            Color.White,
+                            themeColors[2].copy(alpha = 0.1f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(themeColors.map { it.copy(alpha = glowAlpha * 0.6f) }),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 标题行
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 活动图标（带呼吸光效）
+                        Box(contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(
+                                                themeColors[0].copy(alpha = glowAlpha * 0.3f),
+                                                Color.Transparent
+                                            )
+                                        ),
+                                        shape = CircleShape
+                                    )
+                            )
+                            Text("🎁", fontSize = 24.sp, modifier = Modifier.graphicsLayer { translationY = coinBounce })
+                        }
+                        Column {
+                            Text(
+                                "每日活动奖励",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF424242)
+                            )
+                            Text(
+                                "${vipLevel.icon} ${vipLevel.displayName}专属",
+                                fontSize = 11.sp,
+                                color = Color(vipLevel.color),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    
+                    // 奖励金额
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = themeColors[0].copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, themeColors[0].copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "💰", fontSize = 16.sp,
+                                modifier = Modifier.graphicsLayer { translationY = coinBounce }
+                            )
+                            Text(
+                                "+$reward",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFFF6F00)
+                            )
+                        }
+                    }
+                }
+                
+                // VIP等级对比提示
+                if (vipLevel.level < 3) {
+                    val nextLevel = when (vipLevel) {
+                        com.example.funlife.data.model.VipLevel.NORMAL -> com.example.funlife.data.model.VipLevel.VIP1
+                        com.example.funlife.data.model.VipLevel.VIP1 -> com.example.funlife.data.model.VipLevel.VIP2
+                        else -> com.example.funlife.data.model.VipLevel.VIP3
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFFFF8E1),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "升级${nextLevel.displayName}可领 ",
+                                fontSize = 11.sp,
+                                color = Color(0xFF8D6E63)
+                            )
+                            Text(
+                                "${nextLevel.dailyCoins}金币/天",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF6F00)
+                            )
+                            Text(" ⬆️", fontSize = 11.sp)
+                        }
+                    }
+                }
+                
+                // 领取按钮或冷却倒计时
+                if (showSuccess) {
+                    // 领取成功动画
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    listOf(Color(0xFF4CAF50), Color(0xFF66BB6A))
+                                ),
+                                shape = RoundedCornerShape(14.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("✅", fontSize = 20.sp)
+                            Text(
+                                "领取成功！+$reward 金币",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                } else if (canClaim) {
+                    // 可领取按钮（带闪光效果）
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val btnWidth = constraints.maxWidth.toFloat()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .background(
+                                    brush = Brush.horizontalGradient(themeColors.take(2)),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clickable(onClick = onClaim),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // 扫光
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .graphicsLayer { translationX = shimmerOffset * btnWidth }
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.White.copy(alpha = 0.3f),
+                                                Color.Transparent
+                                            ),
+                                            startX = 0f,
+                                            endX = btnWidth * 0.3f
+                                        )
+                                    )
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🎉", fontSize = 18.sp)
+                                Text(
+                                    "立即领取 $reward 金币",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

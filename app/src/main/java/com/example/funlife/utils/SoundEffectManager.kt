@@ -58,6 +58,29 @@ class SoundEffectManager private constructor(context: Context) {
             // 背景音乐
             loadSound(context, SoundEffect.PET_BGM, "pet")
             
+            // 🧩 猜谜游戏音效
+            loadSound(context, SoundEffect.RIDDLE_BGM, "riddle_bgm")
+            loadSound(context, SoundEffect.RIDDLE_CORRECT, "riddle_correct")
+            loadSound(context, SoundEffect.RIDDLE_WRONG, "riddle_wrong")
+            loadSound(context, SoundEffect.RIDDLE_COMPLETE, "riddle_complete")
+            
+            // 🎲 骰子游戏音效（如果有专属文件优先用，否则复用其他音效）
+            val diceShakeId = loadSound(context, SoundEffect.DICE_SHAKE, "dice_shake")
+                ?: soundMap[SoundEffect.SPIN_ROTATING]
+            val diceRevealId = loadSound(context, SoundEffect.DICE_REVEAL, "dice_reveal")
+                ?: soundMap[SoundEffect.RESULT_NORMAL]
+            val diceDropId = loadSound(context, SoundEffect.DICE_DROP, "dice_drop")
+                ?: soundMap[SoundEffect.RESULT_NORMAL]
+            val roundWinId = loadSound(context, SoundEffect.DICE_WIN, "dice_win")
+                ?: soundMap[SoundEffect.RIDDLE_CORRECT]
+            val roundLoseId = loadSound(context, SoundEffect.DICE_LOSE, "dice_lose")
+                ?: soundMap[SoundEffect.RIDDLE_WRONG]
+            diceShakeId?.let { soundMap[SoundEffect.DICE_SHAKE] = it }
+            diceRevealId?.let { soundMap[SoundEffect.DICE_REVEAL] = it }
+            diceDropId?.let { soundMap[SoundEffect.DICE_DROP] = it }
+            roundWinId?.let { soundMap[SoundEffect.DICE_WIN] = it }
+            roundLoseId?.let { soundMap[SoundEffect.DICE_LOSE] = it }
+            
             Log.d(TAG, "Loaded ${soundMap.size} sound effects")
         } catch (e: Exception) {
             Log.e(TAG, "Error loading sounds", e)
@@ -203,5 +226,18 @@ enum class SoundEffect {
     PET_BGM,            // 宠物页面背景音乐
     
     // 通用按钮音效
-    BUTTON_CLICK        // 按钮点击
+    BUTTON_CLICK,       // 按钮点击
+    
+    // 🧩 猜谜游戏音效
+    RIDDLE_BGM,         // 猜谜背景音乐
+    RIDDLE_CORRECT,     // 答对音效
+    RIDDLE_WRONG,       // 答错音效
+    RIDDLE_COMPLETE,    // 通关音效
+    
+    // 🎲 骰子游戏音效
+    DICE_SHAKE,         // 摇骰
+    DICE_REVEAL,        // 揭杯
+    DICE_DROP,          // 骰子落地
+    DICE_WIN,           // 回合胜利
+    DICE_LOSE           // 回合失败
 }

@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -13,6 +14,10 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
         tools:ignore="ScopedStorage" />
+    <!-- 全局悬浮窗（纪念日提醒：跨应用显示） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 开机后重新调度提醒 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".FunLifeApplication"
@@ -37,6 +42,32 @@
         <!-- 纪念日提醒广播接收器 -->
         <receiver
             android:name=".utils.AnniversaryReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        
+        <!-- 用户滑掉通知时停止铃声/震动 -->
+        <receiver
+            android:name=".utils.StopAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        
+        <!-- 开机后重新调度纪念日闹钟 -->
+        <receiver
+            android:name=".utils.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        
+        <!-- 全局悬浮窗服务 -->
+        <service
+            android:name=".utils.OverlayBannerService"
             android:enabled="true"
             android:exported="false" />
         

@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -52,10 +53,13 @@ data class VipCardData(
     val period: String,
     val gradient: List<Color>,
     val level: VipLevel,
-    val cornerTag: String? = null,  // 右上角标文字
-    val cornerTagColor: List<Color>? = null,  // 右上角标颜色
-    val topLeftTag: String? = null,  // 左上角标文字
-    val topLeftTagColor: List<Color>? = null  // 左上角标颜色
+    val cornerTag: String? = null,
+    val cornerTagColor: List<Color>? = null,
+    val topLeftTag: String? = null,
+    val topLeftTagColor: List<Color>? = null,
+    val originalPrice: String? = null,   // 原价（划线价）
+    val discountLabel: String? = null,   // 折扣标签，如"5折"
+    val saleBadge: String? = null        // 促销徽章，如"限时特惠"
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -140,13 +144,16 @@ fun VipScreen(
             price = "39.9",
             period = "永久",
             gradient = listOf(
-                Color(0xFFFFD700), Color(0xFFFFB800), Color(0xFFFF9500)
+                Color(0xFFFFD700), Color(0xFFFF8C00), Color(0xFFE6446E)
             ),
             level = VipLevel.VIP1,
             cornerTag = "超值",
             cornerTagColor = listOf(Color(0xFFFF6B00), Color(0xFFFF9500)),
             topLeftTag = "新人专享",
-            topLeftTagColor = listOf(Color(0xFFFF1744), Color(0xFFFF5252))
+            topLeftTagColor = listOf(Color(0xFFFF1744), Color(0xFFFF5252)),
+            originalPrice = "79.9",
+            discountLabel = "5折",
+            saleBadge = "🎁 首充特惠"
         ),
         VipCardData(
             title = VipLevel.VIP2.displayName,
@@ -155,13 +162,16 @@ fun VipScreen(
             price = "99.9",
             period = "年费",
             gradient = listOf(
-                Color(0xFF00D9FF), Color(0xFF0099FF), Color(0xFF6B5FFF)
+                Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF7C4DFF)
             ),
             level = VipLevel.VIP2,
             cornerTag = "热销",
             cornerTagColor = listOf(Color(0xFFFF1744), Color(0xFFFF5252)),
             topLeftTag = "限时优惠",
-            topLeftTagColor = listOf(Color(0xFFFF6B00), Color(0xFFFFAA00))
+            topLeftTagColor = listOf(Color(0xFFFF6B00), Color(0xFFFFAA00)),
+            originalPrice = "199",
+            discountLabel = "5折",
+            saleBadge = "🔥 爆款推荐"
         ),
         VipCardData(
             title = VipLevel.VIP3.displayName,
@@ -170,13 +180,16 @@ fun VipScreen(
             price = "399",
             period = "终身",
             gradient = listOf(
-                Color(0xFFFF00FF), Color(0xFFBB00FF), Color(0xFF7700FF)
+                Color(0xFFE040FB), Color(0xFFAA00FF), Color(0xFF6200EA)
             ),
             level = VipLevel.VIP3,
             cornerTag = "至尊",
             cornerTagColor = listOf(Color(0xFFFFD700), Color(0xFFFFAA00)),
             topLeftTag = "尊贵推荐",
-            topLeftTagColor = listOf(Color(0xFFFFD700), Color(0xFFFF9500))
+            topLeftTagColor = listOf(Color(0xFFFFD700), Color(0xFFFF9500)),
+            originalPrice = "999",
+            discountLabel = "4折",
+            saleBadge = "👑 买到即赚"
         )
     )
     
@@ -727,131 +740,343 @@ fun RedeemCodeSection(
 @Composable
 fun PremiumSpaceBackground() {
     val infiniteTransition = rememberInfiniteTransition(label = "space")
-    
+
+    // 星云旋转 - 加快
     val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(120000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(30000, easing = LinearEasing), RepeatMode.Restart),
         label = "rotation"
     )
-    
     val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
+        initialValue = 0.88f, targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(3000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "pulse"
     )
-    
+    // 极光呼吸
+    val aurora by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "aurora"
+    )
+    // 大范围漂移
+    val drift by infiniteTransition.animateFloat(
+        initialValue = -80f, targetValue = 80f,
+        animationSpec = infiniteRepeatable(tween(5000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "drift"
+    )
+    // 水平漂移
+    val driftX by infiniteTransition.animateFloat(
+        initialValue = -60f, targetValue = 60f,
+        animationSpec = infiniteRepeatable(tween(7000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "driftX"
+    )
+    // 光球浮动
+    val orbFloat by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), RepeatMode.Restart),
+        label = "orbFloat"
+    )
+    // 能量波
+    val wave by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2500, easing = LinearEasing), RepeatMode.Restart),
+        label = "wave"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
+        // 深色渐变底色
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF0A0015),
-                            Color(0xFF1A0B2E),
-                            Color(0xFF0F1B3D),
-                            Color(0xFF000000)
+                            Color(0xFF05000D),
+                            Color(0xFF0D0422),
+                            Color(0xFF150835),
+                            Color(0xFF0A0D2E),
+                            Color(0xFF030108)
                         )
                     )
                 )
         )
-        
+
+        // 漂移星云层 - 不断移动
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { 
+                .graphicsLayer {
                     rotationZ = rotation
                     scaleX = pulse
                     scaleY = pulse
+                    translationX = driftX
+                    translationY = drift * 0.3f
                 }
         ) {
-            val centerX = size.width / 2
-            val centerY = size.height / 2.5f
-            
-            repeat(8) { index ->
-                val radius = (250 + index * 180).dp.toPx()
-                val alpha = 0.2f - index * 0.015f
-                
+            val cx = size.width / 2
+            val cy = size.height / 3f
+
+            // 紫色星云（中心）- 更亮
+            repeat(6) { i ->
+                val r = (200 + i * 160).dp.toPx()
+                val a = (0.22f - i * 0.025f).coerceAtLeast(0.03f)
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF9D4FFF).copy(alpha = alpha),
-                            Color(0xFF6B5FFF).copy(alpha = alpha * 0.7f),
-                            Color(0xFF3B82F6).copy(alpha = alpha * 0.4f),
+                            Color(0xFFBB55FF).copy(alpha = a),
+                            Color(0xFF8833DD).copy(alpha = a * 0.6f),
                             Color.Transparent
                         ),
-                        center = Offset(centerX, centerY),
-                        radius = radius
+                        center = Offset(cx, cy), radius = r
                     ),
-                    radius = radius,
-                    center = Offset(centerX, centerY)
+                    radius = r, center = Offset(cx, cy)
+                )
+            }
+
+            // 青蓝星云（右上）
+            repeat(4) { i ->
+                val r = (150 + i * 130).dp.toPx()
+                val a = (0.15f - i * 0.025f).coerceAtLeast(0.03f)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF00CCFF).copy(alpha = a),
+                            Color(0xFF0066EE).copy(alpha = a * 0.5f),
+                            Color.Transparent
+                        ),
+                        center = Offset(cx + 200f, cy - 100f), radius = r
+                    ),
+                    radius = r, center = Offset(cx + 200f, cy - 100f)
+                )
+            }
+
+            // 粉紫星云（左下）
+            repeat(4) { i ->
+                val r = (120 + i * 120).dp.toPx()
+                val a = (0.13f - i * 0.02f).coerceAtLeast(0.03f)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFF55BB).copy(alpha = a),
+                            Color(0xFFDD3399).copy(alpha = a * 0.5f),
+                            Color.Transparent
+                        ),
+                        center = Offset(cx - 150f, cy + 400f), radius = r
+                    ),
+                    radius = r, center = Offset(cx - 150f, cy + 400f)
                 )
             }
         }
-        
-        repeat(150) { index ->
-            FloatingParticle(index)
-        }
-    }
-}
 
-@Composable
-fun FloatingParticle(index: Int) {
-    val infiniteTransition = rememberInfiniteTransition(label = "particle$index")
-    
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = (index * 7f) % 1500f,
-        targetValue = ((index * 7f) % 1500f) + 400f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 4000 + index * 60,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "offsetY"
-    )
-    
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000 + index * 40),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-    
-    val size = when {
-        index % 20 == 0 -> 4f
-        index % 10 == 0 -> 3f
-        index % 5 == 0 -> 2f
-        else -> 1.5f
-    }
-    
-    Canvas(
-        modifier = Modifier
-            .offset(x = ((index * 17f) % 420f).dp, y = offsetY.dp)
-            .size(size.dp)
-    ) {
-        drawCircle(
-            color = Color.White.copy(alpha = alpha),
-            radius = this.size.minDimension / 2
-        )
-        
-        if (size > 2f) {
-            drawCircle(
-                color = Color(0xFF00D9FF).copy(alpha = alpha * 0.4f),
-                radius = this.size.minDimension * 1.5f
+        // 浮动光球 - 6个大光球漂浮移动
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val t = orbFloat
+            val orbData = listOf(
+                Triple(Color(0xFFFF00FF), 0.15f, 0f),
+                Triple(Color(0xFF00D9FF), 0.7f, 0.17f),
+                Triple(Color(0xFFFFD700), 0.4f, 0.33f),
+                Triple(Color(0xFF00FF88), 0.85f, 0.5f),
+                Triple(Color(0xFFFF5577), 0.25f, 0.67f),
+                Triple(Color(0xFF7755FF), 0.6f, 0.83f)
             )
+            orbData.forEach { (color, xFrac, phase) ->
+                val p = (t + phase) % 1f
+                val ox = size.width * xFrac + sin(p * PI.toFloat() * 2f) * 60f + driftX
+                val oy = size.height * (0.1f + p * 0.8f) + drift * 0.5f
+                val oa = (0.12f + 0.08f * sin(p * PI.toFloat() * 4f)).coerceIn(0f, 1f)
+                val oRadius = 40.dp.toPx() + 15.dp.toPx() * sin(p * PI.toFloat() * 2f)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            color.copy(alpha = oa),
+                            color.copy(alpha = oa * 0.4f),
+                            Color.Transparent
+                        ),
+                        center = Offset(ox, oy), radius = oRadius
+                    ),
+                    radius = oRadius, center = Offset(ox, oy)
+                )
+            }
+        }
+
+        // 极光光带 - 更宽更明显，大幅移动
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val auroraAlpha = (0.08f + aurora * 0.15f).coerceIn(0f, 1f)
+            // 光带1 - 青绿
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color(0xFF00FFaa).copy(alpha = auroraAlpha),
+                        Color(0xFF00DDFF).copy(alpha = auroraAlpha * 0.8f),
+                        Color.Transparent
+                    ),
+                    startY = size.height * 0.1f + drift * 2.5f,
+                    endY = size.height * 0.35f + drift * 2.5f
+                )
+            )
+            // 光带2 - 粉紫
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color(0xFFFF00FF).copy(alpha = auroraAlpha * 0.7f),
+                        Color(0xFF8800FF).copy(alpha = auroraAlpha * 0.5f),
+                        Color.Transparent
+                    ),
+                    startY = size.height * 0.5f - drift * 2f,
+                    endY = size.height * 0.75f - drift * 2f
+                )
+            )
+            // 光带3 - 金色（新增）
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color(0xFFFFD700).copy(alpha = auroraAlpha * 0.4f),
+                        Color(0xFFFF8C00).copy(alpha = auroraAlpha * 0.3f),
+                        Color.Transparent
+                    ),
+                    startY = size.height * 0.7f + drift * 1.8f,
+                    endY = size.height * 0.9f + drift * 1.8f
+                )
+            )
+        }
+
+        // 能量波纹 - 从中心扩散
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2
+            val cy = size.height / 2
+            repeat(3) { i ->
+                val p = (wave + i * 0.33f) % 1f
+                val waveRadius = p * size.width * 0.8f
+                val wa = ((1f - p) * 0.15f).coerceIn(0f, 1f)
+                if (wa > 0.01f) {
+                    drawCircle(
+                        color = Color(0xFF7755FF).copy(alpha = wa),
+                        radius = waveRadius,
+                        center = Offset(cx, cy),
+                        style = Stroke(width = 1.5f)
+                    )
+                }
+            }
+        }
+
+        // 彩色星点 - 持续运动
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val time = rotation / 360f
+            val starColors = listOf(
+                Color.White, Color(0xFFFFD700), Color(0xFF00D9FF),
+                Color(0xFFFF77CC), Color(0xFFAABBFF), Color(0xFF88FFBB)
+            )
+            repeat(100) { i ->
+                // 星点持续漂移
+                val baseX = ((i * 23f + 7f) % size.width)
+                val baseY = ((i * 31f + 13f) % size.height)
+                val x = baseX + sin(time * PI.toFloat() * 2f + i * 0.5f) * 20f + driftX * 0.3f
+                val y = baseY + cos(time * PI.toFloat() * 2f + i * 0.7f) * 20f + drift * 0.2f
+                val twinkle = (0.2f + 0.8f * ((sin(time * PI.toFloat() * 6f + i * 0.9f) + 1f) / 2f)).coerceIn(0f, 1f)
+                val s = when {
+                    i % 20 == 0 -> 3f
+                    i % 10 == 0 -> 2.2f
+                    i % 5 == 0 -> 1.6f
+                    else -> 1f
+                }
+                val color = starColors[i % starColors.size]
+                drawCircle(
+                    color = color.copy(alpha = (twinkle * 0.85f).coerceIn(0f, 1f)),
+                    radius = s,
+                    center = Offset(x, y)
+                )
+                if (s >= 2f) {
+                    drawCircle(
+                        color = color.copy(alpha = (twinkle * 0.3f).coerceIn(0f, 1f)),
+                        radius = s * 3.5f,
+                        center = Offset(x, y)
+                    )
+                }
+            }
+        }
+
+        // 流星效果 - 大量、多方向
+        val meteorAnim by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(2500, easing = LinearEasing), RepeatMode.Restart),
+            label = "meteor"
+        )
+        val meteorAnim2 by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(3800, easing = LinearEasing), RepeatMode.Restart),
+            label = "meteor2"
+        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val meteorColors = listOf(
+                Color(0xFF00D9FF), Color(0xFFFFD700), Color(0xFFFF77CC),
+                Color(0xFF88FFBB), Color(0xFFAABBFF)
+            )
+            // 从右上往左下的流星 - 8条
+            repeat(8) { idx ->
+                val phase = (meteorAnim + idx * 0.125f) % 1f
+                val sx = size.width * (0.1f + idx * 0.115f)
+                val sy = -30f
+                val ex = sx - 220f
+                val ey = size.height * 0.6f
+                val mx = sx + (ex - sx) * phase
+                val my = sy + (ey - sy) * phase
+                val tailLen = 90f + (idx % 3) * 20f
+                val ma = if (phase < 0.06f) phase / 0.06f else if (phase > 0.6f) (1f - phase) / 0.4f else 1f
+                val ca = (ma * 0.55f).coerceIn(0f, 1f)
+                if (ca > 0.01f) {
+                    val ang = atan2(ey - sy, ex - sx)
+                    val mc = meteorColors[idx % meteorColors.size]
+                    drawLine(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = ca),
+                                mc.copy(alpha = ca * 0.5f),
+                                Color.Transparent
+                            ),
+                            start = Offset(mx, my),
+                            end = Offset(mx - cos(ang) * tailLen, my - sin(ang) * tailLen)
+                        ),
+                        start = Offset(mx, my),
+                        end = Offset(mx - cos(ang) * tailLen, my - sin(ang) * tailLen),
+                        strokeWidth = 1.8f
+                    )
+                    drawCircle(color = Color.White.copy(alpha = ca), radius = 2.5f, center = Offset(mx, my))
+                }
+            }
+            // 从左上往右下的流星 - 4条（反向）
+            repeat(4) { idx ->
+                val phase = (meteorAnim2 + idx * 0.25f) % 1f
+                val sx = size.width * (0.05f + idx * 0.25f)
+                val sy = -20f
+                val ex = sx + 150f
+                val ey = size.height * 0.5f
+                val mx = sx + (ex - sx) * phase
+                val my = sy + (ey - sy) * phase
+                val tailLen = 70f
+                val ma = if (phase < 0.08f) phase / 0.08f else if (phase > 0.55f) (1f - phase) / 0.45f else 1f
+                val ca = (ma * 0.35f).coerceIn(0f, 1f)
+                if (ca > 0.01f) {
+                    val ang = atan2(ey - sy, ex - sx)
+                    drawLine(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = ca),
+                                Color(0xFFFF00FF).copy(alpha = ca * 0.4f),
+                                Color.Transparent
+                            ),
+                            start = Offset(mx, my),
+                            end = Offset(mx - cos(ang) * tailLen, my - sin(ang) * tailLen)
+                        ),
+                        start = Offset(mx, my),
+                        end = Offset(mx - cos(ang) * tailLen, my - sin(ang) * tailLen),
+                        strokeWidth = 1.5f
+                    )
+                    drawCircle(color = Color.White.copy(alpha = ca), radius = 2f, center = Offset(mx, my))
+                }
+            }
         }
     }
 }
@@ -1093,55 +1318,58 @@ fun SwipeableVipCard(
         val shadowAlpha = lerpFloat(0.3f, 0.8f, 1f - pageOffset.absoluteValue.coerceIn(0f, 1f))
         val shadowBlurDp = lerpFloat(20f, 50f, 1f - pageOffset.absoluteValue.coerceIn(0f, 1f))
         
-        // 外发光（中间卡片更强）
-        if (isCenter) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp)
-                    .clip(RoundedCornerShape(40.dp))
-                    .blur(shadowBlurDp.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFFFFD700).copy(alpha = shadowAlpha),
-                                Color(0xFFFF9500).copy(alpha = shadowAlpha * 0.7f)
-                            )
-                        ),
-                        shape = RoundedCornerShape(40.dp)
-                    )
-            )
-        }
+        // 外发光 - 使用卡片自身颜色
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
+                .clip(RoundedCornerShape(40.dp))
+                .blur(if (isCenter) shadowBlurDp.dp else 25.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            card.gradient[0].copy(alpha = if (isCenter) shadowAlpha else 0.2f),
+                            card.gradient[1].copy(alpha = if (isCenter) shadowAlpha * 0.7f else 0.15f),
+                            card.gradient.getOrElse(2) { card.gradient[1] }.copy(alpha = if (isCenter) shadowAlpha * 0.5f else 0.1f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(40.dp)
+                )
+        )
         
         Card(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(12.dp)
-                .clip(RoundedCornerShape(40.dp))
+                .clip(RoundedCornerShape(36.dp))
                 .border(
                     width = if (isCenter) 2.5.dp else 1.5.dp,
                     brush = if (isCenter) {
-                        Brush.linearGradient(
+                        Brush.sweepGradient(
                             colors = listOf(
-                                Color(0xFFFFD700),
-                                Color(0xFFFFB800),
-                                Color(0xFFFFD700)
+                                card.gradient[0],
+                                Color.White.copy(alpha = 0.8f),
+                                card.gradient[1],
+                                Color.White.copy(alpha = 0.4f),
+                                card.gradient.getOrElse(2) { card.gradient[0] },
+                                Color.White.copy(alpha = 0.8f),
+                                card.gradient[0]
                             )
                         )
                     } else {
                         Brush.linearGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.5f),
-                                Color.White.copy(alpha = 0.2f),
-                                Color.White.copy(alpha = 0.5f)
+                                Color.White.copy(alpha = 0.4f),
+                                Color.White.copy(alpha = 0.15f),
+                                Color.White.copy(alpha = 0.4f)
                             )
                         )
                     },
-                    shape = RoundedCornerShape(40.dp)
+                    shape = RoundedCornerShape(36.dp)
                 )
                 .clickable(onClick = onClick),
-            shape = RoundedCornerShape(40.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isCenter) 20.dp else 10.dp),
+            shape = RoundedCornerShape(36.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isCenter) 24.dp else 10.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Color.Transparent
             )
@@ -1151,9 +1379,13 @@ fun SwipeableVipCard(
                     .fillMaxSize()
                     .background(
                         brush = Brush.verticalGradient(
-                            colors = card.gradient.map { it.copy(alpha = if (isCenter) 0.98f else 0.88f) }
+                            colors = listOf(
+                                card.gradient[0].copy(alpha = if (isCenter) 0.95f else 0.85f),
+                                card.gradient[1].copy(alpha = if (isCenter) 0.98f else 0.88f),
+                                card.gradient.getOrElse(2) { card.gradient[1] }.copy(alpha = if (isCenter) 0.92f else 0.82f)
+                            )
                         ),
-                        shape = RoundedCornerShape(40.dp)
+                        shape = RoundedCornerShape(36.dp)
                     )
             ) {
                 // 右上角吸引人的角标
@@ -1226,12 +1458,12 @@ fun SwipeableVipCard(
                     
                     repeat(8) { index ->
                         val radius = (50 + index * 40).dp.toPx()
-                        val alpha = 0.15f - index * 0.015f
+                        val a = (0.15f - index * 0.015f).coerceAtLeast(0.01f)
                         
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = alpha),
+                                    Color.White.copy(alpha = a),
                                     Color.Transparent
                                 ),
                                 center = Offset(centerX, centerY),
@@ -1243,6 +1475,39 @@ fun SwipeableVipCard(
                     }
                 }
                 
+                // 菱形网格装饰纹理
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val spacing = 40.dp.toPx()
+                    val lineColor = Color.White.copy(alpha = 0.04f)
+                    var lx = 0f
+                    while (lx < size.width + size.height) {
+                        drawLine(lineColor, Offset(lx, 0f), Offset(lx - size.height, size.height), strokeWidth = 0.8f)
+                        drawLine(lineColor, Offset(lx - size.width, 0f), Offset(lx, size.height), strokeWidth = 0.8f)
+                        lx += spacing
+                    }
+                }
+
+                // 四角钻石装饰
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val ds = 6.dp.toPx()
+                    val mg = 24.dp.toPx()
+                    val corners = listOf(
+                        Offset(mg, mg), Offset(size.width - mg, mg),
+                        Offset(mg, size.height - mg), Offset(size.width - mg, size.height - mg)
+                    )
+                    corners.forEachIndexed { idx, pos ->
+                        val da = (0.3f + 0.5f * sin(shimmer * PI.toFloat() * 2f + idx * 1.5f)).coerceIn(0f, 1f)
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(pos.x, pos.y - ds)
+                            lineTo(pos.x + ds, pos.y)
+                            lineTo(pos.x, pos.y + ds)
+                            lineTo(pos.x - ds, pos.y)
+                            close()
+                        }
+                        drawPath(path, color = Color.White.copy(alpha = da))
+                    }
+                }
+
                 // 流光效果（所有卡片都有，中间卡片更强）
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val shimmerOffset = shimmer * size.width * 2.5f
@@ -1261,120 +1526,305 @@ fun SwipeableVipCard(
                         blendMode = BlendMode.Plus
                     )
                 }
+
+                // 顶部高光条 - 玻璃质感
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.1f),
+                                    Color.White.copy(alpha = 0.03f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
                 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(20.dp),
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // 精致的价格标签 - 胶囊形状，半透明玻璃质感，更醒目
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(25.dp))
-                            .background(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        card.gradient[0].copy(alpha = 0.4f),
-                                        card.gradient[1].copy(alpha = 0.3f)
+                    // ===== 促销徽章 =====
+                    if (card.saleBadge != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF1744).copy(alpha = 0.9f),
+                                            Color(0xFFFF6D00).copy(alpha = 0.9f)
+                                        )
                                     )
                                 )
-                            )
-                            .border(
-                                width = 2.dp,
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        card.gradient[0].copy(alpha = 0.8f),
-                                        card.gradient[1].copy(alpha = 0.6f)
-                                    )
-                                ),
-                                shape = RoundedCornerShape(25.dp)
-                            )
-                            .padding(horizontal = 20.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                                .padding(horizontal = 14.dp, vertical = 5.dp)
                         ) {
                             Text(
-                                text = card.period,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                style = LocalTextStyle.current.copy(
-                                    shadow = androidx.compose.ui.graphics.Shadow(
-                                        color = Color.Black.copy(alpha = 0.5f),
-                                        offset = Offset(0f, 1f),
-                                        blurRadius = 3f
-                                    )
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "¥${card.price}",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                style = LocalTextStyle.current.copy(
-                                    shadow = androidx.compose.ui.graphics.Shadow(
-                                        color = Color.Black.copy(alpha = 0.6f),
-                                        offset = Offset(0f, 2f),
-                                        blurRadius = 4f
-                                    )
-                                )
+                                text = card.saleBadge,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
                             )
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
+
+                    // ===== 标题 =====
                     Text(
                         text = card.title,
-                        fontSize = 24.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White,
                         style = LocalTextStyle.current.copy(
                             shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color.Black.copy(alpha = 0.8f),
-                                offset = Offset(0f, 3f),
-                                blurRadius = 12f
+                                color = Color.Black.copy(alpha = 0.6f),
+                                offset = Offset(0f, 2f),
+                                blurRadius = 10f
                             )
                         )
                     )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ===== 耀眼价格区 =====
+                    val priceGlow by infiniteTransition.animateFloat(
+                        initialValue = 0.6f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1200, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "priceGlow"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White.copy(alpha = 0.1f))
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.4f),
+                                        Color.White.copy(alpha = 0.08f)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            .padding(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // 原价 + 折扣标签行
+                            if (card.originalPrice != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "原价 ¥${card.originalPrice}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        textDecoration = TextDecoration.LineThrough
+                                    )
+                                    if (card.discountLabel != null) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    brush = Brush.horizontalGradient(
+                                                        colors = listOf(
+                                                            Color(0xFFFF1744),
+                                                            Color(0xFFFF5252)
+                                                        )
+                                                    )
+                                                )
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = card.discountLabel,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+
+                            // 主价格 - 超大耀眼数字
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                // 周期小标签
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.15f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        .alignByBaseline()
+                                ) {
+                                    Text(
+                                        text = card.period,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White.copy(alpha = 0.9f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                // ¥符号
+                                Text(
+                                    text = "¥",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.alignByBaseline(),
+                                    style = LocalTextStyle.current.copy(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(Color(0xFFFFD700), Color.White)
+                                        ),
+                                        shadow = androidx.compose.ui.graphics.Shadow(
+                                            color = Color(0xFFFFD700).copy(alpha = priceGlow * 0.8f),
+                                            blurRadius = 16f
+                                        )
+                                    )
+                                )
+                                // 大数字 - 渐变 + 发光
+                                Text(
+                                    text = card.price,
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.alignByBaseline(),
+                                    style = LocalTextStyle.current.copy(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                Color.White,
+                                                Color(0xFFFFD700),
+                                                Color.White
+                                            )
+                                        ),
+                                        shadow = androidx.compose.ui.graphics.Shadow(
+                                            color = Color(0xFFFFD700).copy(alpha = priceGlow),
+                                            blurRadius = 24f
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    // ===== 图标区：带发光光环 =====
+                    Box(contentAlignment = Alignment.Center) {
+                        // 外层发光圈
+                        val iconGlow by infiniteTransition.animateFloat(
+                            initialValue = 0.3f,
+                            targetValue = 0.8f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1800, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "iconGlow"
+                        )
+                        Canvas(modifier = Modifier.size(90.dp)) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = iconGlow * 0.25f),
+                                        Color.White.copy(alpha = iconGlow * 0.08f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                radius = size.minDimension / 2
+                            )
+                            // 细光环
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.6f),
+                                        Color.White.copy(alpha = 0.1f),
+                                        Color.White.copy(alpha = 0.6f)
+                                    )
+                                ),
+                                radius = size.minDimension / 2 - 4f,
+                                style = Stroke(width = 1.5f)
+                            )
+                        }
+                        Text(
+                            text = card.icon,
+                            fontSize = 52.sp,
+                            style = LocalTextStyle.current.copy(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.3f),
+                                    offset = Offset(0f, 4f),
+                                    blurRadius = 8f
+                                )
+                            )
+                        )
+                    }
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    Text(
-                        text = card.icon,
-                        fontSize = 55.sp,
-                        style = LocalTextStyle.current.copy(
-                            shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color.Black.copy(alpha = 0.4f),
-                                offset = Offset(0f, 4f),
-                                blurRadius = 8f
+                    // ===== 渐变分割线 =====
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(1.dp)
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.5f),
+                                        Color.Transparent
+                                    )
+                                )
                             )
-                        )
                     )
                     
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     
+                    // ===== 权益列表：毛玻璃卡片 =====
                     Column(
                         horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        card.benefits.forEach { benefit ->
+                        card.benefits.forEachIndexed { idx, benefit ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Start
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.08f + idx * 0.015f))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
+                                // 渐变勾选圆
                                 Box(
                                     modifier = Modifier
-                                        .size(20.dp)
+                                        .size(22.dp)
                                         .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.4f))
+                                        .background(
+                                            brush = Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color.White.copy(alpha = 0.5f),
+                                                    Color.White.copy(alpha = 0.2f)
+                                                )
+                                            )
+                                        )
                                         .border(
-                                            width = 1.5.dp,
+                                            width = 1.dp,
                                             color = Color.White.copy(alpha = 0.6f),
                                             shape = CircleShape
                                         ),
@@ -1384,27 +1834,20 @@ fun SwipeableVipCard(
                                         text = "✓",
                                         fontSize = 12.sp,
                                         color = Color.White,
-                                        fontWeight = FontWeight.Black,
-                                        style = LocalTextStyle.current.copy(
-                                            shadow = androidx.compose.ui.graphics.Shadow(
-                                                color = Color.Black.copy(alpha = 0.5f),
-                                                offset = Offset(0f, 1f),
-                                                blurRadius = 2f
-                                            )
-                                        )
+                                        fontWeight = FontWeight.Black
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = benefit,
                                     fontSize = 13.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.95f),
+                                    fontWeight = FontWeight.SemiBold,
                                     style = LocalTextStyle.current.copy(
                                         shadow = androidx.compose.ui.graphics.Shadow(
-                                            color = Color.Black.copy(alpha = 0.7f),
-                                            offset = Offset(0f, 2f),
-                                            blurRadius = 6f
+                                            color = Color.Black.copy(alpha = 0.5f),
+                                            offset = Offset(0f, 1f),
+                                            blurRadius = 4f
                                         )
                                     )
                                 )
@@ -1412,7 +1855,41 @@ fun SwipeableVipCard(
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.weight(1f))
+                    
+                    // ===== 底部CTA提示 =====
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.15f),
+                                        Color.White.copy(alpha = 0.08f)
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.4f),
+                                        Color.White.copy(alpha = 0.15f)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✨ 滑动选择 · 点击下方购买",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -2091,35 +2568,120 @@ fun PremiumPurchaseButton(
         label = "shimmer"
     )
     
+    val glowPulse by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glowPulse"
+    )
+    
     Box(
         modifier = Modifier
-            .width(340.dp)
-            .height(64.dp)
+            .width(320.dp)
+            .height(60.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // 按钮主体（完全透明，只有边框）
+        // 外层呼吸光晕 - 用Canvas绘制避免矩形阴影
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = 0.99f }
+        ) {
+            val glowA = (glowPulse * 0.45f).coerceIn(0f, 1f)
+            // 左侧光晕
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = glowA),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.2f, size.height / 2),
+                    radius = size.height * 1.2f
+                ),
+                radius = size.height * 1.2f,
+                center = Offset(size.width * 0.2f, size.height / 2)
+            )
+            // 中间光晕
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFF00FF).copy(alpha = glowA * 0.8f),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.5f, size.height / 2),
+                    radius = size.height * 1.1f
+                ),
+                radius = size.height * 1.1f,
+                center = Offset(size.width * 0.5f, size.height / 2)
+            )
+            // 右侧光晕
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF00D9FF).copy(alpha = glowA),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.8f, size.height / 2),
+                    radius = size.height * 1.2f
+                ),
+                radius = size.height * 1.2f,
+                center = Offset(size.width * 0.8f, size.height / 2)
+            )
+        }
+        
+        // 按钮主体 - 渐变填充 + 边框
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(32.dp))
+                .clip(RoundedCornerShape(30.dp))
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.15f),
+                            Color(0xFFFF00FF).copy(alpha = 0.12f),
+                            Color(0xFF00D9FF).copy(alpha = 0.15f)
+                        )
+                    )
+                )
                 .border(
                     width = 1.5.dp,
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            Color(0xFFFFD700).copy(alpha = 0.8f),
-                            Color(0xFFFF00FF).copy(alpha = 0.9f),
-                            Color(0xFF00D9FF).copy(alpha = 0.8f)
+                            Color(0xFFFFD700).copy(alpha = 0.9f),
+                            Color(0xFFFF00FF).copy(alpha = 0.8f),
+                            Color(0xFF00D9FF).copy(alpha = 0.9f)
                         )
                     ),
-                    shape = RoundedCornerShape(32.dp)
+                    shape = RoundedCornerShape(30.dp)
                 )
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
+            // 流光扫过按钮背景
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val off = shimmer * size.width * 2.5f
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.12f),
+                            Color.Transparent
+                        ),
+                        startX = off - size.width * 0.8f,
+                        endX = off
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(30.dp.toPx())
+                )
+            }
+            
             Box {
-                // 底层：固定渐变色文字
+                // 底层：渐变色文字
                 Text(
                     text = "立即购买",
-                    fontSize = 26.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
                     style = LocalTextStyle.current.copy(
                         brush = Brush.linearGradient(
@@ -2132,40 +2694,34 @@ fun PremiumPurchaseButton(
                             )
                         ),
                         shadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color(0xFFFF00FF).copy(alpha = 0.6f),
-                            offset = Offset(0f, 0f),
-                            blurRadius = 20f
+                            color = Color(0xFFFF00FF).copy(alpha = 0.5f),
+                            blurRadius = 16f
                         )
                     )
                 )
                 
-                // 顶层：白色流光（使用graphicsLayer裁剪到文字形状）
+                // 顶层：白色流光
                 Text(
                     text = "立即购买",
-                    fontSize = 26.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White,
                     modifier = Modifier
-                        .graphicsLayer {
-                            alpha = 0.99f  // 稍微透明以启用图层
-                        }
+                        .graphicsLayer { alpha = 0.99f }
                         .drawWithContent {
                             drawContent()
-                            
-                            // 白色流光从左到右扫过
                             val shimmerOffset = shimmer * size.width * 2.5f
-                            
                             drawRect(
                                 brush = Brush.horizontalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.8f),
+                                        Color.White.copy(alpha = 0.7f),
                                         Color.Transparent
                                     ),
                                     startX = shimmerOffset - size.width * 0.8f,
                                     endX = shimmerOffset + size.width * 0.2f
                                 ),
-                                blendMode = BlendMode.SrcIn  // 只在文字形状内显示
+                                blendMode = BlendMode.SrcIn
                             )
                         }
                 )
@@ -2717,122 +3273,285 @@ fun CornerPriceTag(
 }
 
 
-// 可爱的加载动画
+// 豪华加载动画
 @Composable
 fun CuteLoadingAnimation() {
     val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
+
+    // 三层环 - 不同速度/方向
+    val ring1 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
+        label = "ring1"
     )
-    
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
+    val ring2 by infiniteTransition.animateFloat(
+        initialValue = 360f, targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart),
+        label = "ring2"
     )
-    
+    val ring3 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(5000, easing = LinearEasing), RepeatMode.Restart),
+        label = "ring3"
+    )
+
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.85f, targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse"
+    )
+
+    val textShimmer by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
+        label = "textShimmer"
+    )
+
+    // 进度动画 0→1
+    val progress by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        label = "progress"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                brush = Brush.verticalGradient(
+                brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF0A0015),
                         Color(0xFF1A0B2E),
-                        Color(0xFF0F1B3D),
+                        Color(0xFF0A0015),
                         Color(0xFF000000)
-                    )
+                    ),
+                    radius = 900f
                 )
             ),
         contentAlignment = Alignment.Center
     ) {
+        // 背景粒子
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val time = ring1 / 360f
+            repeat(40) { i ->
+                val angle = (i * 9f + time * 360f) * PI.toFloat() / 180f
+                val dist = 120f + (i % 7) * 35f
+                val px = center.x + cos(angle) * dist
+                val py = center.y + sin(angle) * dist
+                val a = (0.15f + 0.2f * sin(time * PI.toFloat() * 2f + i * 0.5f)).coerceIn(0f, 1f)
+                val r = 1f + (i % 3)
+                drawCircle(
+                    color = when (i % 3) {
+                        0 -> Color(0xFFFFD700).copy(alpha = a)
+                        1 -> Color(0xFFFF00FF).copy(alpha = a)
+                        else -> Color(0xFF00D9FF).copy(alpha = a)
+                    },
+                    radius = r,
+                    center = Offset(px, py)
+                )
+            }
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // 旋转的VIP图标
+            // 多层旋转环 + 中心图标
             Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .graphicsLayer {
-                        rotationZ = rotation
-                        scaleX = scale
-                        scaleY = scale
-                    }
+                modifier = Modifier.size(160.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // 外圈光环
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                // 最外层环 - 虚线感
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { rotationZ = ring3 }
+                ) {
+                    val r = size.minDimension / 2 - 4f
+                    repeat(24) { i ->
+                        val a = (i * 15f) * PI.toFloat() / 180f
+                        val len = 8f
+                        drawLine(
+                            color = Color(0xFF00D9FF).copy(alpha = 0.4f),
+                            start = Offset(center.x + cos(a) * (r - len), center.y + sin(a) * (r - len)),
+                            end = Offset(center.x + cos(a) * r, center.y + sin(a) * r),
+                            strokeWidth = 2f
+                        )
+                    }
+                }
+
+                // 中层环 - 渐变扫描
+                Canvas(
+                    modifier = Modifier
+                        .size(130.dp)
+                        .graphicsLayer { rotationZ = ring2 }
+                ) {
                     drawCircle(
                         brush = Brush.sweepGradient(
                             colors = listOf(
-                                Color(0xFFFFD700).copy(alpha = 0.6f),
-                                Color(0xFFFF00FF).copy(alpha = 0.6f),
-                                Color(0xFF00D9FF).copy(alpha = 0.6f),
-                                Color(0xFFFFD700).copy(alpha = 0.6f)
+                                Color(0xFFFF00FF).copy(alpha = 0.7f),
+                                Color.Transparent,
+                                Color(0xFF00D9FF).copy(alpha = 0.5f),
+                                Color.Transparent,
+                                Color(0xFFFF00FF).copy(alpha = 0.7f)
                             )
                         ),
                         radius = size.minDimension / 2,
-                        style = Stroke(width = 8f)
+                        style = Stroke(width = 3.5f)
                     )
                 }
-                
-                // 中心VIP文字
+
+                // 内层环 - 金色主环
+                Canvas(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .graphicsLayer { rotationZ = ring1 }
+                ) {
+                    drawCircle(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700).copy(alpha = 0.9f),
+                                Color(0xFFFF9500).copy(alpha = 0.3f),
+                                Color(0xFFFFD700).copy(alpha = 0.9f),
+                                Color(0xFFFF9500).copy(alpha = 0.3f),
+                                Color(0xFFFFD700).copy(alpha = 0.9f)
+                            )
+                        ),
+                        radius = size.minDimension / 2,
+                        style = Stroke(width = 5f)
+                    )
+                    // 光点
+                    drawCircle(
+                        color = Color.White,
+                        radius = 4f,
+                        center = Offset(center.x, center.y - size.minDimension / 2)
+                    )
+                }
+
+                // 中心：脉冲背景 + 皇冠 + VIP
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(80.dp)
+                        .graphicsLayer {
+                            scaleX = pulse
+                            scaleY = pulse
+                        }
                         .clip(CircleShape)
                         .background(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFFFFD700).copy(alpha = 0.3f),
-                                    Color(0xFF000000).copy(alpha = 0.8f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "VIP",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        style = LocalTextStyle.current.copy(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFFD700),
-                                    Color(0xFFFF9500)
+                                    Color(0xFFFFD700).copy(alpha = 0.35f),
+                                    Color(0xFF1A0B2E).copy(alpha = 0.95f)
                                 )
                             )
                         )
-                    )
+                        .border(
+                            width = 1.5.dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD700).copy(alpha = 0.8f),
+                                    Color(0xFFFF9500).copy(alpha = 0.4f)
+                                )
+                            ),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = "👑", fontSize = 22.sp)
+                        Text(
+                            text = "VIP",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            style = LocalTextStyle.current.copy(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(Color(0xFFFFD700), Color(0xFFFFAA00))
+                                )
+                            )
+                        )
+                    }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // 加载文字
-            Text(
-                text = "正在加载精彩内容...",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.8f),
-                style = LocalTextStyle.current.copy(
-                    shadow = androidx.compose.ui.graphics.Shadow(
-                        color = Color(0xFFFFD700).copy(alpha = 0.5f),
-                        offset = Offset(0f, 0f),
-                        blurRadius = 10f
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 进度条
+            Box(
+                modifier = Modifier
+                    .width(180.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.1f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(Color(0xFFFFD700), Color(0xFFFF00FF), Color(0xFF00D9FF))
+                            )
+                        )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 文字带流光
+            Box {
+                Text(
+                    text = "正在加载VIP专属内容",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = LocalTextStyle.current.copy(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700).copy(alpha = 0.9f),
+                                Color.White.copy(alpha = 0.7f),
+                                Color(0xFF00D9FF).copy(alpha = 0.9f)
+                            )
+                        ),
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color(0xFFFFD700).copy(alpha = 0.4f),
+                            blurRadius = 12f
+                        )
                     )
                 )
+                // 流光
+                Text(
+                    text = "正在加载VIP专属内容",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .graphicsLayer { alpha = 0.99f }
+                        .drawWithContent {
+                            drawContent()
+                            val off = textShimmer * size.width * 3f
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.6f),
+                                        Color.Transparent
+                                    ),
+                                    startX = off - size.width,
+                                    endX = off
+                                ),
+                                blendMode = BlendMode.SrcIn
+                            )
+                        }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 副标题
+            Text(
+                text = "尊享特权即将呈现 ✨",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.4f),
+                fontWeight = FontWeight.Medium
             )
         }
     }

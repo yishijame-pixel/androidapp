@@ -29,8 +29,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.funlife.data.model.ShopItem
 import com.example.funlife.viewmodel.ShopViewModel
+import com.example.funlife.ui.components.AvatarFrameDetailDialog
+import com.example.funlife.ui.components.PurchaseConfirmDialog
+import com.example.funlife.ui.components.PurchaseSuccessDialog
 
 // Palette
 object Palette {
@@ -68,11 +73,43 @@ fun AvatarFrameShopScreen(
     var typeTab by remember { mutableStateOf("动态") }
     var rarityTab by remember { mutableStateOf("全部") }
     
+    // 记录已显示过的卡片ID，避免重复播放入场动画
+    val shownCardIds = remember { mutableSetOf<Int>() }
+    
+    // 🔥 对话框状态
+    var selectedFrame by remember { mutableStateOf<ShopItem?>(null) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+    var showPurchaseConfirm by remember { mutableStateOf(false) }
+    var showPurchaseSuccess by remember { mutableStateOf(false) }  // 🔥 购买成功动画
+    var purchasedFrameName by remember { mutableStateOf("") }  // 🔥 购买的商品名称
+    
     val avatarFrames by viewModel.avatarFrames.collectAsState()
     val userCoinsData by viewModel.userCoins.collectAsState()
     val ownedFrames by viewModel.userOwnedFrames.collectAsState()
+    val isUserVip by viewModel.isUserVip.collectAsState()  // 🔥 获取VIP状态
+    val message by viewModel.message.collectAsState()  // 🔥 获取消息提示
+    
+    // 🔥 调试：打印数据数量
+    LaunchedEffect(avatarFrames) {
+        android.util.Log.d("AvatarFrameShop", "Total avatar frames: ${avatarFrames.size}")
+        avatarFrames.forEach { frame ->
+            android.util.Log.d("AvatarFrameShop", "Frame: ${frame.name}, type=${frame.type}, animated=${frame.isAnimated}, rarity=${frame.rarity}")
+        }
+    }
     
     val coins = userCoinsData?.coins ?: 0
+    
+    // 🔥 消息提示 Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(
+                message = it,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.clearMessage()
+        }
+    }
     
     val rarityMap = mapOf("COMMON" to "普通", "RARE" to "稀有", "EPIC" to "史诗", "LEGENDARY" to "传说")
     
@@ -355,16 +392,107 @@ fun AvatarFrameShopScreen(
                     itemsIndexed(filtered) { index, frame ->
                         val isOwned = ownedFrames.any { it.frameId == frame.id }
                         val rarityDisplay = rarityMap[frame.rarity] ?: "普通"
-                        FrameCard(frame, index, isOwned, rarityDisplay)
+                        val isVip = isUserVip  // 🔥 获取VIP状态
+                        
+                        FrameCard(
+                            frame = frame,
+                            index = index,
+                            isOwned = isOwned,
+                            rarityDisplay = rarityDisplay,
+                            shownCardIds = shownCardIds,
+                            isVip = isVip,
+                            onClick = {
+                                selectedFrame = frame
+                                showDetailDialog = true
+                            }
+                        )
                     }
                 }
             }
+        }
+        
+        // 🔥 Snackbar提示
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+        )
+        
+        // 🔥 商品详情对话框
+        if (showDetailDialog && selectedFrame != null) {
+            val frame = selectedFrame!!
+            val isOwned = ownedFrames.any { it.frameId == frame.id }
+            val isEquipped = ownedFrames.any { it.frameId == frame.id && it.isEquipped }
+            val rarityDisplay = rarityMap[frame.rarity] ?: "普通"
+            
+            AvatarFrameDetailDialog(
+                frame = frame,
+                isOwned = isOwned,
+                isEquipped = isEquipped,
+                isVip = isUserVip,
+                userCoins = coins,
+                rarityDisplay = rarityDisplay,
+                onDismiss = {
+                    showDetailDialog = false
+                    selectedFrame = null
+                },
+                onPurchase = {
+                    showPurchaseConfirm = true
+                },
+                onEquip = {
+                    viewModel.equipAvatarFrame(frame.id)
+                },
+                onUnequip = {
+                    viewModel.unequipAvatarFrame()
+                }
+            )
+        }
+        
+        // 🔥 购买确认对话框
+        if (showPurchaseConfirm && selectedFrame != null) {
+            val frame = selectedFrame!!
+            val actualPrice = if (isUserVip) frame.vipPrice else frame.price
+            
+            PurchaseConfirmDialog(
+                frame = frame,
+                price = actualPrice,
+                currentCoins = coins,
+                isVip = isUserVip,
+                onDismiss = {
+                    showPurchaseConfirm = false
+                },
+                onConfirm = {
+                    purchasedFrameName = frame.name
+                    viewModel.purchaseAvatarFrame(frame)
+                    showPurchaseConfirm = false
+                    showDetailDialog = false
+                    selectedFrame = null
+                    showPurchaseSuccess = true  // 🔥 显示购买成功动画
+                }
+            )
+        }
+        
+        // 🔥 购买成功动画
+        if (showPurchaseSuccess) {
+            PurchaseSuccessDialog(
+                frameName = purchasedFrameName,
+                onDismiss = {
+                    showPurchaseSuccess = false
+                }
+            )
         }
     }
 }
 
 @Composable
-fun FrameCard(frame: ShopItem, index: Int, isOwned: Boolean, rarityDisplay: String) {
+fun FrameCard(
+    frame: ShopItem, 
+    index: Int, 
+    isOwned: Boolean, 
+    rarityDisplay: String,
+    shownCardIds: MutableSet<Int>,
+    isVip: Boolean = false,  // 🔥 新增：用户是否为VIP
+    onClick: () -> Unit = {}  // 🔥 新增：点击事件
+) {
     var tapped by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (tapped) 0.93f else 1f,
@@ -375,11 +503,16 @@ fun FrameCard(frame: ShopItem, index: Int, isOwned: Boolean, rarityDisplay: Stri
     val rc = rarityConfigs[rarityDisplay]!!
     val isVipOnly = frame.vipPrice < frame.price
     
-    // 入场动画
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(index * 45L)
-        visible = true
+    // 入场动画 - 只在第一次显示时播放，且无延迟
+    val hasShown = remember(frame.id) { shownCardIds.contains(frame.id) }
+    var visible by remember(frame.id) { mutableStateOf(hasShown) }
+    
+    LaunchedEffect(frame.id) {
+        if (!hasShown) {
+            // 移除延迟，立即显示
+            visible = true
+            shownCardIds.add(frame.id)
+        }
     }
     
     val alpha by animateFloatAsState(
@@ -434,7 +567,8 @@ fun FrameCard(frame: ShopItem, index: Int, isOwned: Boolean, rarityDisplay: Stri
                         tapped = true
                         tryAwaitRelease()
                         tapped = false
-                    }
+                    },
+                    onTap = { onClick() }  // 🔥 添加点击事件
                 )
             },
         shape = RoundedCornerShape(20.dp),
@@ -534,35 +668,95 @@ fun FrameCard(frame: ShopItem, index: Int, isOwned: Boolean, rarityDisplay: Stri
                     // 如果有头像框资源路径，显示真实图片
                     if (!frame.assetPath.isNullOrEmpty()) {
                         val context = androidx.compose.ui.platform.LocalContext.current
-                        val frameBitmap = remember(frame.assetPath) {
-                            try {
-                                context.assets.open(frame.assetPath).use { inputStream ->
-                                    android.graphics.BitmapFactory.decodeStream(inputStream)
-                                }
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
                         
-                        if (frameBitmap != null) {
-                            androidx.compose.foundation.Image(
-                                bitmap = frameBitmap.asImageBitmap(),
-                                contentDescription = frame.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                            )
-                        } else {
-                            // 加载失败时显示emoji
-                            Box(
-                                Modifier.fillMaxSize().background(
-                                    brush = Brush.linearGradient(listOf(Color(colors[0]), Color.White)),
-                                    shape = CircleShape
-                                ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(frame.icon, fontSize = 26.sp)
+                        // 使用SubcomposeAsyncImage支持自定义加载和错误状态
+                        coil.compose.SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("file:///android_asset/${frame.assetPath}")
+                                .crossfade(300) // 300ms淡入动画
+                                .memoryCacheKey(frame.assetPath) // 缓存key
+                                .build(),
+                            contentDescription = frame.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            loading = {
+                                // 骨架屏加载效果 - 更明显的脉动动画
+                                val infiniteTransition = rememberInfiniteTransition(label = "loading")
+                                val shimmerAlpha by infiniteTransition.animateFloat(
+                                    initialValue = 0.2f,
+                                    targetValue = 0.8f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1000, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "shimmerAlpha"
+                                )
+                                
+                                val shimmerOffset by infiniteTransition.animateFloat(
+                                    initialValue = -1f,
+                                    targetValue = 1f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1500, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Restart
+                                    ),
+                                    label = "shimmerOffset"
+                                )
+                                
+                                Box(
+                                    Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // 背景渐变
+                                    Canvas(Modifier.fillMaxSize()) {
+                                        drawCircle(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    Color(colors[0]).copy(alpha = 0.3f),
+                                                    Color(colors[1]).copy(alpha = 0.15f)
+                                                )
+                                            )
+                                        )
+                                    }
+                                    
+                                    // 闪烁光效
+                                    Canvas(Modifier.fillMaxSize()) {
+                                        val gradientWidth = size.width * 0.5f
+                                        val startX = size.width * shimmerOffset
+                                        
+                                        drawCircle(
+                                            brush = Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color.White.copy(alpha = 0f),
+                                                    Color.White.copy(alpha = shimmerAlpha * 0.4f),
+                                                    Color.White.copy(alpha = 0f)
+                                                ),
+                                                start = Offset(startX - gradientWidth, 0f),
+                                                end = Offset(startX + gradientWidth, 0f)
+                                            )
+                                        )
+                                    }
+                                    
+                                    // 加载指示器
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        strokeWidth = 2.5.dp
+                                    )
+                                }
+                            },
+                            error = {
+                                // 加载失败时显示emoji
+                                Box(
+                                    Modifier.fillMaxSize().background(
+                                        brush = Brush.linearGradient(listOf(Color(colors[0]), Color.White)),
+                                        shape = CircleShape
+                                    ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(frame.icon, fontSize = 26.sp)
+                                }
                             }
-                        }
+                        )
                     } else {
                         // 没有资源路径时显示emoji
                         Box(
@@ -663,14 +857,80 @@ fun FrameCard(frame: ShopItem, index: Int, isOwned: Boolean, rarityDisplay: Stri
                 contentAlignment = Alignment.Center
             ) {
                 when {
+                    // 已拥有
                     isOwned -> Text("已拥有", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Palette.coral)
-                    isVipOnly -> Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Lock, null, tint = Color(0xFFC17A1A), modifier = Modifier.size(9.dp))
-                        Text("VIP 专属", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC17A1A))
+                    
+                    // VIP专属商品
+                    isVipOnly -> {
+                        if (isVip) {
+                            // VIP用户：显示VIP价格（高亮）+ 普通价格（划线）
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // VIP价格（高亮）
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(10.dp))
+                                    Text(
+                                        frame.vipPrice.toString(),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFC17A1A)
+                                    )
+                                }
+                                
+                                // 普通价格（划线）
+                                Text(
+                                    frame.price.toString(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF999999),
+                                    style = androidx.compose.ui.text.TextStyle(
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough
+                                    )
+                                )
+                            }
+                        } else {
+                            // 普通用户：显示普通价格 + VIP价格（置灰+锁）
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 普通价格
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Star, null, tint = Palette.amber, modifier = Modifier.size(10.dp))
+                                    Text(
+                                        frame.price.toString(),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Palette.brown
+                                    )
+                                }
+                                
+                                // VIP价格（置灰+锁）
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Lock, null, tint = Color(0xFFB0B0B0), modifier = Modifier.size(8.dp))
+                                    Text(
+                                        frame.vipPrice.toString(),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFFB0B0B0)
+                                    )
+                                }
+                            }
+                        }
                     }
+                    
+                    // 普通商品
                     else -> Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -680,6 +940,87 @@ fun FrameCard(frame: ShopItem, index: Int, isOwned: Boolean, rarityDisplay: Stri
                     }
                 }
             }
+        }
+    }
+}
+
+
+// 🔥 骨架屏卡片组件
+@Composable
+fun SkeletonCard(colors: List<Long>) {
+    // 脉动动画
+    val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+    
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = Palette.white,
+        border = BorderStroke(1.5.dp, Palette.border),
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 顶部条纹占位
+            Box(
+                Modifier.fillMaxWidth().height(3.dp)
+                    .background(Color(0xFFC8AA8C).copy(alpha = shimmerAlpha))
+            )
+            
+            Spacer(Modifier.height(8.dp))
+            
+            // 圆形头像占位
+            Box(
+                Modifier.size(78.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(colors[0]).copy(alpha = shimmerAlpha * 0.5f),
+                                Color(colors[1]).copy(alpha = shimmerAlpha * 0.3f)
+                            )
+                        ),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // 加载指示器
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White.copy(alpha = 0.6f),
+                    strokeWidth = 2.dp
+                )
+            }
+            
+            Spacer(Modifier.height(8.dp))
+            
+            // 文字占位
+            Box(
+                Modifier.width(60.dp).height(12.dp)
+                    .background(
+                        Color.Gray.copy(alpha = shimmerAlpha * 0.3f),
+                        RoundedCornerShape(6.dp)
+                    )
+            )
+            
+            // 价格占位
+            Box(
+                Modifier.width(40.dp).height(10.dp)
+                    .background(
+                        Color.Gray.copy(alpha = shimmerAlpha * 0.2f),
+                        RoundedCornerShape(5.dp)
+                    )
+            )
         }
     }
 }

@@ -71,49 +71,52 @@ class PetRepository(private val petDao: PetDao) {
         petDao.updateAppearance(petId, appearance)
     }
     
-    // 更新宠物状态（时间衰减）
+    /**
+     * 时间衰减规则（按分钟计算，使变化在会话内可见）：
+     * - 饥饿值：每 12 分钟 -1（≈ -5 / 小时）
+     * - 清洁值：每 20 分钟 -1（≈ -3 / 小时）
+     * - 心情值：每 15 分钟 -1，并被饥饿/清洁联动；属性低时下降更快
+     * - 健康值：饥饿或清洁过低时受损，否则缓慢回血
+     */
     suspend fun updatePetStatus(petId: Long) {
         val pet = petDao.getPetById(petId) ?: return
-        val currentTime = System.currentTimeMillis()
-        val hoursPassed = (currentTime - pet.lastUpdateTime) / (1000 * 60 * 60)
+        val now = System.currentTimeMillis()
+        val minutesPassed = ((now - pet.lastUpdateTime) / 60_000L).toInt()
+        if (minutesPassed <= 0) return
         
-        if (hoursPassed > 0) {
-            // 饥饿值每小时 -5
-            val newHunger = (pet.hungerValue - (hoursPassed * 5).toInt()).coerceIn(0, 100)
-            // 清洁值每2小时 -3
-            val newClean = (pet.cleanValue - ((hoursPassed / 2) * 3).toInt()).coerceIn(0, 100)
-            // 心情值根据其他属性计算
-            val newMood = calculateMood(newHunger, newClean, pet.healthValue)
-            // 健康值根据其他属性计算
-            val newHealth = calculateHealth(newHunger, newClean, pet.healthValue)
-            
-            val updatedPet = pet.copy(
-                hungerValue = newHunger,
-                cleanValue = newClean,
-                moodValue = newMood,
-                healthValue = newHealth,
-                lastUpdateTime = currentTime,
-                updatedAt = currentTime
+        val hungerDrop = minutesPassed / 12
+        val cleanDrop = minutesPassed / 20
+        var moodDrop = minutesPassed / 15
+        // 饥饿/清洁过低时心情额外下降
+        if (pet.hungerValue < 30) moodDrop += minutesPassed / 10
+        if (pet.cleanValue < 30) moodDrop += minutesPassed / 15
+        
+        val newHunger = (pet.hungerValue - hungerDrop).coerceIn(0, 100)
+        val newClean = (pet.cleanValue - cleanDrop).coerceIn(0, 100)
+        val newMood = (pet.moodValue - moodDrop).coerceIn(0, 100)
+        val newHealth = calculateHealth(newHunger, newClean, pet.healthValue, minutesPassed)
+        
+        // 至少有一个值真的改变了才写入，避免每分钟空更新
+        if (newHunger != pet.hungerValue || newClean != pet.cleanValue ||
+            newMood != pet.moodValue || newHealth != pet.healthValue) {
+            petDao.updatePet(
+                pet.copy(
+                    hungerValue = newHunger,
+                    cleanValue = newClean,
+                    moodValue = newMood,
+                    healthValue = newHealth,
+                    lastUpdateTime = now,
+                    updatedAt = now
+                )
             )
-            petDao.updatePet(updatedPet)
         }
     }
     
-    private fun calculateMood(hunger: Int, clean: Int, health: Int): Int {
-        val avgStatus = (hunger + clean + health) / 3
+    private fun calculateHealth(hunger: Int, clean: Int, currentHealth: Int, minutes: Int): Int {
         return when {
-            avgStatus >= 70 -> 100
-            avgStatus >= 50 -> 80
-            avgStatus >= 30 -> 50
-            else -> 20
-        }.coerceIn(0, 100)
-    }
-    
-    private fun calculateHealth(hunger: Int, clean: Int, currentHealth: Int): Int {
-        return when {
-            hunger < 10 || clean < 10 -> (currentHealth - 10).coerceIn(0, 100)
-            hunger < 30 || clean < 30 -> (currentHealth - 5).coerceIn(0, 100)
-            currentHealth < 100 -> (currentHealth + 2).coerceIn(0, 100)
+            hunger < 10 || clean < 10 -> (currentHealth - minutes / 10).coerceIn(0, 100)
+            hunger < 30 || clean < 30 -> (currentHealth - minutes / 30).coerceIn(0, 100)
+            currentHealth < 100 -> (currentHealth + minutes / 20).coerceIn(0, 100)
             else -> currentHealth
         }
     }

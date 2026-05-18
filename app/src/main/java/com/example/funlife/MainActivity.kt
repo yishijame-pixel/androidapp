@@ -63,8 +63,51 @@ class MainActivity : ComponentActivity() {
         // 初始化音效管理器
         soundManager = SoundEffectManager.getInstance(this)
         
+        // 🔔 Android 13+ 请求通知权限（不然 heads-up 不弹）
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                androidx.core.app.ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        }
+        
+        // 🎀 引导用户授予悬浮窗权限（用于纪念日提醒跨应用显示）
+        // 仅在首次未授予时引导，避免每次启动都跳设置
+        if (!com.example.funlife.utils.OverlayBannerService.hasOverlayPermission(this)) {
+            val prefs = getSharedPreferences("app_perm_prefs", MODE_PRIVATE)
+            if (!prefs.getBoolean("overlay_asked", false)) {
+                prefs.edit().putBoolean("overlay_asked", true).apply()
+                // 延迟到 onResume 后弹出，避免影响启动
+                window.decorView.post {
+                    com.example.funlife.utils.OverlayBannerService.requestOverlayPermission(this)
+                }
+            }
+        }
+        
         // 🔥 初始化应用数据（头像框等）
         initializeAppData()
+        
+        // 🔔 启动时调度所有纪念日提醒（精确闹钟，到点自动触发）
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                kotlinx.coroutines.delay(2000)  // 等待数据库初始化
+                val sessionManager = com.example.funlife.utils.UserSessionManager(this@MainActivity)
+                val userId = sessionManager.getCurrentUserId()
+                if (userId > 0L) {
+                    com.example.funlife.utils.AnniversaryReminderScheduler.scheduleAllForUser(
+                        this@MainActivity, userId
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "调度纪念日提醒失败", e)
+            }
+        }
         
         // 切换到正常主题
         setTheme(R.style.Theme_FunLife)
@@ -159,7 +202,11 @@ fun MainScreen(soundManager: SoundEffectManager) {
         "anniversary",
         Screen.Goal.route,
         Screen.Vip.route,
-        Screen.AvatarFrameShop.route
+        Screen.AvatarFrameShop.route,
+        Screen.ChatBill.route,
+        Screen.BillDetail.route,
+        "riddle_game",
+        "dice_game"
     )
     
     Scaffold(
@@ -305,6 +352,21 @@ fun MainScreen(soundManager: SoundEffectManager) {
                     navController = navController,
                     modifier = Modifier.fillMaxSize(),
                     authViewModel = authViewModel
+                )
+            }
+            
+            // 🎀 全局纪念日提醒悬浮条 - 覆盖在所有页面顶部
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+            ) {
+                com.example.funlife.ui.components.InAppReminderBanner(
+                    onClick = {
+                        com.example.funlife.utils.AnniversaryReminderManager.dismissInAppBanner()
+                        com.example.funlife.utils.AnniversaryReminderManager.stopAlarm()
+                        navController.navigate("anniversary")
+                    }
                 )
             }
             
