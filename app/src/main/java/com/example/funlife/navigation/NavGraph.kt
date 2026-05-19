@@ -246,12 +246,13 @@ fun NavGraph(
         }
         
         composable(Screen.Profile.route) {
+            val ctx = LocalContext.current
             ProfileScreen(
                 authViewModel = authViewModel,
                 onLogout = {
-                    navController.navigate(Screen.Welcome.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                    // 🔒 安全修复：退出登录后重建 Activity，销毁所有 Activity范围的 ViewModel
+                    // （anniversary / score / goal / pet 等默认 viewModel()），避免新账号看到旧账号数据
+                    (ctx as? android.app.Activity)?.recreate()
                 },
                 onNavigateToInventory = {
                     navController.navigate(Screen.Inventory.route)
@@ -266,26 +267,44 @@ fun NavGraph(
         composable(Screen.Inventory.route) {
             val context = LocalContext.current
             val database = (context.applicationContext as FunLifeApplication).database
-            val inventoryRepository = remember { 
-                com.example.funlife.repository.InventoryRepository(database.inventoryDao()) 
+            val userSession = authViewModel.getCurrentSession()
+
+            if (userSession == null) {
+                // 🔒 未登录直接跳到登录页，避免使用默认 userId 加载错乱数据
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+                return@composable
+            }
+
+            val inventoryRepository = remember {
+                com.example.funlife.repository.InventoryRepository(database.inventoryDao())
             }
             val userPreferencesDao = remember { database.userPreferencesDao() }
-            val userVipDao = remember { database.userVipDao() } // 🔥 新增VIP DAO
-            val userAvatarDao = remember { database.userAvatarDao() } // 🔥 新增UserAvatar DAO
+            val userVipDao = remember { database.userVipDao() }
+            val userAvatarDao = remember { database.userAvatarDao() }
+            val shopDao = remember { database.shopDao() }
+            // � ViewModel 实例按 userId 区分，登录不同账号会得到不同实例，
+            // 防止登出再登入复用旧用户数据。
             val inventoryViewModel: com.example.funlife.viewmodel.InventoryViewModel = viewModel(
+                key = "inventory_${userSession.userId}",
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                         @Suppress("UNCHECKED_CAST")
                         return com.example.funlife.viewmodel.InventoryViewModel(
                             inventoryRepository,
                             userPreferencesDao,
-                            userVipDao, // 🔥 传递VIP DAO
-                            userAvatarDao // 🔥 传递UserAvatar DAO
+                            userVipDao,
+                            userAvatarDao,
+                            shopDao,
+                            currentUserId = userSession.userId
                         ) as T
                     }
                 }
             )
-            
+
             InventoryScreen(
                 viewModel = inventoryViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -302,13 +321,13 @@ fun NavGraph(
         
         // VIP个人主页
         composable(Screen.VipProfile.route) {
+            val ctx = LocalContext.current
             VipProfileScreen(
                 authViewModel = authViewModel,
                 scoreViewModel = scoreViewModel,
                 onLogout = {
-                    navController.navigate(Screen.Welcome.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                    // 🔒 同上：退出后重建 Activity、清理所有 ViewModel缓存
+                    (ctx as? android.app.Activity)?.recreate()
                 }
             )
         }
@@ -324,7 +343,8 @@ fun NavGraph(
                 val userAvatarDao = remember { database.userAvatarDao() }
                 val userAvatar by userAvatarDao.getUserAvatar(userSession.userId)
                     .collectAsState(initial = null)
-                val chatViewModel = remember {
+                // 🔒 安全修复：remember key 加上 userId，登出再登入不同账号会得到全新 ViewModel 实例
+                val chatViewModel = remember(userSession.userId) {
                     ChatViewModel(application, userSession.userId)
                 }
                 ChatBillScreen(
@@ -349,7 +369,8 @@ fun NavGraph(
             val userSession = authViewModel.getCurrentSession()
 
             if (userSession != null) {
-                val chatViewModel = remember {
+                // 🔒 同上：remember 按 userId 区分
+                val chatViewModel = remember(userSession.userId) {
                     ChatViewModel(application, userSession.userId)
                 }
                 BillDetailScreen(

@@ -151,10 +151,19 @@ fun AnniversaryDetailDialog(
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
-            dismissOnClickOutside = true
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
         )
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Transparent
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent)
+            ) {
             // ═══════════════════════════════════════════════════════
             // 背景层
             // ═══════════════════════════════════════════════════════
@@ -634,7 +643,9 @@ fun AnniversaryDetailDialog(
                 }
                 
                 Spacer(modifier = Modifier.height(50.dp))
+                Spacer(modifier = Modifier.navigationBarsPadding())
             }
+        }
         }
     }
 }

@@ -8,11 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 class InventoryRepository(private val inventoryDao: InventoryDao) {
     
-    fun getAllItems(userId: Long = 1): Flow<List<InventoryItem>> {
+    // 🔒 安全修复：移除 userId=1 默认值，强制调用方传入当前用户 ID。
+    fun getAllItems(userId: Long): Flow<List<InventoryItem>> {
         return inventoryDao.getAllItems(userId)
     }
     
-    fun getItemsByType(userId: Long = 1, type: InventoryItemType): Flow<List<InventoryItem>> {
+    fun getItemsByType(userId: Long, type: InventoryItemType): Flow<List<InventoryItem>> {
         return inventoryDao.getItemsByType(userId, type)
     }
     
@@ -20,7 +21,7 @@ class InventoryRepository(private val inventoryDao: InventoryDao) {
         return inventoryDao.getItemById(itemId)
     }
     
-    suspend fun getItemByItemId(userId: Long = 1, itemId: String): InventoryItem? {
+    suspend fun getItemByItemId(userId: Long, itemId: String): InventoryItem? {
         return inventoryDao.getItemByItemId(userId, itemId)
     }
     
@@ -68,15 +69,15 @@ class InventoryRepository(private val inventoryDao: InventoryDao) {
         return true
     }
     
-    fun getItemCount(userId: Long = 1): Flow<Int> {
+    fun getItemCount(userId: Long): Flow<Int> {
         return inventoryDao.getItemCount(userId)
     }
     
-    fun getTotalQuantity(userId: Long = 1): Flow<Int?> {
+    fun getTotalQuantity(userId: Long): Flow<Int?> {
         return inventoryDao.getTotalQuantity(userId)
     }
     
-    suspend fun clearInventory(userId: Long = 1) {
+    suspend fun clearInventory(userId: Long) {
         inventoryDao.deleteAllItems(userId)
     }
 }

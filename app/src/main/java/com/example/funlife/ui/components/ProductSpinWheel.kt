@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.SpinWheelViewModel
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.random.Random
 
 // 清新明亮配色 - 饱和度适中，文字清晰
 private val sectorGradients = listOf(
@@ -62,6 +63,8 @@ fun ProductSpinWheel(
     var isAnimating by remember { mutableStateOf(false) }
     var targetRotation by remember { mutableFloatStateOf(0f) }
     var showResult by remember { mutableStateOf(false) }
+    // 记录上一次已处理的奖品引用，避免重复触发旋转
+    var lastHandledPrize by remember { mutableStateOf<SpinWheelViewModel.ProductPrize?>(null) }
 
     // 旋转动画
     val animatedRotation by animateFloatAsState(
@@ -78,6 +81,45 @@ fun ProductSpinWheel(
         },
         label = "wheelRotation"
     )
+
+    // 🎯 关键修复：监听 resultPrize 变化，按奖品索引精确计算目标角度，使指针落在该扇形中心
+    //
+    // 扇形布局（绘制时）：sector i 的 startAngle = i*sweep - 90，center = i*sweep + sweep/2 - 90
+    // 指针固定在屏幕 12 点方向（screen angle = -90 即 270）
+    // 旋转 R 度后 sector i 的 center 变为：i*sweep + sweep/2 - 90 + R
+    // 想让它对准指针：i*sweep + sweep/2 - 90 + R ≡ -90 (mod 360)
+    //   → R ≡ -i*sweep - sweep/2 (mod 360)
+    //   → R ≡ (360 - i*sweep - sweep/2) mod 360
+    LaunchedEffect(resultPrize) {
+        val prize = resultPrize ?: run {
+            lastHandledPrize = null
+            return@LaunchedEffect
+        }
+        if (prize === lastHandledPrize) return@LaunchedEffect // 同一次结果已处理，避免重复转
+        if (prizes.isEmpty()) return@LaunchedEffect
+        val prizeIndex = prizes.indexOf(prize)
+        if (prizeIndex < 0) return@LaunchedEffect
+
+        lastHandledPrize = prize
+        isAnimating = true
+        showResult = false
+
+        val sweep = 360f / prizes.size
+        // 落到扇形 i 中心所需的旋转角（mod 360）
+        val landingAngle = ((360f - prizeIndex * sweep - sweep / 2f) % 360f + 360f) % 360f
+
+        // 在扇形内随机微偏移，让指针不总是落在正中（±35% 扇形范围，避免太靠近分界线）
+        val randomJitter = (Random.nextFloat() - 0.5f) * sweep * 0.7f
+        val finalLandingMod = ((landingAngle + randomJitter) % 360f + 360f) % 360f
+
+        // 当前角度归一化
+        val currentMod = ((targetRotation % 360f) + 360f) % 360f
+        var diff = finalLandingMod - currentMod
+        if (diff < 0f) diff += 360f
+
+        // 至少 6 整圈 + 对齐偏移，营造连续加速→减速的视觉效果
+        targetRotation = targetRotation + 360f * 6 + diff
+    }
 
     // 外圈灯泡闪烁动画
     val infiniteTransition = rememberInfiniteTransition(label = "lights")
@@ -388,6 +430,8 @@ fun ProductSpinWheel(
                     .size(wheelSize)
                     .rotate(animatedRotation)
             ) {
+                // 🔒 防御：奖品列表为空时直接返回，避免 360f/0 = Infinity 触发异常
+                if (prizes.isEmpty()) return@Canvas
                 val cx = size.width / 2
                 val cy = size.height / 2
                 val r = size.minDimension / 2
@@ -633,10 +677,10 @@ fun ProductSpinWheel(
                     )
                 )
                 .clickable(enabled = canSpin) {
+                    // 🎯 修复：不再在这里随机设置 targetRotation。
+                    // 让 onSpin() 触发 ViewModel 算出 prize 后通过 resultPrize 回传，
+                    // 由 LaunchedEffect(resultPrize) 精确计算落点角度，确保指针与弹窗一致。
                     if (canSpin && !isAnimating) {
-                        isAnimating = true
-                        val extraRotation = (2160f + (0..360).random().toFloat())
-                        targetRotation += extraRotation
                         onSpin()
                     }
                 },

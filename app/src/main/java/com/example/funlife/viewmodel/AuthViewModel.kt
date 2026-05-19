@@ -84,22 +84,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 
-                // 步骤4：检查用户是否存在
-                val existingUser = userRepository.getUserByUsername(trimmedUsername)
-                
-                if (existingUser == null) {
-                    // 用户名不存在
-                    _authState.value = AuthState.Error("该用户名不存在", ErrorField.USERNAME)
-                    return@launch
-                }
-                
-                // 步骤5：验证密码
+                // 🔒 安全修复：合并用户名/密码错误为统一信息，
+                // 防止用户名枚举攻击（攻击者通过响应差异判断哪些账号已存在）
                 val user = userRepository.login(trimmedUsername, trimmedPassword)
-                
+
                 if (user != null) {
                     // 登录成功
                     userRepository.updateLastLogin(user.id)
-                    
+
                     val session = UserSession(
                         userId = user.id,
                         username = user.username,
@@ -107,12 +99,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         avatar = user.avatar
                     )
                     sessionManager.saveSession(session)
-                    
+
                     _isLoggedIn.value = true
                     _authState.value = AuthState.Success(session)
                 } else {
-                    // 密码错误
-                    _authState.value = AuthState.Error("密码错误", ErrorField.PASSWORD)
+                    // 用户名不存在或密码错误一律返回相同提示，避免信息泄漏
+                    _authState.value = AuthState.Error("用户名或密码错误", ErrorField.PASSWORD)
                 }
             } catch (e: Exception) {
                 // 系统错误处理

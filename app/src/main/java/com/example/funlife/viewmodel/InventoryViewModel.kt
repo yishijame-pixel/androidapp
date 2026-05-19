@@ -13,12 +13,31 @@ import kotlinx.coroutines.launch
 class InventoryViewModel(
     private val repository: InventoryRepository,
     private val userPreferencesDao: com.example.funlife.data.dao.UserPreferencesDao,
-    private val userVipDao: com.example.funlife.data.dao.UserVipDao, // 🔥 新增VIP DAO
-    private val userAvatarDao: com.example.funlife.data.dao.UserAvatarDao // 🔥 新增UserAvatar DAO用于检查头像
+    private val userVipDao: com.example.funlife.data.dao.UserVipDao,
+    private val userAvatarDao: com.example.funlife.data.dao.UserAvatarDao,
+    private val shopDao: com.example.funlife.data.dao.ShopDao? = null,
+    // � 安全修复：要求传入当前登录用户 ID，避免默认 1L 导致跨账号数据泄漏
+    private val currentUserId: Long
 ) : ViewModel() {
+
+    /**
+     * 🔥 头像框 id → assetPath 映射
+     * 用于背包中可靠地按 itemId(avatar_frame_<id>) 查到真实图片路径
+     */
+    val frameAssetMap: StateFlow<Map<Int, String>> = (shopDao?.getAvatarFrames() ?: flowOf(emptyList()))
+        .map { list -> list.mapNotNull { it.assetPath?.let { p -> it.id to p } }.toMap() }
+        .catch { e ->
+            android.util.Log.e("InventoryViewModel", "Error loading frame asset map", e)
+            emit(emptyMap())
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
     
-    // 🔥 当前用户ID
-    private val _userId = MutableStateFlow(1L)
+    // 🔥 当前用户ID（从构造参数初始化，避免默认 1L）
+    private val _userId = MutableStateFlow(currentUserId)
     
     // 🔥 消息提示
     private val _message = MutableStateFlow<String?>(null)
@@ -57,8 +76,8 @@ class InventoryViewModel(
     private val _selectedType = MutableStateFlow<InventoryItemType?>(null)
     val selectedType: StateFlow<InventoryItemType?> = _selectedType.asStateFlow()
     
-    // 当前装备的面板皮肤
-    val equippedPanelSkin: StateFlow<String> = userPreferencesDao.getPreferences(1L)
+    // 当前装备的面板皮肤（按当前用户读取）
+    val equippedPanelSkin: StateFlow<String> = userPreferencesDao.getPreferences(currentUserId)
         .map { prefs -> prefs?.spinResultPanelSkin ?: "js_1" }
         .stateIn(
             scope = viewModelScope,
@@ -67,7 +86,7 @@ class InventoryViewModel(
         )
     
     // 🔥 新增：当前装备的按钮皮肤
-    val equippedButtonSkin: StateFlow<String> = userPreferencesDao.getPreferences(1L)
+    val equippedButtonSkin: StateFlow<String> = userPreferencesDao.getPreferences(currentUserId)
         .map { prefs -> prefs?.spinButtonSkin ?: "pf_1" }
         .stateIn(
             scope = viewModelScope,
@@ -75,8 +94,8 @@ class InventoryViewModel(
             initialValue = "pf_1"
         )
     
-    // 所有物品
-    private val allItems = repository.getAllItems()
+    // 所有物品（按当前用户过滤）
+    private val allItems = repository.getAllItems(currentUserId)
     
     // 根据类型过滤的物品
     val items: StateFlow<List<InventoryItem>> = combine(
@@ -95,7 +114,7 @@ class InventoryViewModel(
     )
     
     // 物品总数
-    val itemCount: StateFlow<Int> = repository.getItemCount()
+    val itemCount: StateFlow<Int> = repository.getItemCount(currentUserId)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -103,7 +122,7 @@ class InventoryViewModel(
         )
     
     // 物品总数量
-    val totalQuantity: StateFlow<Int> = repository.getTotalQuantity()
+    val totalQuantity: StateFlow<Int> = repository.getTotalQuantity(currentUserId)
         .map { it ?: 0 }
         .stateIn(
             scope = viewModelScope,
@@ -138,7 +157,7 @@ class InventoryViewModel(
      * 🔥 检查是否可以添加物品（容量检查）
      */
     suspend fun canAddItem(quantity: Int = 1): Boolean {
-        val currentQuantity = repository.getTotalQuantity().first() ?: 0
+        val currentQuantity = repository.getTotalQuantity(currentUserId).first() ?: 0
         val capacity = inventoryCapacity.value
         return (currentQuantity + quantity) <= capacity
     }
@@ -210,19 +229,15 @@ class InventoryViewModel(
     fun equipPanelSkin(skinName: String) {
         viewModelScope.launch {
             try {
-                // 先检查用户偏好是否存在
-                val prefs = userPreferencesDao.getPreferencesSync(1L)
-                
+                val prefs = userPreferencesDao.getPreferencesSync(currentUserId)
                 if (prefs == null) {
-                    // 如果不存在，创建默认偏好
                     val defaultPrefs = com.example.funlife.data.model.UserPreferences(
-                        userId = 1L,
+                        userId = currentUserId,
                         spinResultPanelSkin = skinName
                     )
                     userPreferencesDao.insertPreferences(defaultPrefs)
                 } else {
-                    // 如果存在，更新皮肤
-                    userPreferencesDao.updateSpinResultPanelSkin(1L, skinName)
+                    userPreferencesDao.updateSpinResultPanelSkin(currentUserId, skinName)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("InventoryViewModel", "Error equipping panel skin", e)
@@ -236,19 +251,15 @@ class InventoryViewModel(
     fun equipButtonSkin(skinName: String) {
         viewModelScope.launch {
             try {
-                // 先检查用户偏好是否存在
-                val prefs = userPreferencesDao.getPreferencesSync(1L)
-                
+                val prefs = userPreferencesDao.getPreferencesSync(currentUserId)
                 if (prefs == null) {
-                    // 如果不存在，创建默认偏好
                     val defaultPrefs = com.example.funlife.data.model.UserPreferences(
-                        userId = 1L,
+                        userId = currentUserId,
                         spinButtonSkin = skinName
                     )
                     userPreferencesDao.insertPreferences(defaultPrefs)
                 } else {
-                    // 如果存在，更新皮肤
-                    userPreferencesDao.updateSpinButtonSkin(1L, skinName)
+                    userPreferencesDao.updateSpinButtonSkin(currentUserId, skinName)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("InventoryViewModel", "Error equipping button skin", e)
@@ -261,7 +272,7 @@ class InventoryViewModel(
      */
     fun clearInventory() {
         viewModelScope.launch {
-            repository.clearInventory()
+            repository.clearInventory(currentUserId)
         }
     }
     
@@ -331,7 +342,7 @@ class InventoryViewModel(
     /**
      * 🔥 获取当前装备的头像框
      */
-    val equippedAvatarFrame: StateFlow<String?> = userPreferencesDao.getPreferences(1L)
+    val equippedAvatarFrame: StateFlow<String?> = userPreferencesDao.getPreferences(currentUserId)
         .map { prefs -> prefs?.equippedAvatarFrame }
         .stateIn(
             scope = viewModelScope,

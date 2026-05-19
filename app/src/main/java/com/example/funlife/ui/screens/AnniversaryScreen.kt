@@ -443,11 +443,16 @@ fun AddAnniversaryDialog(
     val context = androidx.compose.ui.platform.LocalContext.current
     val database = (context.applicationContext as com.example.funlife.FunLifeApplication).database
     val inventoryDao = remember { database.inventoryDao() }
-    
-    // 获取用户拥有的相框
-    val ownedFrames by inventoryDao.getItemsByType(1L, com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME)
-        .collectAsState(initial = emptyList())
-    
+    // 🔒 安全修复：从会话管理器读当前用户 ID，不再写死 1L
+    val currentUserId = remember {
+        com.example.funlife.utils.UserSessionManager(context).getCurrentUserId()
+    }
+
+    // 获取用户拥有的相框（按当前用户过滤）
+    val ownedFrames by remember(currentUserId) {
+        inventoryDao.getItemsByType(currentUserId, com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME)
+    }.collectAsState(initial = emptyList())
+
     var name by remember { mutableStateOf("") }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -885,11 +890,16 @@ fun EditAnniversaryDialog(
     val context = androidx.compose.ui.platform.LocalContext.current
     val database = (context.applicationContext as com.example.funlife.FunLifeApplication).database
     val inventoryDao = remember { database.inventoryDao() }
-    
-    // 获取用户拥有的相框
-    val ownedFrames by inventoryDao.getItemsByType(1L, com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME)
-        .collectAsState(initial = emptyList())
-    
+    // 🔒 安全修复：从会话管理器读当前用户 ID，不再写死 1L
+    val currentUserId = remember {
+        com.example.funlife.utils.UserSessionManager(context).getCurrentUserId()
+    }
+
+    // 获取用户拥有的相框（按当前用户过滤）
+    val ownedFrames by remember(currentUserId) {
+        inventoryDao.getItemsByType(currentUserId, com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME)
+    }.collectAsState(initial = emptyList())
+
     var name by remember { mutableStateOf(anniversary.name) }
     var selectedDate by remember { 
         mutableStateOf(

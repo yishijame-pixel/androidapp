@@ -31,7 +31,22 @@ import com.example.funlife.data.model.InventoryItem
 import com.example.funlife.data.model.ItemRarity
 import com.example.funlife.data.model.InventoryItemType
 import com.example.funlife.viewmodel.InventoryViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.launch
+
+/** 🔥 解析头像框 itemId(avatar_frame_<id>) 对应的真实 asset 路径 */
+private fun resolveFrameAssetPath(item: InventoryItem, frameAssetMap: Map<Int, String>): String? {
+    if (!item.itemId.startsWith("avatar_frame_")) return null
+    // 1) 优先从 ShopDao 查询出的真实路径取（最可靠）
+    val id = item.itemId.removePrefix("avatar_frame_").toIntOrNull()
+    if (id != null) frameAssetMap[id]?.takeIf { it.isNotBlank() }?.let { return it }
+    // 2) 退而求其次：从描述首行解析
+    if (item.description.contains("/")) {
+        return item.description.substringBefore("\n").trim()
+    }
+    return null
+}
 
 @Composable
 fun InventoryScreen(
@@ -47,6 +62,7 @@ fun InventoryScreen(
     val inventoryCapacity by viewModel.inventoryCapacity.collectAsState() // 🔥 背包容量
     val userVip by viewModel.userVip.collectAsState() // 🔥 VIP状态
     val message by viewModel.message.collectAsState() // 🔥 消息提示
+    val frameAssetMap by viewModel.frameAssetMap.collectAsState() // 🔥 头像框 id→assetPath 映射
     
     var showItemDetail by remember { mutableStateOf(false) }
     var selectedItem by remember { mutableStateOf<InventoryItem?>(null) }
@@ -119,15 +135,9 @@ fun InventoryScreen(
                             item.itemId == "panel_$equippedPanelSkin" -> true
                             // 按钮皮肤匹配
                             item.itemId == "button_$equippedButtonSkin" -> true
-                            // 头像框匹配：从description中提取实际路径进行精确匹配
+                            // 头像框匹配：使用 ShopDao 的真实资源路径精确匹配
                             item.itemId.startsWith("avatar_frame_") && equippedAvatarFrame != null -> {
-                                val actualAssetPath = if (item.description.contains("/")) {
-                                    item.description.substringBefore("\n").trim()
-                                } else {
-                                    val frameNum = item.itemId.removePrefix("avatar_frame_")
-                                    "xiangkuang/$frameNum.png"
-                                }
-                                actualAssetPath == equippedAvatarFrame
+                                resolveFrameAssetPath(item, frameAssetMap) == equippedAvatarFrame
                             }
                             else -> false
                         }
@@ -138,7 +148,8 @@ fun InventoryScreen(
                                 selectedItem = item
                                 showItemDetail = true
                             },
-                            isEquipped = isEquipped
+                            isEquipped = isEquipped,
+                            frameAssetMap = frameAssetMap
                         )
                     }
                 }
@@ -150,6 +161,7 @@ fun InventoryScreen(
     if (showItemDetail && selectedItem != null) {
         ItemDetailDialog(
             item = selectedItem!!,
+            frameAssetMap = frameAssetMap,
             onDismiss = { showItemDetail = false },
             onUse = { item ->
                 viewModel.useItem(item)
@@ -452,7 +464,8 @@ fun ItemTypeFilter(
 fun InventoryItemCard(
     item: InventoryItem,
     onClick: () -> Unit,
-    isEquipped: Boolean = false
+    isEquipped: Boolean = false,
+    frameAssetMap: Map<Int, String> = emptyMap()
 ) {
     val rarityColor = when (item.itemRarity) {
         ItemRarity.COMMON -> Color(0xFF9E9E9E)
@@ -591,31 +604,15 @@ fun InventoryItemCard(
                         )
                     }
                 } else if (item.itemId.startsWith("avatar_frame_")) {
-                    // 🔥 显示头像框图片
+                    // 🔥 显示头像框图片 - 通过 ShopDao 的真实路径用 Coil 加载（支持 GIF/中文路径）
                     val context = LocalContext.current
-                    // 从itemId中提取资源路径（存储在description中）
-                    val frameBitmap = remember(item.itemId) {
-                        try {
-                            // 尝试从description中获取路径，或使用默认路径
-                            val assetPath = if (item.description.contains("/")) {
-                                item.description.substringBefore("\n").trim()
-                            } else {
-                                // 从itemId提取数字，构建路径
-                                val frameNum = item.itemId.removePrefix("avatar_frame_")
-                                "xiangkuang/$frameNum.png"
-                            }
-                            context.assets.open(assetPath).use { inputStream ->
-                                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("InventoryItemCard", "Failed to load avatar frame: ${e.message}")
-                            null
-                        }
-                    }
-                    
-                    if (frameBitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = frameBitmap,
+                    val resolved = resolveFrameAssetPath(item, frameAssetMap)
+                    if (!resolved.isNullOrBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data("file:///android_asset/$resolved")
+                                .crossfade(200)
+                                .build(),
                             contentDescription = item.itemName,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -724,7 +721,8 @@ fun ItemDetailDialog(
     onDelete: (InventoryItem) -> Unit,
     onEquipPanel: (String) -> Unit = {},
     onEquipButton: (String) -> Unit = {},
-    onEquipAvatarFrame: (String) -> Unit = {}  // 🔥 新增：装备头像框回调
+    onEquipAvatarFrame: (String) -> Unit = {},  // 🔥 新增：装备头像框回调
+    frameAssetMap: Map<Int, String> = emptyMap()  // 🔥 头像框 id→assetPath
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -829,29 +827,14 @@ fun ItemDetailDialog(
                             }
                         }
                         item.itemId.startsWith("avatar_frame_") -> {
-                            // 🔥 显示头像框图片
-                            val frameBitmap = remember(item.itemId) {
-                                try {
-                                    // 尝试从description中获取路径，或使用默认路径
-                                    val assetPath = if (item.description.contains("/")) {
-                                        item.description.substringBefore("\n").trim()
-                                    } else {
-                                        // 从itemId提取数字，构建路径
-                                        val frameNum = item.itemId.removePrefix("avatar_frame_")
-                                        "xiangkuang/$frameNum.png"
-                                    }
-                                    context.assets.open(assetPath).use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("ItemDetailDialog", "Failed to load avatar frame: ${e.message}")
-                                    null
-                                }
-                            }
-                            
-                            if (frameBitmap != null) {
-                                androidx.compose.foundation.Image(
-                                    bitmap = frameBitmap,
+                            // 🔥 显示头像框图片 - 使用 ShopDao 真实路径 + Coil（支持中文路径/GIF）
+                            val resolved = resolveFrameAssetPath(item, frameAssetMap)
+                            if (!resolved.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data("file:///android_asset/$resolved")
+                                        .crossfade(200)
+                                        .build(),
                                     contentDescription = item.itemName,
                                     modifier = Modifier
                                         .size(80.dp)
@@ -942,14 +925,11 @@ fun ItemDetailDialog(
                                         onEquipButton(skinName)
                                     }
                                     isAvatarFrame -> {
-                                        // 🔥 处理头像框装备
-                                        val assetPath = if (item.description.contains("/")) {
-                                            item.description.substringBefore("\n").trim()
-                                        } else {
-                                            val frameNum = item.itemId.removePrefix("avatar_frame_")
-                                            "xiangkuang/$frameNum.png"
+                                        // 🔥 处理头像框装备 - 优先使用 ShopDao 真实路径
+                                        val assetPath = resolveFrameAssetPath(item, frameAssetMap)
+                                        if (!assetPath.isNullOrBlank()) {
+                                            onEquipAvatarFrame(assetPath)
                                         }
-                                        onEquipAvatarFrame(assetPath)
                                     }
                                     else -> {
                                         onUse(item)

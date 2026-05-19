@@ -31,7 +31,8 @@ class DiceCubeGLView(context: Context) : GLSurfaceView(context) {
         setEGLContextClientVersion(2)
         setEGLConfigChooser(8, 8, 8, 8, 16, 0)
         holder.setFormat(PixelFormat.TRANSLUCENT)
-        setZOrderOnTop(true)
+        // 使用 MediaOverlay 而非 OnTop，让其它 Compose UI（如杯子）可以盖在骰子上方
+        setZOrderMediaOverlay(true)
         setRenderer(cubeRenderer)
         renderMode = RENDERMODE_CONTINUOUSLY
     }
@@ -50,13 +51,21 @@ class DiceCubeRenderer : GLSurfaceView.Renderer {
     private var program = 0
     private var posHandle = 0
     private var uvHandle = 0
+    private var shadeHandle = 0
     private var mvpHandle = 0
     private var samplerHandle = 0
     private var textureId = 0
 
     private lateinit var vertexBuffer: FloatBuffer
     private lateinit var uvBuffer: FloatBuffer
+    private lateinit var shadeBuffer: FloatBuffer
     private val uvArray = FloatArray(6 * 6 * 2)
+
+    // 每面亮度：前/后/上/下/左/右 —— 模拟左上前光源
+    private val faceShade = floatArrayOf(1.00f, 0.55f, 1.00f, 0.50f, 0.72f, 0.85f)
+    private val shadeArray = FloatArray(6 * 6).also { arr ->
+        for (f in 0 until 6) for (v in 0 until 6) arr[f * 6 + v] = faceShade[f]
+    }
 
     private val projectionMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
@@ -99,25 +108,31 @@ class DiceCubeRenderer : GLSurfaceView.Renderer {
         val vs = """
             attribute vec4 aPos;
             attribute vec2 aUV;
+            attribute float aShade;
             uniform mat4 uMVP;
             varying vec2 vUV;
+            varying float vShade;
             void main() {
                 gl_Position = uMVP * aPos;
                 vUV = aUV;
+                vShade = aShade;
             }
         """.trimIndent()
         val fs = """
             precision mediump float;
             varying vec2 vUV;
+            varying float vShade;
             uniform sampler2D uTex;
             void main() {
-                gl_FragColor = texture2D(uTex, vUV);
+                vec4 c = texture2D(uTex, vUV);
+                gl_FragColor = vec4(c.rgb * vShade, c.a);
             }
         """.trimIndent()
 
         program = createProgram(vs, fs)
         posHandle = GLES20.glGetAttribLocation(program, "aPos")
         uvHandle = GLES20.glGetAttribLocation(program, "aUV")
+        shadeHandle = GLES20.glGetAttribLocation(program, "aShade")
         mvpHandle = GLES20.glGetUniformLocation(program, "uMVP")
         samplerHandle = GLES20.glGetUniformLocation(program, "uTex")
 
@@ -129,6 +144,9 @@ class DiceCubeRenderer : GLSurfaceView.Renderer {
         uvBuffer = ByteBuffer.allocateDirect(uvArray.size * 4)
             .order(ByteOrder.nativeOrder())
             .asFloatBuffer()
+        shadeBuffer = ByteBuffer.allocateDirect(shadeArray.size * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer().apply { put(shadeArray); position(0) }
 
         textureId = createAtlasTexture()
     }
@@ -164,6 +182,10 @@ class DiceCubeRenderer : GLSurfaceView.Renderer {
         uvBuffer.position(0)
         GLES20.glVertexAttribPointer(uvHandle, 2, GLES20.GL_FLOAT, false, 8, uvBuffer)
 
+        GLES20.glEnableVertexAttribArray(shadeHandle)
+        shadeBuffer.position(0)
+        GLES20.glVertexAttribPointer(shadeHandle, 1, GLES20.GL_FLOAT, false, 4, shadeBuffer)
+
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
         GLES20.glUniform1i(samplerHandle, 0)
@@ -172,6 +194,7 @@ class DiceCubeRenderer : GLSurfaceView.Renderer {
 
         GLES20.glDisableVertexAttribArray(posHandle)
         GLES20.glDisableVertexAttribArray(uvHandle)
+        GLES20.glDisableVertexAttribArray(shadeHandle)
     }
 
     /** UV 重建：按当前 faceFront 计算每个面的 atlas UV */

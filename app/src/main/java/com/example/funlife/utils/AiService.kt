@@ -47,26 +47,59 @@ interface AiApiService {
 }
 
 // ===== AI 服务封装 =====
-class AiService(private val application: android.app.Application) {
+class AiService(
+    private val application: android.app.Application,
+    // 🔒 安全修复：按用户 ID 隔离 API Key 存储；为兼容旧调用，userId<=0 时退化为全局 key
+    private val userId: Long = 0L
+) {
 
-    private val prefs = application.getSharedPreferences("ai_settings", android.content.Context.MODE_PRIVATE)
+    // 🔒 安全修复：使用 EncryptedSharedPreferences 加密存储 API Key
+    private val prefs: android.content.SharedPreferences = try {
+        val masterKey = androidx.security.crypto.MasterKey.Builder(application)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        androidx.security.crypto.EncryptedSharedPreferences.create(
+            application,
+            "ai_settings_encrypted",
+            masterKey,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        android.util.Log.w("AiService", "EncryptedSharedPreferences 创建失败，降级到普通 SharedPreferences")
+        application.getSharedPreferences("ai_settings", android.content.Context.MODE_PRIVATE)
+    }
+
+    // 🔒 按 userId 划分 key 命名空间，避免不同账号互相读取/覆盖对方的 API Key
+    private val keyName: String = if (userId > 0) "ai_api_key_$userId" else "ai_api_key"
 
     // 优先使用运行时配置的key，其次使用BuildConfig的key
     private fun getActiveKey(): String {
-        val runtimeKey = prefs.getString("ai_api_key", "") ?: ""
+        val runtimeKey = prefs.getString(keyName, "") ?: ""
         return runtimeKey.ifBlank { BuildConfig.AI_API_KEY }
     }
 
-    fun getApiKey(): String = prefs.getString("ai_api_key", "") ?: ""
+    fun getApiKey(): String = prefs.getString(keyName, "") ?: ""
 
     fun setApiKey(key: String) {
-        prefs.edit().putString("ai_api_key", key).apply()
+        prefs.edit().putString(keyName, key).apply()
     }
 
     private val api: AiApiService by lazy {
+        // 🔒 安全修复：仅 DEBUG 构建打印日志且只用 BASIC（不含请求头），
+        // 防止生产版本把 Authorization: Bearer xxx 完整写到 logcat。
         val logging = HttpLoggingInterceptor { msg ->
             android.util.Log.d("AiService", msg)
-        }.apply { level = HttpLoggingInterceptor.Level.BODY }
+        }.apply {
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BASIC
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+            // 即使 BASIC 也额外屏蔽敏感请求头，双保险
+            redactHeader("Authorization")
+            redactHeader("Cookie")
+        }
 
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -216,7 +249,8 @@ class AiService(private val application: android.app.Application) {
         messages: List<Map<String, String>>,
         userMsg: String
     ): AiResult {
-        android.util.Log.d("AiService", "发送AI请求: key=${getActiveKey().take(8)}..., messages=${messages.size}条")
+        // 🔒 安全修复：不再打印 API Key 任何明文片段
+        android.util.Log.d("AiService", "发送AI请求: keyConfigured=${getActiveKey().isNotBlank()}, messages=${messages.size}条")
 
         val response = api.chatCompletion(
             "Bearer ${getActiveKey()}",

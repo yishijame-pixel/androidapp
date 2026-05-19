@@ -37,7 +37,7 @@ data class InventoryItem(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     
-    val userId: Long = 1,           // 用户ID
+    val userId: Long,                // 🔒 安全修复：移除默认值 1，强制构造方传入，防止意外把物品挂到 user 1
     val itemId: String,              // 物品ID（对应商店物品）
     val itemName: String,            // 物品名称
     val itemType: InventoryItemType, // 物品类型

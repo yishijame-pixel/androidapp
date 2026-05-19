@@ -84,8 +84,10 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
             26 to "传世经典"
         )
         
-        // 从数据库获取所有按钮皮肤商品
-        val allButtonSkins = database.inventoryDao().getAllItemsList()
+        // 🔒 安全修复：仅迁移当前用户的按钮皮肤名称，避免触碰其他用户数据
+        val userId = getCurrentUserId()
+        if (userId <= 0) return
+        val allButtonSkins = database.inventoryDao().getAllItemsList(userId)
             .filter { it.itemId.startsWith("button_pf_") }
         
         allButtonSkins.forEach { item ->

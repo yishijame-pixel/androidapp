@@ -30,18 +30,19 @@ class PetViewModel(
     fun consumeToast() { _toast.value = null }
     
     private fun refreshMissions() {
-        _missions.value = PetMissionHelper.getMissions(appContext)
+        // 🔒 按当前用户读取任务状态
+        _missions.value = PetMissionHelper.getMissions(appContext, userId)
     }
     
     private fun trackMission(type: PetMissionHelper.MissionType) {
-        PetMissionHelper.increment(appContext, type)
+        PetMissionHelper.increment(appContext, userId, type)
         refreshMissions()
     }
     
     /** 领取任务奖励 */
     fun claimMission(type: PetMissionHelper.MissionType) {
         viewModelScope.launch {
-            if (PetMissionHelper.claim(appContext, type)) {
+            if (PetMissionHelper.claim(appContext, userId, type)) {
                 coinRepository.addCoins(userId, type.reward)
                 _toast.value = "🎉 领取了 ${type.reward} 金币！"
                 refreshMissions()

@@ -60,22 +60,32 @@ fun PurchaseConfirmDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(animationSpec = tween(200)) + scaleIn(
-                initialScale = 0.85f,
-                animationSpec = spring(dampingRatio = 0.75f, stiffness = 350f)
-            ),
-            exit = fadeOut(animationSpec = tween(150)) + scaleOut(targetScale = 0.9f)
+        // 🔥 蒙层与卡片分开动画，避免 AnimatedVisibility 包裹整屏 Box 导致 scaleIn 从左上角放大
+        val scrimAlpha by animateFloatAsState(
+            targetValue = if (visible) 1f else 0f,
+            animationSpec = tween(200),
+            label = "scrimAlpha"
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f * scrimAlpha))
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onDismiss() })
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { onDismiss() })
-                    },
-                contentAlignment = Alignment.Center
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(animationSpec = tween(200)) + scaleIn(
+                    initialScale = 0.85f,
+                    animationSpec = spring(dampingRatio = 0.75f, stiffness = 350f),
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                ),
+                exit = fadeOut(animationSpec = tween(150)) + scaleOut(
+                    targetScale = 0.9f,
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                )
             ) {
                 Surface(
                     modifier = Modifier

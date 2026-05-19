@@ -530,13 +530,17 @@ fun EnhancedSpinWheelScreen(
                             shopPoints = userShopPoints,
                             userCoins = userCoins,
                             onSpin = {
+                                // 🎯 修复：立即把 prize 传给转盘，由转盘根据 prize 索引精确计算
+                                // 落点角度并播放 4500ms 旋转动画。结果弹窗在动画结束时才弹出，
+                                // 确保指针指向的扇形 = 弹窗显示的奖品。
                                 isProductSpinning = true
                                 scope.launch {
                                     val result = viewModel.performProductSpin()
-                                    kotlinx.coroutines.delay(4500) // 等待动画完成
                                     when (result) {
                                         is ProductSpinResult.Success -> {
                                             productSpinResult = result.prize
+                                            // 等待动画完成后再解锁可旋转状态（防止重复点）
+                                            kotlinx.coroutines.delay(4500)
                                             isProductSpinning = false
                                         }
                                         is ProductSpinResult.InsufficientPoints -> {

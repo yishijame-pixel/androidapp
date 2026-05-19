@@ -188,7 +188,12 @@ fun ChatBillScreen(
                 onExport = {
                     scope.launch {
                         val csv = viewModel.exportBillsCsv()
-                        val file = java.io.File(context.cacheDir, "bills_export.csv")
+                        // 🔒 安全修复：导出文件名包含 userId + 时间戳，避免多账号互相覆盖
+                        // 同时清理旧文件，防止 cacheDir 残留其他账号导出
+                        val sharedDir = java.io.File(context.cacheDir, "shared_images").apply { mkdirs() }
+                        sharedDir.listFiles { f -> f.name.startsWith("bills_export_") }?.forEach { it.delete() }
+                        val fileName = "bills_export_${viewModel.userId}_${System.currentTimeMillis()}.csv"
+                        val file = java.io.File(sharedDir, fileName)
                         file.writeText(csv)
                         val uri = androidx.core.content.FileProvider.getUriForFile(
                             context, "${context.packageName}.fileprovider", file

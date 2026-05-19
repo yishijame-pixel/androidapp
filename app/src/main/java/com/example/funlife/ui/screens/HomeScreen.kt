@@ -94,16 +94,17 @@ fun HomeScreen(
     var showFirstEntryEffect by remember { mutableStateOf(false) }
     
     // 检测VIP激活（从VIP页面返回）
-    LaunchedEffect(vipLevel) {
+    LaunchedEffect(vipLevel, userSession?.userId) {
+        val uid = userSession?.userId ?: return@LaunchedEffect
         if (vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
-            // 检查是否刚激活（可以通过SharedPreferences或其他方式）
+            // 🔒 安全修复：VIP 激活动画标志按 userId 隔离，避免 A 账号刚激活 VIP 后 B 账号登录也被弹动画
             val prefs = context.getSharedPreferences("vip_animation", android.content.Context.MODE_PRIVATE)
-            val shouldShowAnimation = prefs.getBoolean("show_first_entry_effect", false)
-            
+            val key = "show_first_entry_effect_$uid"
+            val shouldShowAnimation = prefs.getBoolean(key, false)
+
             if (shouldShowAnimation) {
                 showFirstEntryEffect = true
-                // 清除标记
-                prefs.edit().putBoolean("show_first_entry_effect", false).apply()
+                prefs.edit().putBoolean(key, false).apply()
             }
         }
     }

@@ -10,6 +10,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -44,6 +46,8 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.viewinterop.AndroidView
+import com.example.funlife.ui.components.gl.DiceCubeGLView
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +62,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// 主题色
+// 主题色（保留原粉色用于弹窗）
 private val PinkLight = Color(0xFFFFE0EC)
 private val PinkSoft = Color(0xFFFFCAD4)
 private val PinkMid = Color(0xFFFF80AB)
@@ -66,6 +70,21 @@ private val PinkDeep = Color(0xFFEC407A)
 private val PinkAccent = Color(0xFFD81B60)
 private val GoldStar = Color(0xFFFFC107)
 private val CreamBg = Color(0xFFFFF5F8)
+
+// 🔥 新版"欢乐摇骰子"暗色主题
+private val NightBg1 = Color(0xFF0E1726)
+private val NightBg2 = Color(0xFF13202F)
+private val NightBg3 = Color(0xFF1A2A3F)
+private val DeepBlue1 = Color(0xFF2A4E78)
+private val DeepBlue2 = Color(0xFF1F3A5C)
+private val DeepBlue3 = Color(0xFF152A44)
+private val SteelBlue = Color(0xFF3B6EA8)
+private val PlateRim = Color(0xFF14253A)
+private val ShakeRed1 = Color(0xFFFF5A3C)
+private val ShakeRed2 = Color(0xFFE0341A)
+private val ShakeRed3 = Color(0xFFB22315)
+private val IconYellow1 = Color(0xFFFFD86A)
+private val IconYellow2 = Color(0xFFFFB23A)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,18 +120,26 @@ fun DiceGameScreen(
     // 🎵 音效
     val soundManager = remember { com.example.funlife.utils.SoundEffectManager.getInstance(context) }
 
+    // 🔥 进入页面或骰子数量改变时，自动让骰子落进骰盘
+    LaunchedEffect(diceCount) {
+        if (gameStage == com.example.funlife.data.model.DiceGameStage.IDLE) {
+            viewModel.setStage(com.example.funlife.data.model.DiceGameStage.DROPPING_DICE)
+        }
+    }
+
     // 🎬 流程动画驱动 — 根据 gameStage 自动推进
     LaunchedEffect(gameStage) {
         when (gameStage) {
             com.example.funlife.data.model.DiceGameStage.DROPPING_DICE -> {
-                // 1.4 秒骰子飞入动画 + 音效
+                // 1.2 秒骰子飞入骰盘动画 + 音效
                 soundManager.play(com.example.funlife.utils.SoundEffect.DICE_DROP, volume = 0.7f)
-                delay(1400)
-                viewModel.setStage(com.example.funlife.data.model.DiceGameStage.COVERING)
+                delay(1200)
+                // 🔥 骰子落定后停在 REVEALED（骰子可见，等用户滑动杯子下来盖住）
+                viewModel.setStage(com.example.funlife.data.model.DiceGameStage.REVEALED)
             }
             com.example.funlife.data.model.DiceGameStage.COVERING -> {
-                // 0.6 秒杯子翻转倒扣动画
-                delay(600)
+                // 兼容：若仍有外部触发 COVERING，0.4 秒后自动进入 COVERED
+                delay(400)
                 viewModel.setStage(com.example.funlife.data.model.DiceGameStage.COVERED)
             }
             com.example.funlife.data.model.DiceGameStage.SHAKING -> {
@@ -180,24 +207,21 @@ fun DiceGameScreen(
         }
     }
 
+    var showMorePlay by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF0F5),
-                        Color(0xFFFFE0EC),
-                        Color(0xFFFFCAD4)
-                    )
+                    colors = listOf(NightBg1, NightBg2, NightBg3, NightBg1)
                 )
             )
     ) {
-        // 背景装饰
+        // 暗色星点背景装饰
         BackgroundDecor()
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // 顶部栏
+            // 顶部栏：返回 + 标题
             DiceTopBar(
                 onBack = onNavigateBack,
                 onSettings = { showSettings = true },
@@ -205,35 +229,26 @@ fun DiceGameScreen(
                 onToggleSensor = { sensorShakeEnabled = !sensorShakeEnabled }
             )
 
-            // 模式选择
-            ModeSelectorRow(
-                selected = gameMode,
-                onSelect = { viewModel.setGameMode(it) }
+            // 4 个胶囊圆形入口
+            TopActionIcons(
+                onMorePlay = { showMorePlay = true },
+                onSkin = {
+                    viewModel.let { /* 占位 */ }
+                    android.widget.Toast.makeText(context, "皮肤系统开发中～", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                onDaily = {
+                    android.widget.Toast.makeText(context, "每日福利稍后开放～", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                onShare = {
+                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, "来一起玩欢乐摇骰子吧！🎲")
+                    }
+                    context.startActivity(android.content.Intent.createChooser(sendIntent, "分享好友"))
+                }
             )
 
-            // 数字定罚目标数字（仅在该模式下）
-            AnimatedVisibility(visible = gameMode == DiceGameMode.NUMBER_PENALTY) {
-                PenaltyNumberPicker(
-                    selected = penaltyNumber,
-                    onSelect = { viewModel.setPenaltyNumber(it) }
-                )
-            }
-
-            // 骰子数量调整
-            DiceCountAdjuster(
-                count = diceCount,
-                onChange = { viewModel.setDiceCount(it) }
-            )
-
-            // 玩家滑动条
-            PlayersRow(
-                players = players,
-                currentIndex = currentPlayerIndex,
-                onAdd = { showAddPlayer = true },
-                onRemove = { viewModel.removePlayer(it) }
-            )
-
-            // 主舞台 - 杯子 + 骰子
+            // 主舞台 - 蓝色骰盅 + 蓝色骰盘 + 骰子
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -244,20 +259,46 @@ fun DiceGameScreen(
                     diceCount = diceCount,
                     diceValues = diceValues,
                     stage = gameStage,
-                    currentPlayer = players.getOrNull(currentPlayerIndex)
+                    currentPlayer = players.getOrNull(currentPlayerIndex),
+                    onCoverByDrag = {
+                        // 🔥 用户把骰盅拖到底 → 进入 COVERED
+                        if (gameStage == com.example.funlife.data.model.DiceGameStage.REVEALED ||
+                            gameStage == com.example.funlife.data.model.DiceGameStage.IDLE) {
+                            viewModel.setStage(com.example.funlife.data.model.DiceGameStage.COVERED)
+                        }
+                    }
                 )
             }
 
-            // 操作按钮区（根据 stage 显示不同按钮）
-            StageActionButtons(
+            // 底部操作栏：设置(左) + 红色摇按钮(中) + 小骰盅(右)
+            BottomActionBar(
                 stage = gameStage,
-                onDropDice = { viewModel.setStage(com.example.funlife.data.model.DiceGameStage.DROPPING_DICE) },
-                onShake = { viewModel.setStage(com.example.funlife.data.model.DiceGameStage.SHAKING) },
-                onReveal = { viewModel.setStage(com.example.funlife.data.model.DiceGameStage.REVEALING) },
-                onNext = { viewModel.nextPlayer() }
+                onSettings = { showSettings = true },
+                onShakeAction = {
+                    when (gameStage) {
+                        com.example.funlife.data.model.DiceGameStage.COVERED -> {
+                            // 已盖住 → 摇动
+                            viewModel.setStage(com.example.funlife.data.model.DiceGameStage.SHAKING)
+                        }
+                        com.example.funlife.data.model.DiceGameStage.SHAKEN -> {
+                            // 已摇完 → 揭盅
+                            viewModel.setStage(com.example.funlife.data.model.DiceGameStage.REVEALING)
+                        }
+                        com.example.funlife.data.model.DiceGameStage.REVEALED -> {
+                            // 揭盅后 → 重新投掷
+                            viewModel.setStage(com.example.funlife.data.model.DiceGameStage.DROPPING_DICE)
+                        }
+                        com.example.funlife.data.model.DiceGameStage.IDLE -> {
+                            // 还没投掷 → 投掷
+                            viewModel.setStage(com.example.funlife.data.model.DiceGameStage.DROPPING_DICE)
+                        }
+                        else -> {}
+                    }
+                },
+                onCupAction = { showMorePlay = true }
             )
 
-            // 当前玩家结果 + 模式提示
+            // 当前玩家结果 + 模式提示（紧凑显示在底部上方）
             AnimatedVisibility(
                 visible = isRevealed,
                 enter = fadeIn() + slideInVertically { it / 2 },
@@ -274,7 +315,6 @@ fun DiceGameScreen(
                     onDrawDare = { viewModel.drawTruthOrDare(CardType.DARE) }
                 )
             }
-            
             // 吹牛骰盅 - 叫数面板
             if (gameMode == DiceGameMode.LIAR_DICE && liarPhase == LiarPhase.BIDDING) {
                 LiarBiddingPanel(
@@ -294,6 +334,23 @@ fun DiceGameScreen(
                 )
             }
         }
+    }
+
+    // "更多玩法"底部面板：包含模式选择、惩罚数字、骰子数量、玩家
+    if (showMorePlay) {
+        MorePlaySheet(
+            gameMode = gameMode,
+            onSelectMode = { viewModel.setGameMode(it) },
+            penaltyNumber = penaltyNumber,
+            onSelectPenalty = { viewModel.setPenaltyNumber(it) },
+            diceCount = diceCount,
+            onChangeDiceCount = { viewModel.setDiceCount(it) },
+            players = players,
+            currentIndex = currentPlayerIndex,
+            onAddPlayer = { showAddPlayer = true },
+            onRemovePlayer = { viewModel.removePlayer(it) },
+            onDismiss = { showMorePlay = false }
+        )
     }
 
     // 设置弹窗
@@ -331,6 +388,162 @@ fun DiceGameScreen(
 }
 
 // ════════════════════════════════════════════════════════════
+// 🔥 底部动作栏：设置(左) + 大红"摇"按钮(中) + 小骰盅(右)
+// ════════════════════════════════════════════════════════════
+@Composable
+private fun BottomActionBar(
+    stage: com.example.funlife.data.model.DiceGameStage,
+    onSettings: () -> Unit,
+    onShakeAction: () -> Unit,
+    onCupAction: () -> Unit
+) {
+    val canTap = stage == com.example.funlife.data.model.DiceGameStage.IDLE ||
+            stage == com.example.funlife.data.model.DiceGameStage.COVERED ||
+            stage == com.example.funlife.data.model.DiceGameStage.SHAKEN ||
+            stage == com.example.funlife.data.model.DiceGameStage.REVEALED
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp, vertical = 12.dp)
+            .navigationBarsPadding(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // 设置按钮
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .shadow(6.dp, CircleShape, ambientColor = SteelBlue, spotColor = SteelBlue)
+                .clip(CircleShape)
+                .background(Brush.verticalGradient(listOf(NightBg3, DeepBlue3)))
+                .border(1.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                .clickable { onSettings() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Settings, "设置",
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        // 红色"摇"按钮
+        val infinite = rememberInfiniteTransition(label = "shakeBtn")
+        val pulse by infinite.animateFloat(
+            initialValue = 0.96f, targetValue = 1.04f,
+            animationSpec = infiniteRepeatable(tween(900, easing = EaseInOut), RepeatMode.Reverse),
+            label = "p"
+        )
+        val scale = if (canTap) pulse else 1f
+        Box(
+            modifier = Modifier
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .size(78.dp)
+                .shadow(12.dp, CircleShape, ambientColor = ShakeRed1, spotColor = ShakeRed2)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(ShakeRed1, ShakeRed2, ShakeRed3),
+                        radius = 130f
+                    )
+                )
+                .border(3.dp, Color.White.copy(alpha = 0.65f), CircleShape)
+                .clickable(enabled = canTap) { onShakeAction() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "摇",
+                color = Color.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+                style = TextStyle(shadow = Shadow(Color(0xFF7A1A0F), Offset(0f, 2f), 4f))
+            )
+        }
+
+        // 小骰盅图标（打开"更多玩法"以快速调整骰子数量）
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .shadow(6.dp, CircleShape, ambientColor = SteelBlue, spotColor = SteelBlue)
+                .clip(CircleShape)
+                .background(Brush.verticalGradient(listOf(NightBg3, DeepBlue3)))
+                .border(1.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                .clickable { onCupAction() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("\uD83C\uDFB2", fontSize = 22.sp)
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// 🔥 "更多玩法"底部面板（包含原来散布在主界面的：模式/惩罚数字/骰子数量/玩家）
+// ════════════════════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MorePlaySheet(
+    gameMode: DiceGameMode,
+    onSelectMode: (DiceGameMode) -> Unit,
+    penaltyNumber: Int,
+    onSelectPenalty: (Int) -> Unit,
+    diceCount: Int,
+    onChangeDiceCount: (Int) -> Unit,
+    players: List<DicePlayer>,
+    currentIndex: Int,
+    onAddPlayer: () -> Unit,
+    onRemovePlayer: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = NightBg2,
+        scrimColor = Color.Black.copy(alpha = 0.6f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("\uD83C\uDFAE", fontSize = 22.sp)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "更多玩法",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+            // 模式选择
+            ModeSelectorRow(selected = gameMode, onSelect = onSelectMode)
+            // 数字定罚目标数字（仅在该模式下）
+            AnimatedVisibility(visible = gameMode == DiceGameMode.NUMBER_PENALTY) {
+                PenaltyNumberPicker(selected = penaltyNumber, onSelect = onSelectPenalty)
+            }
+            // 骰子数量
+            DiceCountAdjuster(count = diceCount, onChange = onChangeDiceCount)
+            // 玩家
+            PlayersRow(
+                players = players,
+                currentIndex = currentIndex,
+                onAdd = onAddPlayer,
+                onRemove = onRemovePlayer
+            )
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════
 // 背景装饰
 // ════════════════════════════════════════════════════════════
 @Composable
@@ -342,23 +555,24 @@ private fun BackgroundDecor() {
         label = "f"
     )
     Canvas(modifier = Modifier.fillMaxSize()) {
-        // 散落的心形和星星
+        // 暗夜星点
         val w = size.width; val h = size.height
-        listOf(
-            Triple(0.08f, 0.12f, 16f),
-            Triple(0.85f, 0.08f, 12f),
-            Triple(0.92f, 0.35f, 14f),
-            Triple(0.05f, 0.55f, 10f),
-            Triple(0.88f, 0.78f, 18f),
-            Triple(0.12f, 0.88f, 14f),
-            Triple(0.50f, 0.05f, 9f)
-        ).forEach { (fx, fy, s) ->
-            drawDecorHeart(Offset(w * fx, h * fy + float), s, Color.White.copy(alpha = 0.5f))
+        val stars = listOf(
+            0.08f to 0.12f, 0.85f to 0.08f, 0.92f to 0.35f, 0.05f to 0.55f,
+            0.88f to 0.78f, 0.12f to 0.88f, 0.50f to 0.05f, 0.20f to 0.20f,
+            0.75f to 0.25f, 0.30f to 0.85f, 0.95f to 0.55f, 0.40f to 0.40f,
+            0.62f to 0.32f, 0.18f to 0.68f, 0.83f to 0.60f, 0.45f to 0.75f
+        )
+        stars.forEach { (fx, fy) ->
+            drawCircle(
+                Color.White.copy(alpha = 0.18f),
+                radius = 1.6f,
+                center = Offset(w * fx, h * fy + float * 0.2f)
+            )
         }
-        listOf(
-            0.20f to 0.20f, 0.75f to 0.25f, 0.30f to 0.85f, 0.95f to 0.55f, 0.40f to 0.40f
-        ).forEach { (fx, fy) ->
-            drawSparkleStar(Offset(w * fx, h * fy - float * 0.3f), 8f, Color.White.copy(alpha = 0.55f))
+        // 几颗稍亮的"闪烁星"
+        listOf(0.22f to 0.22f, 0.78f to 0.30f, 0.40f to 0.10f).forEach { (fx, fy) ->
+            drawSparkleStar(Offset(w * fx, h * fy - float * 0.3f), 5f, Color.White.copy(alpha = 0.45f))
         }
     }
 }
@@ -402,47 +616,84 @@ private fun DiceTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, "返回", tint = PinkAccent)
+            Icon(Icons.Default.ArrowBack, "返回", tint = Color.White.copy(alpha = 0.85f))
         }
         Spacer(modifier = Modifier.weight(1f))
-        Row(
-            modifier = Modifier
-                .shadow(8.dp, RoundedCornerShape(50), ambientColor = PinkDeep, spotColor = PinkDeep)
-                .clip(RoundedCornerShape(50))
-                .background(
-                    Brush.horizontalGradient(listOf(PinkMid, PinkDeep))
-                )
-                .padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text("🎲", fontSize = 20.sp)
-            Text(
-                "骰子游戏",
-                color = Color.White,
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                letterSpacing = 1.5.sp,
-                style = TextStyle(shadow = Shadow(Color(0xFFAD1457), Offset(0f, 2f), 4f))
-            )
-            Text("✨", fontSize = 14.sp)
-        }
+        Text(
+            "欢乐摇骰子",
+            color = Color.White,
+            fontWeight = FontWeight.Black,
+            fontSize = 18.sp,
+            letterSpacing = 2.sp,
+            style = TextStyle(shadow = Shadow(Color(0xFF000000).copy(alpha = 0.7f), Offset(0f, 2f), 6f))
+        )
         Spacer(modifier = Modifier.weight(1f))
         // 重力感应开关
         IconButton(onClick = onToggleSensor) {
             Icon(
                 if (sensorEnabled) Icons.Default.Vibration else Icons.Default.PhoneAndroid,
                 "重力感应",
-                tint = if (sensorEnabled) PinkAccent else Color.Gray
+                tint = if (sensorEnabled) IconYellow1 else Color.White.copy(alpha = 0.45f)
             )
         }
-        IconButton(onClick = onSettings) {
-            Icon(Icons.Default.Settings, "设置", tint = PinkAccent)
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// 🔥 顶部 4 个胶囊圆形入口（更多玩法/换皮肤/每日福利/分享好友）
+// ════════════════════════════════════════════════════════════
+@Composable
+private fun TopActionIcons(
+    onMorePlay: () -> Unit,
+    onSkin: () -> Unit,
+    onDaily: () -> Unit,
+    onShare: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Top
+    ) {
+        TopActionIcon("\uD83D\uDE03", "更多玩法", onMorePlay)
+        TopActionIcon("\uD83C\uDFF7", "更换皮肤", onSkin)
+        TopActionIcon("\uD83C\uDF81", "每日福利", onDaily)
+        TopActionIcon("\u21AA", "分享好友", onShare)
+    }
+}
+
+@Composable
+private fun TopActionIcon(emoji: String, label: String, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .shadow(6.dp, CircleShape, ambientColor = IconYellow2, spotColor = IconYellow2)
+                .clip(CircleShape)
+                .background(Brush.verticalGradient(listOf(IconYellow1, IconYellow2)))
+                .border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(emoji, fontSize = 22.sp)
         }
+        Text(
+            label,
+            fontSize = 11.sp,
+            color = IconYellow1,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -698,7 +949,8 @@ private fun DiceStage(
     diceCount: Int,
     diceValues: List<Int>,
     stage: com.example.funlife.data.model.DiceGameStage,
-    currentPlayer: DicePlayer?
+    currentPlayer: DicePlayer?,
+    onCoverByDrag: () -> Unit = {}
 ) {
     val cupCovered = stage == com.example.funlife.data.model.DiceGameStage.COVERING ||
             stage == com.example.funlife.data.model.DiceGameStage.COVERED ||
@@ -707,6 +959,8 @@ private fun DiceStage(
     val isShaking = stage == com.example.funlife.data.model.DiceGameStage.SHAKING
     val isRevealed = stage == com.example.funlife.data.model.DiceGameStage.REVEALED
     val isDropping = stage == com.example.funlife.data.model.DiceGameStage.DROPPING_DICE
+    val isDraggable = stage == com.example.funlife.data.model.DiceGameStage.REVEALED ||
+            stage == com.example.funlife.data.model.DiceGameStage.IDLE
 
     val infinite = rememberInfiniteTransition(label = "stage")
     val shakeRotZ by infinite.animateFloat(
@@ -724,19 +978,19 @@ private fun DiceStage(
         animationSpec = infiniteRepeatable(tween(70, easing = EaseInOut), RepeatMode.Reverse),
         label = "shakeOy"
     )
-    // 杯子升降动画：盖住时 0，未盖时升到 -260
+    // 🔥 杯子下移动画：默认停在顶部（0），盖住时向下移动 ~110dp 罩住骰盘
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val coverDistancePx = with(density) { 110.dp.toPx() }
     val cupRise by animateFloatAsState(
-        targetValue = if (cupCovered) 0f else -260f,
+        targetValue = if (cupCovered) coverDistancePx else 0f,
         animationSpec = tween(550, easing = EaseOutBack),
         label = "rise"
     )
-    // 杯子翻转动画：IDLE/DROPPING 时 0°（直立），COVERING 起翻转 180°
-    val cupFlip by animateFloatAsState(
-        targetValue = if (stage == com.example.funlife.data.model.DiceGameStage.IDLE ||
-                        stage == com.example.funlife.data.model.DiceGameStage.DROPPING_DICE) 0f else 180f,
-        animationSpec = tween(550, easing = EaseInOutCubic),
-        label = "flip"
-    )
+    // 🔥 拖拽偏移：用户在 REVEALED/IDLE 时向下拖骰盅累计的位移
+    var cupDragY by remember { mutableStateOf(0f) }
+    // 当不可拖时归零
+    LaunchedEffect(isDraggable) { if (!isDraggable) cupDragY = 0f }
+    val coverThreshold = coverDistancePx * 0.6f // 拖过 60% 距离即视为已盖住
     // 骰子可见度：DROPPING/REVEALED 显示，IDLE/COVERED/SHAKING/SHAKEN 隐藏
     val diceVisible = isDropping ||
             stage == com.example.funlife.data.model.DiceGameStage.REVEALING || isRevealed
@@ -789,350 +1043,505 @@ private fun DiceStage(
         // 阶段提示文字
         Text(
             text = when (stage) {
-                com.example.funlife.data.model.DiceGameStage.IDLE -> "👇 点击「投掷骰子」把骰子放进杯子"
-                com.example.funlife.data.model.DiceGameStage.DROPPING_DICE -> "🎲 骰子飞入杯中..."
-                com.example.funlife.data.model.DiceGameStage.COVERING -> "🥤 杯子倒扣盖住骰子..."
-                com.example.funlife.data.model.DiceGameStage.COVERED -> "👇 点击「摇一摇」摇晃杯子（也可摇手机）"
-                com.example.funlife.data.model.DiceGameStage.SHAKING -> "💃 摇晃中... 骰子叮当响"
-                com.example.funlife.data.model.DiceGameStage.SHAKEN -> "👇 点击「揭杯」查看点数"
-                com.example.funlife.data.model.DiceGameStage.REVEALING -> "✨ 杯子升起，揭晓时刻..."
-                com.example.funlife.data.model.DiceGameStage.REVEALED -> "🎉 看看你的运气！点击「下一位」继续"
+                com.example.funlife.data.model.DiceGameStage.IDLE -> "🎲 准备投掷骰子..."
+                com.example.funlife.data.model.DiceGameStage.DROPPING_DICE -> "🎲 骰子飞入骰盘..."
+                com.example.funlife.data.model.DiceGameStage.COVERING -> "🥤 骰盅倒扣..."
+                com.example.funlife.data.model.DiceGameStage.COVERED -> "👇 点「摇」开始摇骰（或晃手机）"
+                com.example.funlife.data.model.DiceGameStage.SHAKING -> "💃 摇晃中..."
+                com.example.funlife.data.model.DiceGameStage.SHAKEN -> "👇 点「摇」揭盅看点数"
+                com.example.funlife.data.model.DiceGameStage.REVEALING -> "✨ 揭盅..."
+                com.example.funlife.data.model.DiceGameStage.REVEALED -> "↓ 滑动骰盅向下盖住骰子"
             },
             fontSize = 11.sp,
-            color = PinkAccent.copy(alpha = 0.85f),
+            color = Color.White.copy(alpha = 0.7f),
             fontWeight = FontWeight.SemiBold
         )
 
-        // 主舞台
+        // 主舞台 - 顶部蓝色骰盅 + 中部留白 + 底部蓝色骰盘+骰子
         Box(
             modifier = Modifier
-                .size(width = 280.dp, height = 320.dp),
-            contentAlignment = Alignment.BottomCenter
+                .fillMaxWidth()
+                .height(420.dp),
+            contentAlignment = Alignment.Center
         ) {
-            // 阴影台面
+            // 蓝色骰盅 - 位于上半部，可竖直拖拽下来盖住骰子
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .size(width = 240.dp, height = 24.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.2f))
-            )
-            // 骰子区（在杯子下方位置）
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 40.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(top = 12.dp)
                     .graphicsLayer {
-                        scaleX = revealScale; scaleY = revealScale
-                        alpha = diceAlpha
-                        // DROPPING 时从空中掉落
-                        if (isDropping) {
-                            translationY = (1f - dropProgress) * -300f
-                        }
-                    }
-            ) {
-                DiceCluster(diceCount, diceValues, isShaking)
-            }
-            // 杯子
-            Box(
-                modifier = Modifier
-                    .graphicsLayer {
-                        translationY = cupRise
-                        // 翻转：从直立 (0°) 旋转到倒扣 (180°)
-                        rotationZ = cupFlip
+                        // 基础升降 + 用户拖拽偏移（仅 REVEALED/IDLE 可拖）
+                        translationY = cupRise + cupDragY
                         if (isShaking) {
                             translationX = shakeOffsetX
                             translationY = cupRise + shakeOffsetY
-                            rotationZ = cupFlip + shakeRotZ
+                            rotationZ = shakeRotZ
+                        }
+                    }
+                    .pointerInput(isDraggable) {
+                        if (!isDraggable) return@pointerInput
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (cupDragY >= coverThreshold) {
+                                    onCoverByDrag()
+                                    cupDragY = 0f
+                                } else {
+                                    cupDragY = 0f
+                                }
+                            },
+                            onDragCancel = { cupDragY = 0f }
+                        ) { _: androidx.compose.ui.input.pointer.PointerInputChange, dy: Float ->
+                            cupDragY = (cupDragY + dy).coerceIn(0f, coverDistancePx + 24f)
                         }
                     }
             ) {
                 CuteCup()
+                // 提示：当骰盅可拖时浮一行小字
+                if (isDraggable && cupDragY < 4f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 4.dp)
+                    ) {
+                        Text(
+                            "↓ 滑动骰盅向下盖住骰子",
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            // 底部 蓝色骰盘 + 骰子
+            Column(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    contentAlignment = Alignment.BottomCenter,
+                    modifier = Modifier.size(width = 280.dp, height = 130.dp)
+                ) {
+                    // 骰盘
+                    BluePlate(modifier = Modifier.align(Alignment.BottomCenter))
+                    // 骰子（放在骰盘之上）
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 22.dp)
+                            .graphicsLayer {
+                                scaleX = revealScale; scaleY = revealScale
+                                alpha = diceAlpha
+                                if (isDropping) {
+                                    translationY = (1f - dropProgress) * -300f
+                                }
+                            }
+                    ) {
+                        DiceCluster(diceCount, diceValues, isShaking)
+                    }
+                }
             }
         }
     }
 }
 
-// 可爱杯子 / 骰盅
+// 🔥 蓝色骰盅 - 圆顶状（参考图深蓝色穹顶）
 @Composable
 private fun CuteCup() {
-    Canvas(modifier = Modifier.size(width = 220.dp, height = 260.dp)) {
+    Canvas(modifier = Modifier.size(width = 240.dp, height = 260.dp)) {
         val w = size.width; val h = size.height
-        // 杯子主体（倒扣，下宽上窄）
+        // 杯身（圆顶状：上半圆 + 下方直筒）
         val bodyPath = Path().apply {
-            moveTo(w * 0.10f, h * 0.18f)
-            lineTo(w * 0.90f, h * 0.18f)
-            lineTo(w * 0.78f, h * 0.92f)
-            lineTo(w * 0.22f, h * 0.92f)
+            moveTo(w * 0.12f, h * 0.95f)
+            lineTo(w * 0.12f, h * 0.32f)
+            // 顶部圆弧
+            cubicTo(
+                w * 0.12f, h * 0.05f,
+                w * 0.88f, h * 0.05f,
+                w * 0.88f, h * 0.32f
+            )
+            lineTo(w * 0.88f, h * 0.95f)
             close()
         }
-        // 阴影
+        // 阴影背景（让骰盅看起来立体）
         drawPath(
             bodyPath,
-            brush = Brush.verticalGradient(
+            brush = Brush.linearGradient(
                 colors = listOf(
-                    Color(0xFFFF8FA3),
-                    Color(0xFFEC407A),
-                    Color(0xFFAD1457)
-                )
+                    SteelBlue,
+                    DeepBlue1,
+                    DeepBlue2,
+                    DeepBlue3
+                ),
+                start = Offset(w * 0.15f, h * 0.1f),
+                end = Offset(w * 0.95f, h * 0.95f)
             )
         )
-        // 杯口椭圆（顶部）
-        drawOval(
-            color = Color(0xFFAD1457),
-            topLeft = Offset(w * 0.10f, h * 0.12f),
-            size = Size(w * 0.80f, h * 0.14f)
-        )
-        drawOval(
-            color = Color(0xFFEC407A),
-            topLeft = Offset(w * 0.13f, h * 0.13f),
-            size = Size(w * 0.74f, h * 0.10f)
-        )
-        // 高光
-        drawPath(
-            Path().apply {
-                moveTo(w * 0.20f, h * 0.25f)
-                cubicTo(w * 0.18f, h * 0.55f, w * 0.22f, h * 0.75f, w * 0.30f, h * 0.88f)
-                lineTo(w * 0.36f, h * 0.88f)
-                cubicTo(w * 0.28f, h * 0.70f, w * 0.26f, h * 0.45f, w * 0.30f, h * 0.25f)
-                close()
-            },
-            color = Color.White.copy(alpha = 0.35f)
-        )
-        // 杯底圈
-        drawOval(
-            color = Color(0xFF880E4F).copy(alpha = 0.6f),
-            topLeft = Offset(w * 0.22f, h * 0.88f),
-            size = Size(w * 0.56f, h * 0.10f),
-            style = Stroke(width = 4f)
-        )
-        // 装饰小心 + 装饰
-        drawDecorHeart(Offset(w * 0.55f, h * 0.45f), 12f, Color.White.copy(alpha = 0.9f))
-        drawDecorHeart(Offset(w * 0.40f, h * 0.65f), 8f, Color.White.copy(alpha = 0.7f))
-        drawSparkleStar(Offset(w * 0.70f, h * 0.55f), 6f, Color.White.copy(alpha = 0.8f))
-        drawSparkleStar(Offset(w * 0.30f, h * 0.40f), 5f, Color.White.copy(alpha = 0.7f))
+        // 左侧高光
+        val hlPath = Path().apply {
+            moveTo(w * 0.18f, h * 0.85f)
+            lineTo(w * 0.18f, h * 0.34f)
+            cubicTo(
+                w * 0.18f, h * 0.14f,
+                w * 0.42f, h * 0.06f,
+                w * 0.50f, h * 0.06f
+            )
+            // 回到内侧
+            cubicTo(
+                w * 0.40f, h * 0.10f,
+                w * 0.26f, h * 0.20f,
+                w * 0.26f, h * 0.36f
+            )
+            lineTo(w * 0.26f, h * 0.85f)
+            close()
+        }
+        drawPath(hlPath, color = Color.White.copy(alpha = 0.10f))
 
-        // 蝴蝶结（杯口装饰）
-        val bowCx = w * 0.50f; val bowCy = h * 0.10f
-        drawPath(
-            Path().apply {
-                moveTo(bowCx, bowCy)
-                lineTo(bowCx - 18f, bowCy - 10f)
-                lineTo(bowCx - 22f, bowCy + 10f)
-                close()
-            },
-            color = Color(0xFFFFC0CB)
+        // 右下阴影
+        val shPath = Path().apply {
+            moveTo(w * 0.82f, h * 0.30f)
+            lineTo(w * 0.82f, h * 0.95f)
+            lineTo(w * 0.72f, h * 0.95f)
+            lineTo(w * 0.72f, h * 0.36f)
+            cubicTo(
+                w * 0.72f, h * 0.20f,
+                w * 0.62f, h * 0.10f,
+                w * 0.55f, h * 0.06f
+            )
+            cubicTo(
+                w * 0.70f, h * 0.07f,
+                w * 0.82f, h * 0.18f,
+                w * 0.82f, h * 0.30f
+            )
+            close()
+        }
+        drawPath(shPath, color = Color.Black.copy(alpha = 0.18f))
+
+        // 顶部最高光斑
+        drawCircle(
+            Color.White.copy(alpha = 0.20f),
+            radius = w * 0.05f,
+            center = Offset(w * 0.36f, h * 0.16f)
         )
-        drawPath(
-            Path().apply {
-                moveTo(bowCx, bowCy)
-                lineTo(bowCx + 18f, bowCy - 10f)
-                lineTo(bowCx + 22f, bowCy + 10f)
-                close()
-            },
-            color = Color(0xFFFFC0CB)
+        // 杯口（底沿环 - 因为这是倒扣的骰盅，"底沿"在视觉上是杯子底部）
+        drawOval(
+            color = PlateRim,
+            topLeft = Offset(w * 0.10f, h * 0.90f),
+            size = Size(w * 0.80f, h * 0.10f)
         )
-        drawCircle(Color(0xFFFF80AB), radius = 6f, center = Offset(bowCx, bowCy))
+        drawOval(
+            color = DeepBlue1,
+            topLeft = Offset(w * 0.12f, h * 0.91f),
+            size = Size(w * 0.76f, h * 0.07f)
+        )
+        // 底沿描边
+        drawOval(
+            color = Color.Black.copy(alpha = 0.5f),
+            topLeft = Offset(w * 0.10f, h * 0.90f),
+            size = Size(w * 0.80f, h * 0.10f),
+            style = Stroke(width = 2f)
+        )
     }
 }
 
-// 多颗骰子聚集
+// 🔥 蓝色骰盘 - 圆形托盘（参考图骰子下方蓝色椭圆盘）
+@Composable
+private fun BluePlate(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(width = 260.dp, height = 60.dp)) {
+        val w = size.width; val h = size.height
+        // 阴影
+        drawOval(
+            color = Color.Black.copy(alpha = 0.5f),
+            topLeft = Offset(0f, h * 0.25f),
+            size = Size(w, h * 0.75f)
+        )
+        // 盘外圈
+        drawOval(
+            brush = Brush.verticalGradient(
+                colors = listOf(SteelBlue, DeepBlue1, DeepBlue2),
+                startY = 0f, endY = h
+            ),
+            topLeft = Offset(w * 0.02f, h * 0.10f),
+            size = Size(w * 0.96f, h * 0.85f)
+        )
+        // 盘内圈（更深）
+        drawOval(
+            brush = Brush.verticalGradient(
+                colors = listOf(DeepBlue2, DeepBlue3, PlateRim),
+                startY = h * 0.15f, endY = h * 0.95f
+            ),
+            topLeft = Offset(w * 0.07f, h * 0.20f),
+            size = Size(w * 0.86f, h * 0.70f)
+        )
+        // 高光
+        drawOval(
+            color = Color.White.copy(alpha = 0.10f),
+            topLeft = Offset(w * 0.12f, h * 0.22f),
+            size = Size(w * 0.76f, h * 0.18f)
+        )
+    }
+}
+
+// 多颗骰子聚集 - 紧凑分布在骰盘上（等距投影占用空间略大）
 @Composable
 private fun DiceCluster(count: Int, values: List<Int>, isShaking: Boolean) {
-    // 简单 grid 布局：每行 3 颗
-    val rows = (count + 2) / 3
-    val rowItems = mutableListOf<List<Int>>()
-    for (r in 0 until rows) {
-        val start = r * 3
-        val end = (start + 3).coerceAtMost(count)
-        rowItems.add((start until end).toList())
-    }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        rowItems.forEach { rowIdxs ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                rowIdxs.forEach { i ->
-                    Dice3DCube(value = values.getOrElse(i) { 1 }, isShaking = isShaking, idx = i)
+    // 5 颗及以下：错位两排（前排 3 + 后排 2），更接近参考图
+    if (count <= 5) {
+        val front = values.take(3.coerceAtMost(count))
+        val back = if (count > 3) values.subList(3, count) else emptyList()
+        Column(
+            verticalArrangement = Arrangement.spacedBy((-14).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // 后排（小一点、上抬错位）
+            if (back.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    back.forEachIndexed { i, v ->
+                        Dice2D(value = v, isShaking = isShaking, idx = i + 100, sizeDp = 50)
+                    }
+                }
+            }
+            // 前排
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                front.forEachIndexed { i, v ->
+                    Dice2D(value = v, isShaking = isShaking, idx = i, sizeDp = 56)
+                }
+            }
+        }
+    } else {
+        // 6 颗以上：每行 5 颗
+        val rowItems = values.chunked(5)
+        Column(
+            verticalArrangement = Arrangement.spacedBy((-8).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            rowItems.forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    row.forEachIndexed { i, v ->
+                        Dice2D(value = v, isShaking = isShaking, idx = i, sizeDp = 44)
+                    }
                 }
             }
         }
     }
 }
 
-// 单颗真 3D 立方体骰子 - 6个面拼成立方体
+/**
+ * 🔥 等距投影 3D 骰子 - 同时展示前/顶/右三面，复刻参考图立体感
+ * 主面 = value，顶面/右面是与 value 相邻的两个合理面（按真实骰子相邻关系）。
+ */
 @Composable
-private fun Dice3DCube(value: Int, isShaking: Boolean, idx: Int) {
-    val density = LocalDensity.current
-    val sizeDp = 56.dp
-    val halfPx = with(density) { sizeDp.toPx() / 2f }
-    val cam = 16f * density.density
-    
-    val infinite = rememberInfiniteTransition(label = "cube$idx")
-    // 持续 3D 旋转动画（X+Y 轴），不同骰子速度不同
-    val cubeRotX by infinite.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(700 + idx * 70, easing = LinearEasing)),
-        label = "crx$idx"
+private fun Dice2D(value: Int, isShaking: Boolean, idx: Int, sizeDp: Int = 56) {
+    // 摇晃时整体抖动 + 旋转
+    val infinite = rememberInfiniteTransition(label = "d2d$idx")
+    val jitterRot by infinite.animateFloat(
+        initialValue = -6f, targetValue = 6f,
+        animationSpec = infiniteRepeatable(
+            tween(120 + (idx * 30) % 80, easing = EaseInOut), RepeatMode.Reverse
+        ),
+        label = "jr$idx"
     )
-    val cubeRotY by infinite.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(850 + idx * 90, easing = LinearEasing)),
-        label = "cry$idx"
+    val jitterY by infinite.animateFloat(
+        initialValue = -3f, targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            tween(90 + (idx * 23) % 60, easing = EaseInOut), RepeatMode.Reverse
+        ),
+        label = "jy$idx"
     )
-    // 静态时的微微浮动（让 IDLE/REVEALED 时也有活力）
-    val idleRotY by infinite.animateFloat(
-        initialValue = -18f, targetValue = 18f,
-        animationSpec = infiniteRepeatable(tween(2500, easing = EaseInOut), RepeatMode.Reverse),
-        label = "idle$idx"
-    )
-    
-    // 骰子相对面之和为 7（标准骰子规则）
-    val faceFront = value
-    val faceBack = 7 - value
-    val faceTop = 2
-    val faceBottom = 5
-    val faceRight = 3
-    val faceLeft = 4
-    
+
+    // 主面对应的相邻顶面 / 右面（真实骰子相邻关系任选）
+    val (topVal, rightVal) = remember(value) {
+        when (value) {
+            1 -> 2 to 3
+            2 -> 1 to 4
+            3 -> 1 to 5
+            4 -> 2 to 6
+            5 -> 3 to 6
+            6 -> 4 to 5
+            else -> 2 to 3
+        }
+    }
+
     Box(
         modifier = Modifier
-            .size(sizeDp)
+            .size(sizeDp.dp)
             .graphicsLayer {
-                cameraDistance = cam
                 if (isShaking) {
-                    rotationX = cubeRotX
-                    rotationY = cubeRotY
-                } else {
-                    rotationX = -22f  // 稍微俯视角度让 3D 立体感更明显
-                    rotationY = idleRotY
+                    rotationZ = jitterRot
+                    translationY = jitterY
                 }
             }
     ) {
-        // 前面 (Front - 默认位置)
-        CubeFace(faceFront, cam, Modifier
-            .size(sizeDp)
-            .graphicsLayer {
-                cameraDistance = cam
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            // 立方体顶点（更平缓的 isometric 透视，深度约 35%）
+            fun p(x: Float, y: Float) = Offset(x * w, y * h)
+            val ftl = p(0.06f, 0.36f)
+            val ftr = p(0.66f, 0.36f)
+            val fbl = p(0.06f, 0.92f)
+            val fbr = p(0.66f, 0.92f)
+            // 深度向右上偏移 dx=0.20, dy=-0.18
+            val ttl = p(0.26f, 0.18f)
+            val ttr = p(0.86f, 0.18f)
+            val rbb = p(0.86f, 0.74f)
+
+            val red = Color(0xFFE53935)
+            val black = Color(0xFF1A1A1A)
+            fun pipColor(v: Int) = if (v == 1 || v == 4) red else black
+            fun pipScale(v: Int) = if (v == 1) 1.7f else 1f
+
+            val pipsForFace: (Int) -> List<Pair<Float, Float>> = { v ->
+                when (v) {
+                    1 -> listOf(0.5f to 0.5f)
+                    2 -> listOf(0.28f to 0.28f, 0.72f to 0.72f)
+                    3 -> listOf(0.28f to 0.28f, 0.5f to 0.5f, 0.72f to 0.72f)
+                    4 -> listOf(0.28f to 0.28f, 0.72f to 0.28f, 0.28f to 0.72f, 0.72f to 0.72f)
+                    5 -> listOf(0.28f to 0.28f, 0.72f to 0.28f, 0.5f to 0.5f, 0.28f to 0.72f, 0.72f to 0.72f)
+                    6 -> listOf(0.28f to 0.28f, 0.72f to 0.28f, 0.28f to 0.5f, 0.72f to 0.5f, 0.28f to 0.72f, 0.72f to 0.72f)
+                    else -> emptyList()
+                }
             }
-        )
-        // 后面 (Back - rotationY 180°)
-        CubeFace(faceBack, cam, Modifier
-            .size(sizeDp)
-            .graphicsLayer {
-                cameraDistance = cam
-                rotationY = 180f
+
+            // ─ 地面柔和阴影 ─
+            drawOval(
+                color = Color.Black.copy(alpha = 0.30f),
+                topLeft = Offset(w * 0.02f, h * 0.91f),
+                size = Size(w * 0.94f, h * 0.09f)
+            )
+
+            // ─ 右面（白色但暗一档，背光）─
+            val rightPath = Path().apply {
+                moveTo(ftr.x, ftr.y); lineTo(ttr.x, ttr.y); lineTo(rbb.x, rbb.y); lineTo(fbr.x, fbr.y); close()
             }
-        )
-        // 上面 (Top) - rotationX -90° 让面变水平朝上, translationY 推到上方
-        CubeFace(faceTop, cam, Modifier
-            .size(sizeDp)
-            .graphicsLayer {
-                cameraDistance = cam
-                rotationX = -90f
-                translationY = -halfPx
+            drawPath(
+                path = rightPath,
+                brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFFCED3D9), Color(0xFF9097A0)),
+                    start = ftr, end = rbb
+                )
+            )
+
+            // ─ 顶面（最亮的白色）─
+            val topPath = Path().apply {
+                moveTo(ttl.x, ttl.y); lineTo(ttr.x, ttr.y); lineTo(ftr.x, ftr.y); lineTo(ftl.x, ftl.y); close()
             }
-        )
-        // 下面 (Bottom)
-        CubeFace(faceBottom, cam, Modifier
-            .size(sizeDp)
-            .graphicsLayer {
-                cameraDistance = cam
-                rotationX = 90f
-                translationY = halfPx
+            drawPath(
+                path = topPath,
+                brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFFFFFFFF), Color(0xFFF1F4F7)),
+                    start = ttl, end = ftr
+                )
+            )
+
+            // ─ 前面（亮白，正面散射光）─
+            val frontPath = Path().apply {
+                moveTo(ftl.x, ftl.y); lineTo(ftr.x, ftr.y); lineTo(fbr.x, fbr.y); lineTo(fbl.x, fbl.y); close()
             }
-        )
-        // 左面 (Left)
-        CubeFace(faceLeft, cam, Modifier
-            .size(sizeDp)
-            .graphicsLayer {
-                cameraDistance = cam
-                rotationY = 90f
-                translationX = -halfPx
+            drawPath(
+                path = frontPath,
+                brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFFFAFBFC), Color(0xFFD8DDE3)),
+                    start = ftl, end = fbr
+                )
+            )
+
+            // ─ 边棱亮白高光（模拟圆角反光，柔化棱角）─
+            drawLine(color = Color.White.copy(alpha = 0.95f), start = ttl, end = ttr, strokeWidth = 2f)  // 顶面后缘
+            drawLine(color = Color.White.copy(alpha = 0.85f), start = ttl, end = ftl, strokeWidth = 1.6f) // 顶左前缘
+            drawLine(color = Color.White.copy(alpha = 0.80f), start = ftl, end = ftr, strokeWidth = 1.6f) // 顶前缘
+            // 右面交界线（顶/右、前/右）— 偏暗细线区分
+            drawLine(color = Color(0xFF7A818A), start = ttr, end = ftr, strokeWidth = 1.0f)
+            drawLine(color = Color(0xFF7A818A).copy(alpha = 0.85f), start = ftr, end = fbr, strokeWidth = 1.0f)
+            // 底前缘（轻暗）
+            drawLine(color = Color(0xFFB8BFC6), start = fbl, end = fbr, strokeWidth = 1.0f)
+            drawLine(color = Color(0xFFB8BFC6), start = ftl, end = fbl, strokeWidth = 1.0f)
+
+            // 局部 (u,v) → 屏幕坐标
+            fun frontPos(u: Float, v: Float) = Offset(
+                ftl.x + u * (ftr.x - ftl.x) + v * (fbl.x - ftl.x),
+                ftl.y + u * (ftr.y - ftl.y) + v * (fbl.y - ftl.y)
+            )
+            fun topPos(u: Float, v: Float) = Offset(
+                ttl.x + u * (ttr.x - ttl.x) + v * (ftl.x - ttl.x),
+                ttl.y + u * (ttr.y - ttl.y) + v * (ftl.y - ttl.y)
+            )
+            fun rightPos(u: Float, v: Float) = Offset(
+                ftr.x + u * (ttr.x - ftr.x) + v * (fbr.x - ftr.x),
+                ftr.y + u * (ttr.y - ftr.y) + v * (fbr.y - ftr.y)
+            )
+
+            // 前面 pip（最大）
+            val frontPipR = w * 0.060f
+            pipsForFace(value).forEach { (u, v) ->
+                drawCircle(pipColor(value), radius = frontPipR * pipScale(value), center = frontPos(u, v))
             }
-        )
-        // 右面 (Right)
-        CubeFace(faceRight, cam, Modifier
-            .size(sizeDp)
-            .graphicsLayer {
-                cameraDistance = cam
-                rotationY = -90f
-                translationX = halfPx
+            // 顶面 pip
+            val topPipR = w * 0.046f
+            pipsForFace(topVal).forEach { (u, v) ->
+                drawCircle(pipColor(topVal), radius = topPipR * pipScale(topVal), center = topPos(u, v))
             }
-        )
+            // 右面 pip
+            val rightPipR = w * 0.044f
+            pipsForFace(rightVal).forEach { (u, v) ->
+                drawCircle(pipColor(rightVal), radius = rightPipR * pipScale(rightVal), center = rightPos(u, v))
+            }
+        }
     }
 }
 
-// 立方体的单一面
+// 单颗真 3D 立方体骰子 - 使用 OpenGL ES 2.0 渲染
 @Composable
-private fun CubeFace(value: Int, cam: Float, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val w = size.width; val h = size.height
-        val cr = androidx.compose.ui.geometry.CornerRadius(w * 0.16f)
-        // 阴影底
-        drawRoundRect(
-            color = Color(0xFFD0D0D0),
-            topLeft = Offset(2f, 4f),
-            size = Size(w - 4f, h - 4f),
-            cornerRadius = cr
-        )
-        // 主体白底 + 立体渐变
-        drawRoundRect(
-            brush = Brush.linearGradient(
-                colors = listOf(Color.White, Color(0xFFF5F5F5), Color(0xFFE8E8E8))
-            ),
-            size = Size(w, h),
-            cornerRadius = cr
-        )
-        // 边框 - 粉色装饰
-        drawRoundRect(
-            color = Color(0xFFFF80AB),
-            size = Size(w, h),
-            cornerRadius = cr,
-            style = Stroke(width = 2.5f)
-        )
-        // 内描边深粉
-        drawRoundRect(
-            color = Color(0xFFEC407A).copy(alpha = 0.3f),
-            topLeft = Offset(3f, 3f),
-            size = Size(w - 6f, h - 6f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.13f),
-            style = Stroke(width = 1f)
-        )
-        // 点位
-        drawDicePips(value, w, h)
-        // 顶部高光（模拟 3D 立体光照）
-        drawRoundRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color.White.copy(alpha = 0.5f), Color.Transparent),
-                startY = 0f, endY = h * 0.4f
-            ),
-            topLeft = Offset(w * 0.12f, w * 0.10f),
-            size = Size(w * 0.40f, h * 0.25f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.10f)
-        )
-    }
-}
+private fun Dice3DCube(value: Int, isShaking: Boolean, idx: Int) {
+    val sizeDp = 64.dp
+    // 持续旋转角度（摇晃时快速翻滚；静止时缓慢飘动）
+    val infinite = rememberInfiniteTransition(label = "glcube$idx")
+    val spinX by infinite.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(if (isShaking) 600 + idx * 60 else 6000, easing = LinearEasing)
+        ),
+        label = "spx$idx"
+    )
+    val spinY by infinite.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(if (isShaking) 750 + idx * 90 else 8000, easing = LinearEasing)
+        ),
+        label = "spy$idx"
+    )
+    val spinZ by infinite.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(if (isShaking) 900 + idx * 110 else 10000, easing = LinearEasing)
+        ),
+        label = "spz$idx"
+    )
 
-private fun DrawScope.drawDicePips(value: Int, w: Float, h: Float) {
-    val r = w * 0.09f
-    val pipColor = Color(0xFFD81B60)
-    val cx = w / 2; val cy = h / 2
-    val left = w * 0.28f; val right = w * 0.72f
-    val top = h * 0.28f; val bottom = h * 0.72f
-    fun pip(x: Float, y: Float) {
-        drawCircle(pipColor, r, Offset(x, y))
-        drawCircle(Color(0xFF880E4F).copy(alpha = 0.6f), r * 0.4f, Offset(x + r * 0.3f, y + r * 0.3f))
-    }
-    when (value) {
-        1 -> pip(cx, cy)
-        2 -> { pip(left, top); pip(right, bottom) }
-        3 -> { pip(left, top); pip(cx, cy); pip(right, bottom) }
-        4 -> { pip(left, top); pip(right, top); pip(left, bottom); pip(right, bottom) }
-        5 -> { pip(left, top); pip(right, top); pip(cx, cy); pip(left, bottom); pip(right, bottom) }
-        6 -> { pip(left, top); pip(right, top); pip(left, cy); pip(right, cy); pip(left, bottom); pip(right, bottom) }
-    }
+    // 静止状态大角度倾斜，同时露出 3 个面（前/上/右），让立方体感非常明显
+    val idleSwayY by infinite.animateFloat(
+        initialValue = -8f, targetValue = 8f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = EaseInOut), RepeatMode.Reverse),
+        label = "sway$idx"
+    )
+    val targetRotX = if (isShaking) spinX else -28f
+    val targetRotY = if (isShaking) spinY else (35f + idleSwayY + (idx % 3) * 6f)
+    val targetRotZ = if (isShaking) spinZ else 0f
+
+    AndroidView(
+        modifier = Modifier.size(sizeDp),
+        factory = { ctx ->
+            DiceCubeGLView(ctx).apply {
+                cubeRenderer.faceFront = value
+            }
+        },
+        update = { v ->
+            v.cubeRenderer.faceFront = value
+            v.cubeRenderer.rotX = targetRotX
+            v.cubeRenderer.rotY = targetRotY
+            v.cubeRenderer.rotZ = targetRotZ
+        }
+    )
 }
 
 // ════════════════════════════════════════════════════════════

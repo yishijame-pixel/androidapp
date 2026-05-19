@@ -286,6 +286,8 @@ fun BarChart(
                 .height(200.dp)
                 .padding(16.dp)
         ) {
+            // 🔒 防御：data 为空直接返回，避免 width / 0 触发 Infinity
+            if (data.isEmpty()) return@Canvas
             val width = size.width
             val height = size.height
             val barWidth = width / data.size * 0.7f

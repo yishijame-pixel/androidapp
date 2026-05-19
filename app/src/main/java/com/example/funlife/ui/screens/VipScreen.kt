@@ -114,9 +114,10 @@ fun VipScreen(
                         bonusCoins = coins
                         showVipAnimation = true
                         
-                        // 设置标记，让HomeScreen显示能量光束动画
+                        // 🔒 安全修复：VIP 动画标志按 userId 隔离，避免不同账号互相触发动画
                         val prefs = navController.context.getSharedPreferences("vip_animation", android.content.Context.MODE_PRIVATE)
-                        prefs.edit().putBoolean("show_beam_animation", true).apply()
+                        val uid = userSession?.userId ?: 0L
+                        prefs.edit().putBoolean("show_beam_animation_$uid", true).apply()
                     }
                 }
             }
@@ -492,9 +493,10 @@ fun VipScreen(
                     activatedVipLevel = null
                     bonusCoins = 0
                     
-                    // 设置首页首次进入特效标记
+                    // 🔒 同上：首页首次进入特效标志按 userId 隔离
                     val prefs = context.getSharedPreferences("vip_animation", android.content.Context.MODE_PRIVATE)
-                    prefs.edit().putBoolean("show_first_entry_effect", true).apply()
+                    val uid = userSession?.userId ?: 0L
+                    prefs.edit().putBoolean("show_first_entry_effect_$uid", true).apply()
                 }
             )
         }
@@ -3556,3 +3558,4 @@ fun CuteLoadingAnimation() {
         }
     }
 }
+

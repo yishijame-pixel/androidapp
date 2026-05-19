@@ -22,7 +22,7 @@ import java.util.Calendar
 import kotlin.random.Random
 
 @OptIn(FlowPreview::class)
-class ChatViewModel(application: Application, private val userId: Long) : AndroidViewModel(application) {
+class ChatViewModel(application: Application, val userId: Long) : AndroidViewModel(application) {
 
     private val database = (application as FunLifeApplication).database
     private val repository = ChatRepository(
@@ -31,7 +31,8 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
         database.chatPersonaDao()
     )
     private val ruleEngine = RuleEngine()
-    private val aiService = AiService(application)
+    // 🔒 安全修复：把 userId 传给 AiService，让 API Key 按账号加密隔离存储
+    private val aiService = AiService(application, userId)
 
     // 内置人格
     private val builtinPersonas = listOf(
@@ -93,15 +94,39 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
         ),
     )
 
+    // 持久化偏好（按用户区分人格选择，避免多账号互相覆盖）
+    private val prefs = application.getSharedPreferences("chat_settings", Context.MODE_PRIVATE)
+    private val lastPersonaKey = "last_persona_id_$userId"
+    // 🔒 安全修复：人格自定义头像按 (userId, personaId) 存储于 SharedPreferences，
+    // 不再写入全局 chat_personas 表，避免跨账户互相覆盖头像。
+    private fun avatarOverrideKey(personaId: String) = "persona_avatar_${userId}_$personaId"
+    private val savedPersonaId = prefs.getString(lastPersonaKey, "girlfriend") ?: "girlfriend"
+    private val savedPersona = builtinPersonas.find { it.id == savedPersonaId } ?: builtinPersonas[1]
+
+    // 当前用户的人格头像覆盖表 (personaId -> uri)
+    private val _avatarOverrides = MutableStateFlow(loadAvatarOverrides())
+
+    private fun loadAvatarOverrides(): Map<String, String> {
+        val prefix = "persona_avatar_${userId}_"
+        return prefs.all.entries
+            .filter { it.key.startsWith(prefix) && it.value is String }
+            .associate { it.key.removePrefix(prefix) to (it.value as String) }
+    }
+
     // UI 状态
     val messages: Flow<List<ChatMessage>> = repository.getAllMessages(userId)
+    // 人格列表：数据库原始人格 ⊔ 当前用户的头像覆盖
     val personas: Flow<List<ChatPersona>> = repository.getAllPersonas()
+        .combine(_avatarOverrides) { list, overrides ->
+            if (overrides.isEmpty()) list
+            else list.map { p -> overrides[p.id]?.let { p.copy(customAvatarUri = it) } ?: p }
+        }
     val bills: Flow<List<Bill>> = repository.getAllBills(userId)
 
-    private val _currentPersonaId = MutableStateFlow("girlfriend")
+    private val _currentPersonaId = MutableStateFlow(savedPersonaId)
     val currentPersonaId: StateFlow<String> = _currentPersonaId.asStateFlow()
 
-    private val _currentPersona = MutableStateFlow(builtinPersonas[1]) // 默认女友
+    private val _currentPersona = MutableStateFlow(savedPersona)
     val currentPersona: StateFlow<ChatPersona> = _currentPersona.asStateFlow()
 
     private val _isTyping = MutableStateFlow(false)
@@ -111,7 +136,6 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
     // 字体大小持久化
-    private val prefs = application.getSharedPreferences("chat_settings", Context.MODE_PRIVATE)
     private val _fontSize = MutableStateFlow(prefs.getFloat("font_size", 15f))
     val fontSize: StateFlow<Float> = _fontSize.asStateFlow()
 
@@ -148,6 +172,8 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
             if (count.isEmpty()) {
                 sendWelcomeMessage()
             }
+            // 🔥 进入聊天时，根据本月已用预算让人格主动提醒（同人格当日同阈值只一次）
+            maybeProactivelyRemindBudget()
         }
     }
 
@@ -176,6 +202,8 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
     fun switchPersona(personaId: String) {
         viewModelScope.launch {
             _currentPersonaId.value = personaId
+            // 持久化用户最后使用的人格，下次进入页面自动恢复
+            prefs.edit().putString(lastPersonaKey, personaId).apply()
             loadPersona(personaId)
             // 切换人格时发送过渡消息
             val persona = _currentPersona.value
@@ -197,20 +225,26 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
                     personaId = personaId, type = "system"
                 )
             )
+            // 🔥 切换人格后，由新人格主动提醒一次本月预算情况
+            maybeProactivelyRemindBudget()
         }
     }
 
     private suspend fun loadPersona(personaId: String) {
-        val persona = repository.getPersonaById(personaId)
+        val raw = repository.getPersonaById(personaId)
             ?: builtinPersonas.find { it.id == personaId }
             ?: builtinPersonas[1]
-        _currentPersona.value = persona
+        // 🔒 应用当前用户的头像覆盖
+        val override = _avatarOverrides.value[personaId]
+        _currentPersona.value = if (override != null) raw.copy(customAvatarUri = override) else raw
     }
 
     fun updatePersonaAvatar(personaId: String, uri: String) {
         viewModelScope.launch {
-            repository.updateCustomAvatar(personaId, uri)
-            // 如果是当前人格，刷新
+            // 🔒 安全修复：只在当前用户的 prefs 里记覆盖，不调 repository.updateCustomAvatar
+            //   （后者会修改全局表、跨账户泄漏）。
+            prefs.edit().putString(avatarOverrideKey(personaId), uri).apply()
+            _avatarOverrides.value = _avatarOverrides.value + (personaId to uri)
             if (_currentPersonaId.value == personaId) {
                 loadPersona(personaId)
             }
@@ -542,6 +576,183 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
     fun setMonthlyBudget(budget: Float) {
         _monthlyBudget.value = budget
         prefs.edit().putFloat("monthly_budget", budget).apply()
+        // 🔥 设置预算后，让人格立即"主动"问候/提醒一句（重置今日去重，确保被发出）
+        viewModelScope.launch {
+            clearTodayBudgetDedup()
+            sendBudgetSetAcknowledgement(budget)
+            maybeProactivelyRemindBudget(force = true)
+        }
+    }
+
+    /**
+     * 🔥 用户设置预算时，人格主动一句"知道啦"
+     */
+    private suspend fun sendBudgetSetAcknowledgement(budget: Float) {
+        val pid = _currentPersonaId.value
+        val b = String.format("%.0f", budget.toDouble())
+        val text = when (pid) {
+            "dad" -> "行，这个月就 $b ，省着点花。爸盯着你呢。"
+            "girlfriend" -> "好哒～本月预算 $b ，亲爱的要乖乖控制哦～♡ 我会盯着你的♡"
+            "roast" -> "$b 块？就这？行吧行吧，我等着看你怎么爆掉。"
+            "gentle" -> "好的呢～本月预算就定 $b 啦，我会陪你慢慢看着花～"
+            "eunuch" -> "奴才领旨！本月内务府银两上限 $b 两，奴才必当严加把守！"
+            "buddha" -> "善哉。本月以 $b 为戒，量入为出，方得清净。"
+            "cat" -> "本月就 $b ？哼，本喵会盯着铲屎官的爪子的喵～"
+            "grandma" -> "好嘞乖孙！这个月就 $b 块，奶奶帮你看着，可别乱花哦！"
+            else -> "好的，本月预算 $b。"
+        }
+        repository.insertMessage(
+            ChatMessage(
+                userId = userId, role = "ai",
+                content = text, personaId = pid, type = "text"
+            )
+        )
+    }
+
+    /**
+     * 🔥 主动预算提醒：在进入聊天/切换人格/设置预算时调用。
+     * 同一天同一人格同一阈值只发一次（去重），避免刷屏。
+     * @param force 为 true 时跳过去重（用于"设置预算"场景立刻反馈）
+     */
+    private suspend fun maybeProactivelyRemindBudget(force: Boolean = false) {
+        val budget = _monthlyBudget.value
+        if (budget <= 0f) return
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
+        }
+        val monthTotal = Math.abs(repository.getTotalAmount(userId, cal.timeInMillis, System.currentTimeMillis()))
+        val ratio = if (budget > 0) monthTotal / budget else 0.0
+        val thresholdLevel = when {
+            ratio >= 1.0 -> 2
+            ratio >= 0.8 -> 1
+            ratio >= 0.5 -> 0  // 半数也来个轻松问候
+            else -> -1
+        }
+        if (thresholdLevel < 0 && !force) return
+
+        val pid = _currentPersonaId.value
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+            .format(java.util.Date())
+        val dedupKey = "budget_proactive_${pid}_${today}_${thresholdLevel}"
+        if (!force && prefs.getBoolean(dedupKey, false)) return
+        prefs.edit().putBoolean(dedupKey, true).apply()
+
+        val line = resolveProactiveBudgetLine(pid, ratio, monthTotal, budget.toDouble(), thresholdLevel, today)
+        if (line.isNotBlank()) {
+            // 轻微延迟，避免与人格切换/欢迎消息挤在同一瞬间
+            delay(400)
+            repository.insertMessage(
+                ChatMessage(
+                    userId = userId, role = "ai",
+                    content = line, personaId = pid, type = "text"
+                )
+            )
+        }
+    }
+
+    /**
+     * 🔥 主动预算提醒文案：优先AI（每天全局只调一次），失败/已用配额则回退本地模板
+     */
+    private suspend fun resolveProactiveBudgetLine(
+        pid: String, ratio: Double, used: Double, budget: Double, level: Int, today: String
+    ): String {
+        val aiUsedKey = "budget_ai_used_$today"
+        val aiAlreadyUsed = prefs.getBoolean(aiUsedKey, false)
+        if (aiService.isAvailable && !aiAlreadyUsed) {
+            val pct = (ratio * 100).toInt().coerceAtLeast(0)
+            val u = String.format("%.0f", used)
+            val b = String.format("%.0f", budget)
+            val status = when (level) {
+                2 -> "本月预算已超支（已花${u}/${b}，约${pct}%）"
+                1 -> "本月预算已用约${pct}%（${u}/${b}），临近上限"
+                0 -> "本月预算已用约${pct}%（${u}/${b}），过半"
+                else -> "本月预算${b}已记录"
+            }
+            val prompt = "请你严格按当前人格的语气，主动提醒用户一句关于本月预算的话。" +
+                    "情况：$status。要求：一句话，自然口语，不要重复数字两次，不要使用方括号或角色名前缀。"
+            val ai = aiService.getChatReply(_currentPersona.value, prompt)
+            if (ai is AiResult.Success && ai.reply.isNotBlank()) {
+                prefs.edit().putBoolean(aiUsedKey, true).apply()
+                return ai.reply
+            }
+            android.util.Log.w("ChatVM", "预算提醒AI失败，回退本地模板")
+        }
+        return personaProactiveBudgetLine(pid, ratio, used, budget, level)
+    }
+
+    /**
+     * 🔥 清空今日预算提醒去重标记（设置预算时调用）
+     */
+    private fun clearTodayBudgetDedup() {
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+            .format(java.util.Date())
+        val editor = prefs.edit()
+        for (key in prefs.all.keys.toList()) {
+            if (key.startsWith("budget_proactive_") && key.contains("_${today}_")) {
+                editor.remove(key)
+            }
+        }
+        // 🔥 同时清掉今日 AI 调用配额，让"设置预算"也能用一次AI生成
+        editor.remove("budget_ai_used_$today")
+        editor.apply()
+    }
+
+    /**
+     * 🔥 各人格主动提醒文案（按阈值分级）
+     */
+    private fun personaProactiveBudgetLine(
+        pid: String, ratio: Double, used: Double, budget: Double, level: Int
+    ): String {
+        val u = String.format("%.0f", used)
+        val b = String.format("%.0f", budget)
+        val pct = (ratio * 100).toInt().coerceAtLeast(0)
+        return when (level) {
+            2 -> when (pid) { // 已超预算
+                "dad" -> "你这月预算超啦，$u/$b ，下次悠着点！"
+                "girlfriend" -> "亲爱的～预算超啦😢 $u/$b ，要心疼钱包嘛～♡"
+                "roast" -> "恭喜你，预算光荣阵亡：$u/$b ，年度败家奖+1。"
+                "gentle" -> "已经超出本月预算啦～$u/$b ，剩下的日子稍微忍一忍好不好～"
+                "eunuch" -> "启禀皇上！本月内务府银两已透支：$u/$b 两，望皇上节流！"
+                "buddha" -> "施主，欲壑难填。$u/$b ，可知止乎？"
+                "cat" -> "喵呜！预算炸了！$u/$b ，铲屎官要破产了喵！"
+                "grandma" -> "哎呦败家孙子！都超啦 $u/$b ！奶奶心疼啊！"
+                else -> "本月预算已超：$u/$b ，要注意了！"
+            }
+            1 -> when (pid) { // ≥80%
+                "dad" -> "你这月已经花了 ${pct}% 了，省着点用。"
+                "girlfriend" -> "亲爱的，预算已经用 ${pct}% 啦～剩下的日子要忍住哦♡"
+                "roast" -> "${pct}%了哦，再嗨一下就爆了，加油（不是）。"
+                "gentle" -> "本月预算已经用了 ${pct}% 啦～后面慢一点会更好哦～"
+                "eunuch" -> "皇上！本月银两已用 ${pct}%，奴才斗胆提醒，望皇上明鉴！"
+                "buddha" -> "施主，已耗 ${pct}%。前路漫漫，节用为上。"
+                "cat" -> "喵～用 ${pct}% 了，铲屎官的猫粮钱可要留好喵！"
+                "grandma" -> "我的乖孙，钱都花 ${pct}% 啦！剩下的日子奶奶可看着你呢！"
+                else -> "本月预算已用 ${pct}%，注意控制～"
+            }
+            0 -> when (pid) { // ≥50% 的轻提醒
+                "dad" -> "本月花到 ${pct}% 了，心里要有数。"
+                "girlfriend" -> "亲爱的～本月已经用了 ${pct}% 啦，要乖乖记账哦♡"
+                "roast" -> "${pct}%已耗，节奏不错，继续保持（？）。"
+                "gentle" -> "本月预算到 ${pct}% 啦，节奏还可以呢～"
+                "eunuch" -> "皇上，本月银两已用 ${pct}%，奴才仅作禀报。"
+                "buddha" -> "${pct}% 已逝，余者珍之。"
+                "cat" -> "${pct}% 了喵，铲屎官表现还行～"
+                "grandma" -> "孙啊，已经花到 ${pct}% 啦，奶奶就提醒一下哈～"
+                else -> "本月已用 ${pct}%。"
+            }
+            else -> when (pid) { // force = true 但未到阈值
+                "dad" -> "知道了，预算我盯着。"
+                "girlfriend" -> "记住啦～预算我帮你看着哦♡"
+                "roast" -> "得嘞，预算这事儿交给我吐槽。"
+                "gentle" -> "好的呢，预算我会帮你留意～"
+                "eunuch" -> "奴才已记下，皇上放心便是！"
+                "buddha" -> "心中有数，万事可平。"
+                "cat" -> "喵，本喵记下了，别想偷偷花～"
+                "grandma" -> "奶奶记下啦，乖孙别乱花！"
+                else -> "好的，预算我已记下。"
+            }
+        }
     }
 
     private suspend fun checkBudgetWarning(newBillAmount: Double) {
@@ -583,6 +794,20 @@ class ChatViewModel(application: Application, private val userId: Long) : Androi
             repository.insertMessage(
                 ChatMessage(userId = userId, role = "ai", content = warning, personaId = pid, type = "system")
             )
+            // 🔥 系统提醒之后，人格再用聊天气泡"主动"说一句，更像真人提醒（优先AI，每日节流）
+            val level = if (ratio >= 1.0) 2 else 1
+            val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+                .format(java.util.Date())
+            val chatLine = resolveProactiveBudgetLine(pid, ratio, monthTotal, budget.toDouble(), level, today)
+            if (chatLine.isNotBlank()) {
+                delay(500)
+                repository.insertMessage(
+                    ChatMessage(
+                        userId = userId, role = "ai",
+                        content = chatLine, personaId = pid, type = "text"
+                    )
+                )
+            }
         }
     }
 

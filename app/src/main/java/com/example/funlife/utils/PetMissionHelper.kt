@@ -44,47 +44,58 @@ object PetMissionHelper {
     private fun sp(context: Context) =
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
-    /** 若日期改变，重置所有进度 */
-    private fun ensureFreshDay(context: Context) {
+    // 🔒 安全修复：任务进度、领取状态按用户 ID 隔离，避免 A 账号完成任务后 B 账号不能领。
+    private fun progressKey(userId: Long, type: MissionType) = "u${userId}_${type.key}"
+    private fun claimedKey(userId: Long, type: MissionType) = "u${userId}_${type.key}_claimed"
+    private fun dateKey(userId: Long) = "u${userId}_$KEY_DATE"
+
+    /** 若日期改变，重置该用户当天进度（不再 clear() 整个文件，避免误删其他账号进度） */
+    private fun ensureFreshDay(context: Context, userId: Long) {
         val s = sp(context)
-        val saved = s.getString(KEY_DATE, null)
+        val saved = s.getString(dateKey(userId), null)
         val today = today()
         if (saved != today) {
-            val editor = s.edit().clear().putString(KEY_DATE, today)
+            val editor = s.edit()
+            // 只清除该用户的进度/领取 key，保留其他用户数据
+            MissionType.values().forEach { t ->
+                editor.remove(progressKey(userId, t))
+                editor.remove(claimedKey(userId, t))
+            }
+            editor.putString(dateKey(userId), today)
             editor.apply()
         }
     }
 
     /** 读取当天所有任务状态 */
-    fun getMissions(context: Context): List<MissionState> {
-        ensureFreshDay(context)
+    fun getMissions(context: Context, userId: Long): List<MissionState> {
+        ensureFreshDay(context, userId)
         val s = sp(context)
         return MissionType.values().map { t ->
             MissionState(
                 type = t,
-                progress = s.getInt(t.key, 0).coerceAtMost(t.target),
-                claimed = s.getBoolean("${t.key}_claimed", false)
+                progress = s.getInt(progressKey(userId, t), 0).coerceAtMost(t.target),
+                claimed = s.getBoolean(claimedKey(userId, t), false)
             )
         }
     }
 
     /** 增加某任务进度（达到上限后不再增加） */
-    fun increment(context: Context, type: MissionType, amount: Int = 1) {
-        ensureFreshDay(context)
+    fun increment(context: Context, userId: Long, type: MissionType, amount: Int = 1) {
+        ensureFreshDay(context, userId)
         val s = sp(context)
-        val current = s.getInt(type.key, 0)
+        val current = s.getInt(progressKey(userId, type), 0)
         val next = (current + amount).coerceAtMost(type.target)
-        s.edit().putInt(type.key, next).apply()
+        s.edit().putInt(progressKey(userId, type), next).apply()
     }
 
     /** 标记奖励已领取 */
-    fun claim(context: Context, type: MissionType): Boolean {
-        ensureFreshDay(context)
+    fun claim(context: Context, userId: Long, type: MissionType): Boolean {
+        ensureFreshDay(context, userId)
         val s = sp(context)
-        val progress = s.getInt(type.key, 0)
+        val progress = s.getInt(progressKey(userId, type), 0)
         if (progress < type.target) return false
-        if (s.getBoolean("${type.key}_claimed", false)) return false
-        s.edit().putBoolean("${type.key}_claimed", true).apply()
+        if (s.getBoolean(claimedKey(userId, type), false)) return false
+        s.edit().putBoolean(claimedKey(userId, type), true).apply()
         return true
     }
 }

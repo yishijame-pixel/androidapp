@@ -116,7 +116,9 @@ fun ShopScreen(
     // 获取VIP状态
     val authViewModel: com.example.funlife.viewmodel.AuthViewModel = viewModel()
     val userSession = authViewModel.getCurrentSession()
-    
+    // 🔒 安全修复：从会话动态读取当前用户 ID（默认 -1 表示未登录）
+    val currentUserId = userSession?.userId ?: -1L
+
     LaunchedEffect(userSession) {
         userSession?.userId?.let { userId ->
             vipViewModel.setUserId(userId)
@@ -128,8 +130,10 @@ fun ShopScreen(
     // 价格倍数：VIP用户1倍，普通用户100倍
     val priceMultiplier = if (vipLevel.level > 0) 1 else 100
     
-    // 获取用户已购买的物品列表
-    val purchasedItems by inventoryDao.getAllItems().collectAsState(initial = emptyList())
+    // 🔒 获取用户已购买的物品列表（按当前用户过滤，防止跨账户污染）
+    val purchasedItems by remember(currentUserId) {
+        inventoryDao.getAllItems(currentUserId)
+    }.collectAsState(initial = emptyList())
     val purchasedPanelIds = remember(purchasedItems) {
         purchasedItems
             .filter { it.itemId.startsWith("panel_") }
@@ -156,11 +160,8 @@ fun ShopScreen(
     val claimSuccessMsg = stringResource(R.string.shop_claim_success)
     val claimedTodayMsg = stringResource(R.string.shop_claimed_today)
     
-    // 🔥 每日活动奖励状态
+    // 🔥 每日活动奖励状态（🔒 复用顶部已声明的 currentUserId，避免与之同名冲突）
     val dailyCoinManager = remember { com.example.funlife.security.DailyCoinManager(context) }
-    val currentUserId = remember { (context.applicationContext as FunLifeApplication).let {
-        com.example.funlife.utils.UserSessionManager(it).getCurrentUserId().takeIf { id -> id > 0 } ?: 0L
-    }}
     var canClaimDailyActivity by remember { mutableStateOf(false) }
     var dailyCooldownSeconds by remember { mutableStateOf(0L) }
     var showDailyClaimSuccess by remember { mutableStateOf(false) }
@@ -374,10 +375,7 @@ fun ShopScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .padding(vertical = vipCardPadding.value)  // 🎯 动态垂直padding
-                        .clickable(
-                            enabled = vipLevel.level == 0,
-                            onClick = { onNavigate("vip") }
-                        )
+                        .clickable(onClick = { onNavigate("vip") })  // 🔥 始终可点击进入开通VIP页面
                 ) {
                     
                     // 卡片主体
@@ -585,8 +583,8 @@ fun ShopScreen(
                                                 "anniversary_frame" -> "jinian_card_${item.value}"
                                                 else -> "${item.type}_${item.id}"
                                             }
-                                            // 二次检查防重复
-                                            if (invDao.getItemByItemId(1L, itemId) != null) {
+                                            // 二次检查防重复（🔒 按当前用户检查，不再写死 1L）
+                                            if (invDao.getItemByItemId(currentUserId, itemId) != null) {
                                                 snackbarHostState.showSnackbar("您已领取过此物品")
                                                 return@launch
                                             }
@@ -597,7 +595,7 @@ fun ShopScreen(
                                                 else -> com.example.funlife.data.model.InventoryItemType.CONSUMABLE
                                             }
                                             val inventoryItem = com.example.funlife.data.model.InventoryItem(
-                                                userId = 1L,
+                                                userId = currentUserId, // 🔒 安全修复：购买入库使用当前用户 ID
                                                 itemId = itemId,
                                                 itemName = item.name,
                                                 itemType = itemType,
@@ -652,7 +650,8 @@ fun ShopScreen(
                         else -> "${selectedShopItem!!.type}_${selectedShopItem!!.id}"
                     }
                     
-                    val alreadyOwned = inventoryDao.getItemByItemId(1L, itemId) != null
+                    // 🔒 按当前用户 ID 检查是否已拥有
+                    val alreadyOwned = inventoryDao.getItemByItemId(currentUserId, itemId) != null
                     
                     if (alreadyOwned) {
                         snackbarHostState.showSnackbar("您已拥有该物品")
@@ -675,7 +674,7 @@ fun ShopScreen(
                         }
                         
                         val inventoryItem = com.example.funlife.data.model.InventoryItem(
-                            userId = 1L,
+                            userId = currentUserId, // 🔒 安全修复：购买入库使用当前用户 ID
                             itemId = itemId,
                             itemName = selectedShopItem!!.name,
                             itemType = itemType,
