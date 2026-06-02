@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -156,6 +157,12 @@ fun ShopScreen(
     var showShopItemDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf(ShopCategory.ALL) }
     var showSuccessAnimation by remember { mutableStateOf(false) }
+    // 🔥 区分"领取成功"与"购买成功"
+    var successIsFreeClaim by remember { mutableStateOf(false) }
+    // 🔥 商品详情对话框状态
+    var detailProduct by remember { mutableStateOf<ShopProduct?>(null) }
+    var detailIsPurchased by remember { mutableStateOf(false) }
+    var showProductDetailDialog by remember { mutableStateOf(false) }
     
     val claimSuccessMsg = stringResource(R.string.shop_claim_success)
     val claimedTodayMsg = stringResource(R.string.shop_claimed_today)
@@ -500,10 +507,11 @@ fun ShopScreen(
                                     snackbarHostState.showSnackbar("领取冷却中，请稍后再试")
                                     return@launch
                                 }
-                                val reward = vipLevel.dailyCoins
+                                val reward = com.example.funlife.vip.VipRuntimeConfig.dailyCoinsOf(vipLevel)
                                 // 加金币
                                 val coinRepo = com.example.funlife.repository.CoinRepository(
-                                    (context.applicationContext as FunLifeApplication).database.coinDao()
+                                    (context.applicationContext as FunLifeApplication).database.coinDao(),
+                                    context.applicationContext
                                 )
                                 coinRepo.addCoins(currentUserId, reward)
                                 // 记录领取（加密时间戳）
@@ -554,72 +562,10 @@ fun ShopScreen(
                             canClaim = canClaimFreeCoins,
                             isPurchased = isPurchased,
                             onClick = {
-                                if (product.price == 0 && product.dbItem?.type == "coins") {
-                                    // 免费领取金币（旧逻辑保留）
-                                    if (canClaimFreeCoins) {
-                                        scope.launch {
-                                            val success = shopViewModel.claimFreeCoins()
-                                            if (success) {
-                                                snackbarHostState.showSnackbar(claimSuccessMsg)
-                                            } else {
-                                                snackbarHostState.showSnackbar(claimedTodayMsg)
-                                            }
-                                        }
-                                    }
-                                } else if (product.price == 0 && product.dbItem != null) {
-                                    // 🔥 免费商品：直接领取到背包，每人限领一次
-                                    if (isPurchased) {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("您已领取过此物品")
-                                        }
-                                    } else {
-                                        scope.launch {
-                                            val db = (context.applicationContext as com.example.funlife.FunLifeApplication).database
-                                            val invDao = db.inventoryDao()
-                                            val item = product.dbItem
-                                            val itemId = when (item.type) {
-                                                "avatar_frame" -> "avatar_frame_${item.id}"
-                                                "button_skin" -> "button_pf_${item.value}"
-                                                "anniversary_frame" -> "jinian_card_${item.value}"
-                                                else -> "${item.type}_${item.id}"
-                                            }
-                                            // 二次检查防重复（🔒 按当前用户检查，不再写死 1L）
-                                            if (invDao.getItemByItemId(currentUserId, itemId) != null) {
-                                                snackbarHostState.showSnackbar("您已领取过此物品")
-                                                return@launch
-                                            }
-                                            val itemType = when (item.type) {
-                                                "avatar_frame" -> com.example.funlife.data.model.InventoryItemType.AVATAR_FRAME
-                                                "button_skin" -> com.example.funlife.data.model.InventoryItemType.BUTTON_SKIN
-                                                "anniversary_frame" -> com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME
-                                                else -> com.example.funlife.data.model.InventoryItemType.CONSUMABLE
-                                            }
-                                            val inventoryItem = com.example.funlife.data.model.InventoryItem(
-                                                userId = currentUserId, // 🔒 安全修复：购买入库使用当前用户 ID
-                                                itemId = itemId,
-                                                itemName = item.name,
-                                                itemType = itemType,
-                                                itemRarity = com.example.funlife.data.model.ItemRarity.COMMON,
-                                                iconEmoji = item.icon,
-                                                description = item.description,
-                                                quantity = 1,
-                                                isUsable = true,
-                                                effectValue = 0,
-                                                purchasePrice = 0,
-                                                obtainedTime = System.currentTimeMillis()
-                                            )
-                                            invDao.insertItem(inventoryItem)
-                                            showSuccessAnimation = true
-                                            delay(2000)
-                                            showSuccessAnimation = false
-                                            snackbarHostState.showSnackbar("🎁 领取成功！已放入背包")
-                                        }
-                                    }
-                                } else if (product.dbItem != null) {
-                                    // 付费商品：显示购买对话框
-                                    selectedShopItem = product.dbItem
-                                    showShopItemDialog = true
-                                }
+                                android.util.Log.d("ShopClick", "Product clicked: ${product.id} ${product.nameText ?: "(res)"}")
+                                detailProduct = product
+                                detailIsPurchased = isPurchased
+                                showProductDetailDialog = true
                             }
                         )
                     }
@@ -627,8 +573,89 @@ fun ShopScreen(
             }
         }
     }
-    
-    val purchaseSuccessMsg = stringResource(R.string.shop_purchase_success)
+
+    // 🔥 提取的领取/购买动作（被详情对话框调用）
+    val executeProductAction: (ShopProduct, Boolean) -> Unit = { product, isPurchased ->
+        if (product.price == 0 && product.dbItem?.type == "coins") {
+            // 免费领取金币（旧逻辑保留）
+            if (canClaimFreeCoins) {
+                scope.launch {
+                    val success = shopViewModel.claimFreeCoins()
+                    if (success) {
+                        snackbarHostState.showSnackbar(claimSuccessMsg)
+                    } else {
+                        snackbarHostState.showSnackbar(claimedTodayMsg)
+                    }
+                }
+            }
+        } else if (product.price == 0 && product.dbItem != null) {
+            // 🔥 免费商品：直接领取到背包，每人限领一次
+            if (isPurchased) {
+                scope.launch { snackbarHostState.showSnackbar("您已领取过此物品") }
+            } else {
+                scope.launch {
+                    val db = (context.applicationContext as com.example.funlife.FunLifeApplication).database
+                    val invDao = db.inventoryDao()
+                    val item = product.dbItem
+                    val itemId = when (item.type) {
+                        "avatar_frame" -> "avatar_frame_${item.id}"
+                        "button_skin" -> "button_pf_${item.value}"
+                        "anniversary_frame" -> "jinian_card_${item.value}"
+                        else -> "${item.type}_${item.id}"
+                    }
+                    if (invDao.getItemByItemId(currentUserId, itemId) != null) {
+                        snackbarHostState.showSnackbar("您已领取过此物品")
+                        return@launch
+                    }
+                    val itemType = when (item.type) {
+                        "avatar_frame" -> com.example.funlife.data.model.InventoryItemType.AVATAR_FRAME
+                        "button_skin" -> com.example.funlife.data.model.InventoryItemType.BUTTON_SKIN
+                        "anniversary_frame" -> com.example.funlife.data.model.InventoryItemType.ANNIVERSARY_FRAME
+                        else -> com.example.funlife.data.model.InventoryItemType.CONSUMABLE
+                    }
+                    val inventoryItem = com.example.funlife.data.model.InventoryItem(
+                        userId = currentUserId,
+                        itemId = itemId,
+                        itemName = item.name,
+                        itemType = itemType,
+                        itemRarity = com.example.funlife.data.model.ItemRarity.COMMON,
+                        iconEmoji = item.icon,
+                        description = item.description,
+                        quantity = 1,
+                        isUsable = true,
+                        effectValue = 0,
+                        purchasePrice = 0,
+                        obtainedTime = System.currentTimeMillis()
+                    )
+                    invDao.insertItem(inventoryItem)
+                    successIsFreeClaim = true
+                    showSuccessAnimation = true
+                    delay(2000)
+                    showSuccessAnimation = false
+                }
+            }
+        } else if (product.dbItem != null) {
+            // 付费商品：显示购买对话框
+            selectedShopItem = product.dbItem
+            showShopItemDialog = true
+        }
+    }
+
+    // 🔥 商品详情对话框
+    if (showProductDetailDialog && detailProduct != null) {
+        ProductDetailDialog(
+            product = detailProduct!!,
+            userCoins = userCoins?.coins ?: 0,
+            canClaim = canClaimFreeCoins,
+            isPurchased = detailIsPurchased,
+            onDismiss = { showProductDetailDialog = false },
+            onConfirm = {
+                showProductDetailDialog = false
+                executeProductAction(detailProduct!!, detailIsPurchased)
+            }
+        )
+    }
+
     val purchaseFailedMsg = stringResource(R.string.shop_purchase_failed)
     
     // 🔥 数据库商品购买对话框
@@ -690,10 +717,10 @@ fun ShopScreen(
                         inventoryDao.insertItem(inventoryItem)
                         
                         showShopItemDialog = false
+                        successIsFreeClaim = false
                         showSuccessAnimation = true
                         delay(2000)
                         showSuccessAnimation = false
-                        snackbarHostState.showSnackbar(purchaseSuccessMsg)
                     } else {
                         snackbarHostState.showSnackbar(purchaseFailedMsg)
                     }
@@ -703,7 +730,7 @@ fun ShopScreen(
     }
     
     if (showSuccessAnimation) {
-        PurchaseSuccessAnimation()
+        PurchaseSuccessAnimation(isFreeClaim = successIsFreeClaim)
     }
 }
 
@@ -721,6 +748,7 @@ fun ShopTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -788,22 +816,25 @@ fun ShopTopBar(
 fun CategorySelector(
     selectedCategory: ShopCategory,
     onCategorySelected: (ShopCategory) -> Unit,
-    collapseProgress: Float = 0f  // 🎯 新增：折叠进度参数
+    collapseProgress: Float = 0f  // 🎯 折叠进度参数
 ) {
-    // 🎯 计算分类选择器的高度变化
-    val categoryHeight = 80f - (collapseProgress * 25f)  // 从80dp缩小到55dp
-    
+    // 🔥 用固定但更高的高度（88dp）解决文字被裁，同时避免 fillMaxHeight 把卡片撑成柱子
+    //    比原 80dp 多 8dp，足够 18sp emoji + 11sp 文字 + padding
+    val rowHeight = (88f - collapseProgress * 30f).dp   // 88dp -> 58dp
+    val verticalPad = (10f - collapseProgress * 5f).dp  // 10dp -> 5dp
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(categoryHeight.dp)
+            .height(rowHeight)  // 🛡️ 必须固定高度，不能只给 min（否则 Card.fillMaxHeight 会撑满父布局）
             .padding(horizontal = 16.dp)
-            .padding(vertical = (12f - collapseProgress * 6f).dp),  // 动态垂直padding：12dp -> 6dp
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(vertical = verticalPad),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         ShopCategory.values().forEach { category ->
             val isSelected = category == selectedCategory
-            
+
             val scale by animateFloatAsState(
                 targetValue = if (isSelected) 1.05f else 1f,
                 animationSpec = spring(
@@ -812,10 +843,11 @@ fun CategorySelector(
                 ),
                 label = "category_scale"
             )
-            
+
             Card(
                 modifier = Modifier
                     .weight(1f)
+                    .fillMaxHeight()
                     .scale(scale)
                     .clickable { onCategorySelected(category) },
                 shape = RoundedCornerShape(16.dp),
@@ -824,50 +856,49 @@ fun CategorySelector(
                 ),
                 elevation = CardDefaults.cardElevation(0.dp)
             ) {
-                // 🎯 根据折叠进度决定显示模式
                 if (collapseProgress < 0.5f) {
-                    // 展开状态：显示图标 + 文字
+                    // 展开：图标 + 文字（紧凑垂直排列，让两者都能完整显示）
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                            .padding(vertical = 6.dp, horizontal = 2.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically)
                     ) {
-                        // 🎯 图标逐渐淡出
                         Text(
                             category.icon,
-                            fontSize = 20.sp,
-                            modifier = Modifier
-                                .padding(bottom = 2.dp)
-                                .graphicsLayer {
-                                    alpha = 1f - (collapseProgress * 2f)  // 快速淡出
-                                }
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            modifier = Modifier.graphicsLayer {
+                                alpha = 1f - (collapseProgress * 2f)
+                            }
                         )
-                        // 🎯 文字始终清晰
                         Text(
                             stringResource(category.displayNameResId),
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else Color(0xFF424242),
                             maxLines = 1,
-                            overflow = TextOverflow.Visible
+                            softWrap = false,
+                            overflow = TextOverflow.Visible,
+                            textAlign = TextAlign.Center
                         )
                     }
                 } else {
-                    // 折叠状态：只显示文字（图标已完全淡出）
+                    // 折叠：只显示文字
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             stringResource(category.displayNameResId),
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else Color(0xFF424242),
                             maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Visible,
                             textAlign = TextAlign.Center
                         )
@@ -906,18 +937,14 @@ fun ProductCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
                         tryAwaitRelease()
                         isPressed = false
-                    }
+                    },
+                    onTap = { onClick() }  // 🔥 关键：让整张卡片任意位置都能触发 onClick
                 )
             },
         shape = RoundedCornerShape(24.dp),
@@ -1012,18 +1039,7 @@ fun ProductCard(
                             val context = LocalContext.current
                             val assetPath = product.dbItem.assetPath
                             val frameBitmap = remember(product.id) {
-                                try {
-                                    if (assetPath != null) {
-                                        context.assets.open(assetPath).use { inputStream ->
-                                            android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                        }
-                                    } else {
-                                        null
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("ShopScreen", "Failed to load avatar frame: $assetPath", e)
-                                    null
-                                }
+                                if (assetPath != null) com.example.funlife.utils.ImageCache.loadImage(context, assetPath, sampleSize = 2) else null
                             }
                             
                             if (frameBitmap != null) {
@@ -1042,13 +1058,7 @@ fun ProductCard(
                             val context = LocalContext.current
                             val panelIndex = product.id - 20
                             val panelBitmap = remember(product.id) {
-                                try {
-                                    context.assets.open("login/js_$panelIndex.png").use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
+                                com.example.funlife.utils.ImageCache.loadImage(context, "login/js_$panelIndex.png", sampleSize = 2)
                             }
                             
                             if (panelBitmap != null) {
@@ -1067,14 +1077,7 @@ fun ProductCard(
                             val context = LocalContext.current
                             val frameIndex = product.dbItem.value
                             val frameBitmap = remember(product.id) {
-                                try {
-                                    context.assets.open("login/jinian_card_$frameIndex.png").use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("ShopScreen", "Failed to load frame image: jinian_card_$frameIndex.png", e)
-                                    null
-                                }
+                                com.example.funlife.utils.ImageCache.loadImage(context, "login/jinian_card_$frameIndex.png", sampleSize = 2)
                             }
                             
                             if (frameBitmap != null) {
@@ -1093,13 +1096,7 @@ fun ProductCard(
                             val context = LocalContext.current
                             val buttonIndex = product.dbItem.value
                             val buttonBitmap = remember(product.id) {
-                                try {
-                                    context.assets.open("login/pf_$buttonIndex.png").use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
+                                com.example.funlife.utils.ImageCache.loadImage(context, "login/pf_$buttonIndex.png", sampleSize = 2)
                             }
                             
                             if (buttonBitmap != null) {
@@ -1116,15 +1113,9 @@ fun ProductCard(
                         // 按钮皮肤 (ID 100-125 对应 pf_1到pf_26)
                         product.id in 100..125 -> {
                             val context = LocalContext.current
-                            val buttonIndex = product.id - 99  // 100->1, 101->2, ..., 125->26
+                            val buttonIndex = product.id - 99
                             val buttonBitmap = remember(product.id) {
-                                try {
-                                    context.assets.open("login/pf_$buttonIndex.png").use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
+                                com.example.funlife.utils.ImageCache.loadImage(context, "login/pf_$buttonIndex.png", sampleSize = 2)
                             }
                             
                             if (buttonBitmap != null) {
@@ -1588,54 +1579,557 @@ fun PurchaseDialog(
 }
 
 @Composable
-fun PurchaseSuccessAnimation() {
-    var visible by remember { mutableStateOf(true) }
-    
+fun PurchaseSuccessAnimation(isFreeClaim: Boolean = false) {
+    var visible by remember { mutableStateOf(false) }
+    var checkVisible by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
-        delay(2000)
-        visible = false
+        visible = true
+        delay(180)
+        checkVisible = true
     }
-    
+
+    // 主题色：领取（橙金）/ 购买（翠绿）
+    val accent = if (isFreeClaim) Color(0xFFFF9800) else Color(0xFF22C55E)
+    val accentSoft = if (isFreeClaim) Color(0xFFFFB74D) else Color(0xFF4ADE80)
+    val title = if (isFreeClaim) "领取成功！" else "购买成功！"
+    val subtitle = if (isFreeClaim) "已放入您的背包" else "商品已添加到您的背包"
+    val badgeText = if (isFreeClaim) "免费 FREE" else "已入库"
+
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn() + scaleIn(),
-        exit = fadeOut() + scaleOut()
+        enter = fadeIn(tween(220)) + scaleIn(
+            initialScale = 0.7f,
+            animationSpec = spring(dampingRatio = 0.55f, stiffness = 320f)
+        ),
+        exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.85f)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f)),
+                .background(Color.Black.copy(alpha = 0.55f)),
             contentAlignment = Alignment.Center
         ) {
-            Card(
-                shape = RoundedCornerShape(32.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(0.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.78f)
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White,
+                shadowElevation = 28.dp
             ) {
-                Column(
-                    modifier = Modifier.padding(48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    val scale by rememberInfiniteTransition(label = "success").animateFloat(
-                        initialValue = 0.8f,
-                        targetValue = 1.2f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(600, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "success_scale"
+                Box {
+                    // 顶部彩色装饰条
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(accentSoft, accent, accentSoft)
+                                )
+                            )
                     )
-                    
-                    Text("✨", fontSize = 72.sp, modifier = Modifier.scale(scale))
-                    Text(stringResource(R.string.shop_purchase_success_title), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
-                    Text(stringResource(R.string.shop_purchase_success_message), fontSize = 16.sp, color = Color.Gray)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp, vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        // ━━━━━━━ 图标区（光晕 + 渐变圆 + 对勾） ━━━━━━━
+                        Box(
+                            modifier = Modifier.size(96.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val infinite = rememberInfiniteTransition(label = "glow")
+                            val glowScale by infinite.animateFloat(
+                                initialValue = 1f,
+                                targetValue = 1.35f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1100, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "glowScale"
+                            )
+                            val glowAlpha by infinite.animateFloat(
+                                initialValue = 0.45f,
+                                targetValue = 0.15f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1100, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "glowAlpha"
+                            )
+
+                            // 外圈呼吸光晕
+                            Box(
+                                Modifier
+                                    .matchParentSize()
+                                    .scale(glowScale)
+                                    .background(
+                                        brush = Brush.radialGradient(
+                                            colors = listOf(
+                                                accent.copy(alpha = glowAlpha),
+                                                Color.Transparent
+                                            )
+                                        ),
+                                        shape = CircleShape
+                                    )
+                            )
+
+                            // 主圆（渐变）
+                            Box(
+                                Modifier
+                                    .size(80.dp)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(accentSoft, accent)
+                                        ),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = checkVisible,
+                                    enter = fadeIn(tween(260)) + scaleIn(
+                                        initialScale = 0.3f,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.5f,
+                                            stiffness = 220f
+                                        )
+                                    )
+                                ) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // ━━━━━━━ 标题 ━━━━━━━
+                        Text(
+                            title,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accent
+                        )
+
+                        // ━━━━━━━ 副标题徽章 ━━━━━━━
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = accent.copy(alpha = 0.10f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    badgeText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = accent
+                                )
+                            }
+                        }
+
+                        // ━━━━━━━ 提示文字 ━━━━━━━
+                        Text(
+                            subtitle,
+                            fontSize = 14.sp,
+                            color = Color(0xFF6B7280)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+// 🎨 商品详情对话框 - 精致现代设计
+// ════════════════════════════════════════════════════════════════════
+@Composable
+fun ProductDetailDialog(
+    product: ShopProduct,
+    userCoins: Int,
+    canClaim: Boolean,
+    isPurchased: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val rarityColor = product.rarity.color
+    val canAfford = userCoins >= product.price
+    val isFree = product.price == 0
+    val isCoinProduct = product.dbItem?.type == "coins"
+
+    // 按钮文案 + 状态
+    val (buttonText, buttonEnabled) = when {
+        isCoinProduct && !canClaim -> "今日已领取" to false
+        isCoinProduct && canClaim -> "立即领取" to true
+        isFree && isPurchased -> "已领取" to false
+        isFree -> "免费领取" to true
+        isPurchased -> "已拥有" to false
+        !canAfford -> "金币不足" to false
+        else -> "立即购买" to true
+    }
+
+    // 🔥 顶部 Hero 渐变（按稀有度配色，但普通稀有度用温暖橙色而不是灰色）
+    val heroGradient = when (product.rarity) {
+        ProductRarity.LEGENDARY -> listOf(Color(0xFFFFB300), Color(0xFFFF6F00))
+        ProductRarity.EPIC -> listOf(Color(0xFFAB47BC), Color(0xFF6A1B9A))
+        ProductRarity.RARE -> listOf(Color(0xFF42A5F5), Color(0xFF1565C0))
+        ProductRarity.COMMON -> listOf(Color(0xFFFFCA80), Color(0xFFFF8F4F))  // 不再灰色
+    }
+
+    // 主按钮渐变（与稀有度协调，永远鲜艳）
+    val buttonGradient = when (product.rarity) {
+        ProductRarity.LEGENDARY -> listOf(Color(0xFFFFB300), Color(0xFFFF6F00))
+        ProductRarity.EPIC -> listOf(Color(0xFFAB47BC), Color(0xFF6A1B9A))
+        ProductRarity.RARE -> listOf(Color(0xFF42A5F5), Color(0xFF1565C0))
+        ProductRarity.COMMON -> listOf(Color(0xFFFF8A4C), Color(0xFFFF5722))
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White,
+                shadowElevation = 24.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // ═════════════════════════════════════════
+                    // 顶部 Hero（彩色渐变 + 装饰 + 大图标 + 多徽章）
+                    // ═════════════════════════════════════════
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .background(Brush.verticalGradient(heroGradient))
+                    ) {
+                        // 多层装饰圆
+                        Box(
+                            Modifier.size(180.dp)
+                                .offset(x = (-60).dp, y = (-60).dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.18f))
+                        )
+                        Box(
+                            Modifier.size(120.dp)
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 40.dp, y = 30.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.14f))
+                        )
+                        Box(
+                            Modifier.size(40.dp)
+                                .align(Alignment.TopStart)
+                                .offset(x = 60.dp, y = 24.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.20f))
+                        )
+
+                        // 顶部徽章行（稀有度 + HOT + NEW）
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(start = 18.dp, top = 18.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    stringResource(product.rarity.labelResId),
+                                    fontSize = 10.sp,
+                                    color = rarityColor,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                            if (product.isHot) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFFF1744))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text("🔥 HOT", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Black)
+                                }
+                            }
+                            if (product.isNew) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF4CAF50))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text("✨ NEW", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Black)
+                                }
+                            }
+                        }
+
+                        // 关闭按钮
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.32f))
+                                .clickable(onClick = onDismiss),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "关闭",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // 大圆形图标（飘出底部 = 视觉聚焦）— 显示真实商品图
+                        val ctx = LocalContext.current
+                        val productBitmap = remember(product.id) {
+                            val assetPath: String? = when {
+                                product.id >= 4000 && product.id < 5000 ->
+                                    product.dbItem?.assetPath
+                                product.id in 21..25 ->
+                                    "login/js_${product.id - 20}.png"
+                                product.id >= 2000 && product.dbItem != null ->
+                                    "login/jinian_card_${product.dbItem.value}.png"
+                                product.id >= 1000 && product.dbItem != null ->
+                                    "login/pf_${product.dbItem.value}.png"
+                                product.id in 100..125 ->
+                                    "login/pf_${product.id - 99}.png"
+                                else -> null
+                            }
+                            if (assetPath != null) com.example.funlife.utils.ImageCache.loadImage(ctx, assetPath, sampleSize = 2) else null
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .offset(y = 50.dp)
+                                .size(100.dp)
+                                .shadow(12.dp, CircleShape, ambientColor = heroGradient[1], spotColor = heroGradient[1])
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .border(3.dp, Color.White, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (productBitmap != null) {
+                                Image(
+                                    bitmap = productBitmap,
+                                    contentDescription = product.nameText ?: stringResource(product.nameResId),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Text(text = product.emoji, fontSize = 50.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(56.dp))  // 给飘出的图标留位置
+
+                    // ═════════════════════════════════════════
+                    // 内容区
+                    // ═════════════════════════════════════════
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 名称
+                        Text(
+                            text = product.nameText ?: stringResource(product.nameResId),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF1A1A1A),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        // 描述
+                        Text(
+                            text = product.descriptionText ?: stringResource(product.descriptionResId),
+                            fontSize = 13.sp,
+                            color = Color(0xFF757575),
+                            lineHeight = 20.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(Modifier.height(20.dp))
+
+                        // 价格 + 余额（精致对比卡）
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFFFFF8E1), Color(0xFFFFE0B2))
+                                    )
+                                )
+                                .border(
+                                    1.dp,
+                                    Color(0xFFFFB74D).copy(alpha = 0.4f),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(horizontal = 18.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "💰 价格",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF8D6E00),
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                if (isFree) {
+                                    Text(
+                                        "FREE",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFF2E7D32),
+                                        letterSpacing = 1.sp
+                                    )
+                                } else {
+                                    Text(
+                                        "${product.price}",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFFE65100)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(40.dp)
+                                    .background(Color(0xFFB07000).copy(alpha = 0.3f))
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 16.dp)
+                            ) {
+                                Text(
+                                    "🪙 余额",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF8D6E00),
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "$userCoins",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFFB07000)
+                                )
+                            }
+                        }
+
+                        // 余额不足提示
+                        if (!isFree && !canAfford && !isPurchased) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "还差 ${product.price - userCoins} 金币 💸",
+                                fontSize = 12.sp,
+                                color = Color(0xFFE53935),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        // 主操作按钮（永远鲜艳渐变 + 圆角 + 阴影）
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                                .shadow(
+                                    elevation = if (buttonEnabled) 8.dp else 0.dp,
+                                    shape = RoundedCornerShape(18.dp),
+                                    ambientColor = buttonGradient[1],
+                                    spotColor = buttonGradient[1]
+                                )
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(
+                                    if (buttonEnabled) Brush.horizontalGradient(buttonGradient)
+                                    else Brush.horizontalGradient(
+                                        listOf(Color(0xFFBDBDBD), Color(0xFF9E9E9E))
+                                    )
+                                )
+                                .clickable(enabled = buttonEnabled, onClick = onConfirm),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = buttonText,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                letterSpacing = 2.sp
+                            )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // 次要取消
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "再看看",
+                                fontSize = 13.sp,
+                                color = Color(0xFF9E9E9E),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+    }
+}
 
 // 🔥 数据库商品购买对话框
 @Composable
@@ -2377,7 +2871,7 @@ fun DailyActivityCard(
     showSuccess: Boolean,
     onClaim: () -> Unit
 ) {
-    val reward = vipLevel.dailyCoins
+    val reward = com.example.funlife.vip.VipRuntimeConfig.dailyCoinsOf(vipLevel)
     val hours = cooldownSeconds / 3600
     val minutes = (cooldownSeconds % 3600) / 60
     val seconds = cooldownSeconds % 60
@@ -2533,7 +3027,7 @@ fun DailyActivityCard(
                                 color = Color(0xFF8D6E63)
                             )
                             Text(
-                                "${nextLevel.dailyCoins}金币/天",
+                                "${com.example.funlife.vip.VipRuntimeConfig.dailyCoinsOf(nextLevel)}金币/天",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFF6F00)

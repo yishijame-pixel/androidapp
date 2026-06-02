@@ -4,6 +4,7 @@ package com.example.funlife.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.ShopItem
 import com.example.funlife.data.model.PurchaseHistory
@@ -22,7 +23,7 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
         database.shopDao(),
         database.userAvatarFrameDao()  // 🔥 添加UserAvatarFrameDao
     )
-    private val coinRepository = CoinRepository(database.coinDao())
+    private val coinRepository = CoinRepository(database.coinDao(), application.applicationContext)
     private val habitRepository = HabitRepository(database.habitDao())
     private val dailyRewardDao = database.dailyRewardDao()
     private val userDao = database.userDao()  // 🔥 添加UserDao
@@ -104,46 +105,49 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    // 检查每日奖励状态
+    // 检查每日奖励状态（防回拨：使用 MonotonicClock 的"有效今天"）
     private suspend fun checkDailyRewardStatus() {
         val userId = getCurrentUserId()
-        val today = java.time.LocalDate.now().toString()
+        val today = com.example.funlife.security.MonotonicClock.get(getApplication()).effectiveToday()
+        // 顺手去重历史脏数据（无 unique 索引时的保护）
+        dailyRewardDao.dedupe(userId, "free_coins")
         val reward = dailyRewardDao.getDailyReward(userId, "free_coins")
-        
         _canClaimFreeCoins.value = reward == null || reward.lastClaimDate != today
     }
-    
-    // 领取免费金币
+
+    // 🔒 领取免费金币：单事务原子，防并发双发 + 防系统时间回拨
     suspend fun claimFreeCoins(): Boolean {
         val userId = getCurrentUserId()
-        val today = java.time.LocalDate.now().toString()
-        
-        // 再次检查是否可以领取
-        val reward = dailyRewardDao.getDailyReward(userId, "free_coins")
-        if (reward != null && reward.lastClaimDate == today) {
-            return false // 今天已经领取过了
+        val today = com.example.funlife.security.MonotonicClock.get(getApplication()).effectiveToday()
+        return try {
+            val claimed = database.withTransaction {
+                dailyRewardDao.dedupe(userId, "free_coins")
+                val existing = dailyRewardDao.getDailyReward(userId, "free_coins")
+                if (existing == null) {
+                    dailyRewardDao.insertDailyReward(
+                        com.example.funlife.data.model.DailyReward(
+                            userId = userId,
+                            rewardType = "free_coins",
+                            lastClaimDate = today,
+                            claimCount = 1
+                        )
+                    )
+                    database.coinDao().addCoins(userId, 100)
+                    true
+                } else {
+                    val rows = dailyRewardDao.claimIfNewDay(userId, "free_coins", today)
+                    if (rows > 0) {
+                        database.coinDao().addCoins(userId, 100)
+                        true
+                    } else false
+                }
+            }
+            if (claimed) _canClaimFreeCoins.value = false
+            claimed
+        } catch (e: Exception) {
+            android.util.Log.e("ShopViewModel", "claimFreeCoins failed", e)
+            false
         }
-        
-        // 添加金币
-        coinRepository.addCoins(userId, 100)
-        
-        // 更新或创建领取记录
-        if (reward == null) {
-            dailyRewardDao.insertDailyReward(
-                com.example.funlife.data.model.DailyReward(
-                    userId = userId,
-                    rewardType = "free_coins",
-                    lastClaimDate = today,
-                    claimCount = 1
-                )
-            )
-        } else {
-            dailyRewardDao.updateClaimDate(userId, "free_coins", today)
-        }
-        
-        // 更新状态
-        _canClaimFreeCoins.value = false
-        return true
     }
     
     val shopItems: StateFlow<List<ShopItem>> = shopRepository.allShopItems
@@ -182,37 +186,46 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
     fun purchaseItem(item: ShopItem, habitId: Int? = null) {
         viewModelScope.launch {
             val userId = getCurrentUserId()
-            val success = coinRepository.spendCoins(userId, item.price)
-            if (success) {
-                // 记录购买历史
-                val purchase = PurchaseHistory(
-                    userId = userId,
-                    itemId = item.id,
-                    itemName = item.name,
-                    price = item.price,
-                    timestamp = LocalDateTime.now().toString()
-                )
-                shopRepository.insertPurchaseHistory(purchase)
-                
-                // 🔥 购买商品获得5积分
-                coinRepository.addShopPoints(userId, 5)
-                android.util.Log.d("ShopViewModel", "购买商品获得5积分")
-                
-                // 根据商品类型执行相应操作
-                when (item.type) {
-                    "makeup_card" -> {
-                        // 给指定习惯添加补卡卡片
-                        habitId?.let {
-                            val currentCards = habitRepository.getMakeupCards(userId, it)
-                            habitRepository.updateMakeupCards(userId, it, currentCards + item.value)
+            try {
+                database.withTransaction {
+                    // 原子扣币
+                    val rows = database.coinDao().run {
+                        // 必须使用 DAO 原子语句以参与同事务
+                        if (item.price > 0) spendCoinsAtomic(userId, item.price) else 1
+                    }
+                    if (rows == 0) throw IllegalStateException("金币不足")
+
+                    database.shopDao().insertPurchaseHistory(
+                        PurchaseHistory(
+                            userId = userId,
+                            itemId = item.id,
+                            itemName = item.name,
+                            price = item.price,
+                            timestamp = LocalDateTime.now().toString()
+                        )
+                    )
+                    // 购买送 5 积分（事务内仅 DAO 原子入库，补上云端上报在事务外）
+                    database.coinDao().addShopPoints(userId, 5)
+
+                    when (item.type) {
+                        "makeup_card" -> {
+                            habitId?.let {
+                                val currentCards = habitRepository.getMakeupCards(userId, it)
+                                habitRepository.updateMakeupCards(userId, it, currentCards + item.value)
+                            }
                         }
+                        "coins" -> {
+                            database.coinDao().addCoins(userId, item.value)
+                        }
+                        else -> Unit
                     }
-                    "coins" -> {
-                        // 添加金币
-                        coinRepository.addCoins(userId, item.value)
-                    }
-                    // 其他类型可以在这里扩展
                 }
+                // 事务后补 “安全记录 + 云端审计”（不重复入库）
+                runCatching { coinRepository.notifyShopPointsAdded(userId, 5, reason = "shop_purchase_${item.id}") }
+            } catch (e: Exception) {
+                android.util.Log.e("ShopViewModel", "purchaseItem failed", e)
+                // 🔒 不把技术异常信息暴露给用户，统一中文提示
+                _message.value = "购买失败，请稍后重试"
             }
         }
     }
@@ -221,16 +234,22 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
         return coinRepository.getCoinsAmount(getCurrentUserId()) >= price
     }
     
-    // 简单的购买方法（仅扣除金币）
+    // 简单的购买方法（原子扣金币 + 加5积分）
     suspend fun purchaseItem(price: Int): Boolean {
         val userId = getCurrentUserId()
-        val success = coinRepository.spendCoins(userId, price)
-        if (success) {
-            // 🔥 购买商品获得5积分
-            coinRepository.addShopPoints(userId, 5)
-            android.util.Log.d("ShopViewModel", "简单购买获得5积分")
+        return try {
+            database.withTransaction {
+                val rows = database.coinDao().spendCoinsAtomic(userId, price)
+                if (rows == 0) throw IllegalStateException("金币不足")
+                database.coinDao().addShopPoints(userId, 5)
+            }
+            // 事务后补上安全记录+云端上报（不重复入库）
+            runCatching { coinRepository.notifyShopPointsAdded(userId, 5, reason = "shop_purchase_simple") }
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("ShopViewModel", "purchaseItem(price) failed", e)
+            false
         }
-        return success
     }
     
     // 🔥 ========== 头像框相关方法 ==========
@@ -302,11 +321,12 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 
-                // 扣除金币
-                val success = coinRepository.spendCoins(userId, price)
-                if (success) {
-                    // 添加到用户背包（user_avatar_frames表）
-                    shopRepository.addUserFrame(userId, frame.id)
+                // 事务：扣币 + 发背包 + 记录 + 送积分，整体原子化
+                val success = try {
+                    database.withTransaction {
+                        val rows = database.coinDao().spendCoinsAtomic(userId, price)
+                        if (rows == 0) throw IllegalStateException("金币不足")
+                        shopRepository.addUserFrame(userId, frame.id)
                     
                     // 🔥 同时添加到inventory_items表，让背包能显示
                     val rarityMap = mapOf(
@@ -327,33 +347,33 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                         purchasePrice = price,
                         obtainedTime = System.currentTimeMillis()
                     )
-                    database.inventoryDao().insertItem(inventoryItem)
-                    
-                    // 🔥 不再自动装备，只是放入背包
-                    // shopRepository.equipFrame(userId, frame.id)
-                    // userDao.updateEquippedFrame(userId, frame.id)
-                    
-                    // 记录购买历史
-                    val purchase = PurchaseHistory(
-                        userId = userId,
-                        itemId = frame.id,
-                        itemName = frame.name,
-                        price = price,
-                        timestamp = LocalDateTime.now().toString()
-                    )
-                    shopRepository.insertPurchaseHistory(purchase)
-                    
-                    // 🔥 购买头像框获得5积分
-                    coinRepository.addShopPoints(userId, 5)
-                    
+                        database.inventoryDao().insertItem(inventoryItem)
+                        shopRepository.insertPurchaseHistory(
+                            PurchaseHistory(
+                                userId = userId,
+                                itemId = frame.id,
+                                itemName = frame.name,
+                                price = price,
+                                timestamp = LocalDateTime.now().toString()
+                            )
+                        )
+                        database.coinDao().addShopPoints(userId, 5)
+                    }
+                    // 事务后补审计（不重复入库）
+                    runCatching { coinRepository.notifyShopPointsAdded(userId, 5, reason = "shop_purchase_frame_${frame.id}") }
+                    true
+                } catch (e: Exception) {
+                    android.util.Log.e("ShopViewModel", "purchaseAvatarFrame tx failed", e)
+                    _message.value = "购买失败，请稍后重试"
+                    false
+                }
+                if (success) {
                     _message.value = "购买成功！已放入背包 (+5积分)"
-                    android.util.Log.d("ShopViewModel", "Purchased frame: ${frame.name}, added to inventory, +5 points")
-                } else {
-                    _message.value = "购买失败"
+                    android.util.Log.d("ShopViewModel", "Purchased frame: ${frame.name}")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ShopViewModel", "Error purchasing frame", e)
-                _message.value = "购买失败: ${e.message}"
+                _message.value = "购买失败，请稍后重试"
             }
         }
     }
@@ -389,7 +409,7 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                 android.util.Log.d("ShopViewModel", "Equipped frame: $frameId")
             } catch (e: Exception) {
                 android.util.Log.e("ShopViewModel", "Error equipping frame", e)
-                _message.value = "装备失败: ${e.message}"
+                _message.value = "装备失败，请重试"
             }
         }
     }
@@ -408,7 +428,7 @@ class ShopViewModel(application: Application) : AndroidViewModel(application) {
                 android.util.Log.d("ShopViewModel", "Unequipped frame")
             } catch (e: Exception) {
                 android.util.Log.e("ShopViewModel", "Error unequipping frame", e)
-                _message.value = "操作失败: ${e.message}"
+                _message.value = "操作失败，请重试"
             }
         }
     }

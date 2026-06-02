@@ -60,7 +60,8 @@ fun VipProfileScreen(
                         application.database.userAvatarDao(),
                         application.database.userDao(),
                         application.database.coinDao(),
-                        application.database.dailyRewardDao()
+                        application.database.dailyRewardDao(),
+                        application.database
                     ),
                     userId = currentSession?.userId ?: 0L,
                     context = context
@@ -146,25 +147,9 @@ fun VipProfileScreen(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .wrapContentSize()
-                                .padding(30.dp)  // 足够的padding确保边框动画不被裁剪
+                                .padding(20.dp)
                         ) {
-                            // 背景光晕层
-                            Box(
-                                modifier = Modifier
-                                    .size(160.dp)
-                                    .background(
-                                        Brush.radialGradient(
-                                            colors = listOf(
-                                                Color(0xFFE1BEE7).copy(alpha = 0.4f),
-                                                Color(0xFFFCE4EC).copy(alpha = 0.2f),
-                                                Color.Transparent
-                                            )
-                                        ),
-                                        CircleShape
-                                    )
-                            )
-                            
-                            // 头像和边框层
+                            // 头像和边框层（已移除背景光晕层）
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.size(160.dp)  // 🔥 外层容器尺寸（从130dp增加到160dp）
@@ -579,13 +564,23 @@ fun VipUserInfoCard(
                 
                 Spacer(Modifier.height(24.dp))
                 
-                // 用户名
-                Text(
-                    username,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2C3E50)
-                )
+                // 用户名 — VIP 用户走专属流光效果，普通用户走深色
+                val displayName = if (nickname.isNotEmpty()) nickname else username
+                if (vipLevel > 0) {
+                    com.example.funlife.ui.components.VipGlowingText(
+                        text = displayName,
+                        vipLevel = com.example.funlife.data.model.VipLevel.fromLevel(vipLevel),
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Text(
+                        displayName,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2C3E50)
+                    )
+                }
                 
                 Spacer(Modifier.height(12.dp))
                 
@@ -849,14 +844,18 @@ fun BeautifulResourceItem(
             text = label,
             fontSize = 13.sp,
             color = Color(0xFF757575),
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
-        
+
         Text(
             text = value,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF2C3E50)
+            color = Color(0xFF2C3E50),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
     }
 }
@@ -1827,13 +1826,23 @@ fun VipProfileHeader(
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 用户名
-                Text(
-                    text = if (nickname.isNotEmpty()) nickname else username,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                // 用户名 — VIP 用户专属等级流光
+                val headerDisplayName = if (nickname.isNotEmpty()) nickname else username
+                if (vipLevel > 0) {
+                    com.example.funlife.ui.components.VipGlowingText(
+                        text = headerDisplayName,
+                        vipLevel = com.example.funlife.data.model.VipLevel.fromLevel(vipLevel),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Text(
+                        text = headerDisplayName,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
                 
                 // VIP等级标签
                 Row(

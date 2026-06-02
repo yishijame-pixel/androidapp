@@ -25,10 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -39,7 +42,11 @@ import androidx.navigation.NavController
 import com.example.funlife.data.model.VipLevel
 import com.example.funlife.viewmodel.VipViewModel
 import com.example.funlife.viewmodel.AuthViewModel
+import com.example.funlife.ui.utils.rdp
+import com.example.funlife.ui.utils.rsp
+import com.example.funlife.ui.utils.rememberScreenAdapter
 import kotlin.math.*
+import kotlinx.coroutines.launch
 
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction
@@ -86,9 +93,16 @@ fun VipScreen(
     // 支付对话框状态
     var showPaymentDialog by remember { mutableStateOf(false) }
     var selectedVipCard by remember { mutableStateOf<VipCardData?>(null) }
+    // 完整权益弹窗（点击卡片底部「查看完整权益」触发）
+    var benefitsDialogCard by remember { mutableStateOf<VipCardData?>(null) }
     
     LaunchedEffect(userSession) {
         userSession?.userId?.let { vipViewModel.setUserId(it) }
+    }
+
+    // 🔄 进入 VIP 页就拉一次最新配置（30 秒节流 + 失败静默 + 自动重组）
+    LaunchedEffect(Unit) {
+        com.example.funlife.vip.VipRuntimeConfig.refreshAsync(context)
     }
     
     LaunchedEffect(message) {
@@ -137,13 +151,19 @@ fun VipScreen(
         navController.popBackStack()
     }
     
+    // 🔄 价格优先取云端 vip_sku_config（VipRuntimeConfig），后台改完→重启 App 即生效
+    //    缺失时回退到本地"营销价"（原 39.9 / 99.9 / 399）
+    val priceVip1 = com.example.funlife.vip.VipRuntimeConfig.priceOf(VipLevel.VIP1) ?: "39.9"
+    val priceVip2 = com.example.funlife.vip.VipRuntimeConfig.priceOf(VipLevel.VIP2) ?: "99.9"
+    val priceVip3 = com.example.funlife.vip.VipRuntimeConfig.priceOf(VipLevel.VIP3) ?: "399"
+
     val vipCards = listOf(
         VipCardData(
             title = VipLevel.VIP1.displayName,
             icon = VipLevel.VIP1.icon,
             benefits = VipLevel.VIP1.benefits,
-            price = "39.9",
-            period = "永久",
+            price = priceVip1,
+            period = "30 天",
             gradient = listOf(
                 Color(0xFFFFD700), Color(0xFFFF8C00), Color(0xFFE6446E)
             ),
@@ -160,8 +180,8 @@ fun VipScreen(
             title = VipLevel.VIP2.displayName,
             icon = VipLevel.VIP2.icon,
             benefits = VipLevel.VIP2.benefits,
-            price = "99.9",
-            period = "年费",
+            price = priceVip2,
+            period = "365 天",
             gradient = listOf(
                 Color(0xFF00E5FF), Color(0xFF2979FF), Color(0xFF7C4DFF)
             ),
@@ -178,7 +198,7 @@ fun VipScreen(
             title = VipLevel.VIP3.displayName,
             icon = VipLevel.VIP3.icon,
             benefits = VipLevel.VIP3.benefits,
-            price = "399",
+            price = priceVip3,
             period = "终身",
             gradient = listOf(
                 Color(0xFFE040FB), Color(0xFFAA00FF), Color(0xFF6200EA)
@@ -273,14 +293,13 @@ fun VipScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(8.dp))  // 最小间距，紧贴状态栏
-            
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -297,25 +316,120 @@ fun VipScreen(
                         modifier = Modifier.size(24.dp)
                     )
                 }
-                
-                // VIP标签（炫酷霓虹渐变 + 流光效果）
-                VipBadge()
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 🧪 测试动画按钮（仅 Debug 显示）
+                    if (com.example.funlife.BuildConfig.DEBUG) {
+                        var menuOpen by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(
+                                onClick = { menuOpen = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Science,
+                                    contentDescription = "测试动画",
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuOpen,
+                                onDismissRequest = { menuOpen = false }
+                            ) {
+                                listOf(
+                                    "VIP1 ⭐ 金色星辰" to com.example.funlife.data.model.VipLevel.VIP1,
+                                    "VIP2 💎 冰晶蓝钻" to com.example.funlife.data.model.VipLevel.VIP2,
+                                    "VIP3 👑 紫金王冠" to com.example.funlife.data.model.VipLevel.VIP3,
+                                    "永久会员 🌟" to com.example.funlife.data.model.VipLevel.PERMANENT
+                                ).forEach { (label, level) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            menuOpen = false
+                                            activatedVipLevel = level
+                                            // 🧪 测试金币数 = 后端 sku.js 真实 bonusCoins（保持一致）
+                                            //   月卡 50 / 年卡 300 / 终身 1000
+                                            bonusCoins = when (level) {
+                                                com.example.funlife.data.model.VipLevel.VIP1 -> 50
+                                                com.example.funlife.data.model.VipLevel.VIP2 -> 300
+                                                com.example.funlife.data.model.VipLevel.VIP3,
+                                                com.example.funlife.data.model.VipLevel.PERMANENT -> 1000
+                                                else -> 0
+                                            }
+                                            showVipAnimation = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 🔄 手动刷新按钮（强制拉取最新 vip_config，零成本）
+                    var refreshing by remember { mutableStateOf(false) }
+                    val rotation = remember { Animatable(0f) }
+                    val refreshScope = rememberCoroutineScope()
+                    IconButton(
+                        onClick = {
+                            if (refreshing) return@IconButton
+                            refreshing = true
+                            refreshScope.launch {
+                                // 旋转动画：在刷新期间持续转，最少转 1 圈避免点完无感
+                                val spinJob = launch {
+                                    while (refreshing) {
+                                        rotation.animateTo(
+                                            rotation.value + 360f,
+                                            animationSpec = tween(700, easing = LinearEasing)
+                                        )
+                                    }
+                                }
+                                runCatching {
+                                    com.example.funlife.vip.VipRuntimeConfig.refresh(context, force = true)
+                                }
+                                refreshing = false
+                                spinJob.cancel()
+                                // 回归到整圈，避免停在斜角
+                                rotation.snapTo(rotation.value % 360f)
+                                android.widget.Toast.makeText(
+                                    context, "✓ 已同步最新会员配置",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "刷新会员配置",
+                            tint = Color.White.copy(alpha = if (refreshing) 0.6f else 0.9f),
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer { rotationZ = rotation.value }
+                        )
+                    }
+
+                    // VIP标签（炫酷霓虹渐变 + 流光效果）
+                    VipBadge()
+                }
             }
             
             Spacer(modifier = Modifier.height(4.dp))
-            
-            EpicTitle()
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // 可滑动的3D卡片轮播
+
+            // 🆕 紧凑式小标题
+            CompactSubtitle()
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 可滑动的3D卡片轮播 — 用 weight(1f) 自动占满中间空间
+            val sa = rememberScreenAdapter()
+            val pagerHorizontalPadding = (sa.widthDp * 0.10f).coerceIn(28f, 56f).dp
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(460.dp),  // 恢复原来的高度
-                pageSpacing = 16.dp,
-                contentPadding = PaddingValues(horizontal = 60.dp),
+                    .weight(1f),
+                pageSpacing = 12.dp,
+                contentPadding = PaddingValues(horizontal = pagerHorizontalPadding),
                 beyondBoundsPageCount = 1
             ) { page ->
                 val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
@@ -324,6 +438,7 @@ fun VipScreen(
                     card = vipCards[page],
                     pageOffset = pageOffset,
                     isCenter = page == pagerState.currentPage,
+                    onShowBenefits = { benefitsDialogCard = it },
                     onClick = {
                         vipViewModel.purchaseVip(
                             vipCards[page].level.level,
@@ -333,23 +448,25 @@ fun VipScreen(
                                 "年费" -> 365
                                 else -> 30
                             },
-                            (vipCards[page].price.toFloatOrNull() ?: 0f).toInt() * 100
+                            // ⚠️ 此调用已被 VipRepository.purchaseVip 直接 Result.failure 拦截（VIP 只能走卡密）
+                            //    这里传什么都不会到云端，仅为编译通过保留 0
+                            0
                         )
                     }
                 )
             }
             
-            Spacer(modifier = Modifier.height(30.dp))
-            
-            // 页面指示器
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 页面指示器（紧凑）
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 repeat(vipCards.size) { index ->
                     val isSelected = pagerState.currentPage == index
                     Box(
                         modifier = Modifier
-                            .size(if (isSelected) 32.dp else 8.dp, 8.dp)
+                            .size(if (isSelected) 24.dp else 7.dp, 7.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(
                                 if (isSelected) {
@@ -365,37 +482,20 @@ fun VipScreen(
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // 兑换码区域
-            RedeemCodeSection(
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 🆕 统一金边胶囊操作栏（兑换码 + 立即购买 整合成一个组件）
+            UnifiedActionBar(
                 vipViewModel = vipViewModel,
-                onRedeemSuccess = {
-                    // 兑换成功后的处理
-                }
-            )
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            PremiumPurchaseButton(
-                onClick = {
+                onPurchase = {
                     val selectedCard = vipCards[pagerState.currentPage]
                     selectedVipCard = selectedCard
                     showPaymentDialog = true
                 }
             )
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
-            Text(
-                "开通VIP",
-                fontSize = 14.sp,
-                color = Color.White.copy(alpha = 0.5f),
-                fontWeight = FontWeight.Medium
-            )
-            
-            Spacer(modifier = Modifier.height(50.dp))
         }
         
         AnimatedVisibility(
@@ -456,6 +556,11 @@ fun VipScreen(
             }
         }
         
+        // 完整权益弹窗
+        benefitsDialogCard?.let { card ->
+            com.example.funlife.ui.components.VipBenefitsDialog(card = card, onDismiss = { benefitsDialogCard = null })
+        }
+
         // 支付对话框
         if (showPaymentDialog && selectedVipCard != null) {
             com.example.funlife.ui.components.VipPaymentDialog(
@@ -475,7 +580,8 @@ fun VipScreen(
                             "年费" -> 365
                             else -> 30
                         },
-                        (selectedVipCard!!.price.toFloatOrNull() ?: 0f).toInt() * 100
+                        // ⚠️ 同上，已是死代码，VIP 购买在 Repository 层被拒绝
+                        0
                     )
                 }
             )
@@ -499,6 +605,164 @@ fun VipScreen(
                     prefs.edit().putBoolean("show_first_entry_effect_$uid", true).apply()
                 }
             )
+        }
+    }
+}
+
+/**
+ * 紧凑版兑换码圆形按钮 — 点击弹出 Dialog 显示完整兑换码 UI
+ * 用于一屏布局，节省底部空间
+ */
+@Composable
+fun CompactRedeemCodeButton(
+    vipViewModel: VipViewModel,
+    onRedeemSuccess: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val infiniteTransition = rememberInfiniteTransition(label = "redeemBtn")
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.92f, targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            tween(1100, easing = FastOutSlowInEasing),
+            RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+    val sweep by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing)),
+        label = "sweep"
+    )
+
+    Box(
+        modifier = modifier
+            .size(60.dp)
+            .graphicsLayer { scaleX = pulse; scaleY = pulse }
+            .shadow(
+                elevation = 12.dp,
+                shape = CircleShape,
+                ambientColor = Color(0xFF9D4FFF),
+                spotColor = Color(0xFF6B5FFF)
+            )
+            .clip(CircleShape)
+            .background(
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        Color(0xFF6B5FFF),
+                        Color(0xFF9D4FFF),
+                        Color(0xFFFF4FFF),
+                        Color(0xFF9D4FFF),
+                        Color(0xFF6B5FFF)
+                    )
+                )
+            )
+            .drawBehind {
+                // 旋转流光环
+                rotate(sweep) {
+                    drawCircle(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.4f),
+                                Color.Transparent,
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.6f)
+                            )
+                        ),
+                        radius = size.minDimension / 2f - 2f,
+                        style = Stroke(width = 3f)
+                    )
+                }
+            }
+            .border(2.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+            .clickable { showDialog = true },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = "🎁", fontSize = 22.sp)
+            Text(
+                text = "兑换",
+                fontSize = 9.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Black,
+                style = LocalTextStyle.current.copy(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color.Black.copy(alpha = 0.7f),
+                        blurRadius = 4f
+                    )
+                )
+            )
+        }
+    }
+
+    // 弹出对话框：复用现有 RedeemCodeSection
+    if (showDialog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showDialog = false }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1A0F2E),
+                                Color(0xFF0F0820)
+                            )
+                        )
+                    )
+                    .border(
+                        width = 1.5.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700),
+                                Color(0xFF9D4FFF),
+                                Color(0xFF00D9FF)
+                            )
+                        ),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                    .padding(20.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🎁 兑换码",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                        IconButton(
+                            onClick = { showDialog = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "关闭",
+                                tint = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                    RedeemCodeSection(
+                        vipViewModel = vipViewModel,
+                        onRedeemSuccess = {
+                            onRedeemSuccess()
+                            showDialog = false
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -733,6 +997,57 @@ fun RedeemCodeSection(
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // 🔄 设备迁移区：在原设备导出 / 在新设备恢复
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                ) {
+                    // ① 原设备：导出迁移凭证（复制到剪贴板）
+                    Text(
+                        text = "📤 导出本机迁移凭证",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                        modifier = Modifier.clickable {
+                            val token = vipViewModel.exportMigrationToken()
+                            if (token.isNullOrBlank()) {
+                                android.widget.Toast.makeText(ctx, "本机暂无可迁移的 VIP", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                clipboard.setText(androidx.compose.ui.text.AnnotatedString(token))
+                                android.widget.Toast.makeText(ctx, "✅ 迁移凭证已复制，请发送到新设备", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    )
+
+                    // ② 新设备：粘贴 code:oldDeviceId 后点这里恢复
+                    Text(
+                        text = "📥 在新设备恢复 VIP",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                        modifier = Modifier.clickable(enabled = redeemCode.isNotEmpty()) {
+                            vipViewModel.migrateVip(redeemCode)
+                            redeemCode = ""
+                            isExpanded = false
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "新设备迁移：原设备点「导出本机迁移凭证」→ 把整段粘贴到上方输入框 → 点「在新设备恢复 VIP」",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 10.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp)
                 )
             }
         }
@@ -1147,6 +1462,16 @@ fun EpicTitle() {
 
 @Composable
 fun SwipeableVipCard(
+    card: VipCardData,
+    pageOffset: Float,
+    isCenter: Boolean,
+    onShowBenefits: (VipCardData) -> Unit = {},
+    onClick: () -> Unit
+) = SwipeableVipCardV2(card, pageOffset, isCenter, onShowBenefits, onClick)
+
+@Composable
+@Suppress("unused")
+private fun SwipeableVipCardLegacy_Unused(
     card: VipCardData,
     pageOffset: Float,
     isCenter: Boolean,
@@ -1898,6 +2223,969 @@ fun SwipeableVipCard(
     }
 }
 
+/**
+ * 🎨 重新设计的 VIP 卡片（自适应 + 清晰分区 + 强动画）
+ *
+ * 设计原则（参考 docs/屏幕适配指南.md & DEVELOPMENT_PRINCIPLES.md）：
+ *  1. 全部尺寸用 rdp / rsp，多机型自适应（小屏 360dp~大屏 480dp 都不溢出）
+ *  2. 单一标签焦点：仅保留 topLeftTag 一个促销标签（去掉 cornerTag/saleBadge 重复）
+ *  3. 价格区独立卡片：原价/折扣行 与 主价格行 完全分隔，不再相互重叠
+ *  4. 图标固定 80.rdp 圆形容器：emoji 字号上限 36.rsp，绝不撑爆卡片
+ *  5. 权益最多 3 条：避免在小屏被挤出可视区
+ *  6. 入场弹性 + 中央卡片浮动呼吸 + sweepGradient 边框跑光
+ */
+@Composable
+fun SwipeableVipCardV2(
+    card: VipCardData,
+    pageOffset: Float,
+    isCenter: Boolean,
+    onShowBenefits: (VipCardData) -> Unit = {},
+    onClick: () -> Unit
+) {
+    val transition = rememberInfiniteTransition(label = "cardV2_${card.title}")
+
+    // 流光：边框跑光
+    val shimmer by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing)),
+        label = "shimmer"
+    )
+    // 主价格脉冲发光
+    val priceGlow by transition.animateFloat(
+        initialValue = 0.55f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "priceGlow"
+    )
+    // 中央卡片 Y 浮动（仅中央生效）
+    val floatY by transition.animateFloat(
+        initialValue = -3f, targetValue = 3f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "floatY"
+    )
+    // 角标缓慢扫光旋转
+    val sweepRot by transition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
+        label = "sweepRot"
+    )
+    // 图标圆环呼吸
+    val iconGlow by transition.animateFloat(
+        initialValue = 0.35f, targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(tween(1700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "iconGlow"
+    )
+
+    // 翻页透视
+    val absOffset = pageOffset.absoluteValue.coerceIn(0f, 1f)
+    val scale = lerpFloat(0.86f, 1f, 1f - absOffset)
+    val alpha = lerpFloat(0.55f, 1f, 1f - absOffset)
+    val rotationY = when {
+        pageOffset < 0 -> lerpFloat(0f, 22f, (-pageOffset).coerceIn(0f, 1f))
+        pageOffset > 0 -> lerpFloat(0f, -22f, pageOffset.coerceIn(0f, 1f))
+        else -> 0f
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+                this.rotationY = rotationY
+                cameraDistance = 14f * density
+                translationY = if (isCenter) floatY * density else 0f
+                clip = false
+            }
+    ) {
+        // ① 外层光晕（中央卡片更浓）
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.rdp)
+                .clip(RoundedCornerShape(28.rdp))
+                .blur(if (isCenter) 28.rdp else 14.rdp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            card.gradient[0].copy(alpha = if (isCenter) 0.55f else 0.18f),
+                            card.gradient.getOrElse(1) { card.gradient[0] }.copy(alpha = if (isCenter) 0.4f else 0.12f),
+                            card.gradient.getOrElse(2) { card.gradient[0] }.copy(alpha = if (isCenter) 0.3f else 0.1f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(28.rdp)
+                )
+        )
+
+        // ② 主卡片
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.rdp)
+                .clip(RoundedCornerShape(26.rdp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            card.gradient[0].copy(alpha = if (isCenter) 0.96f else 0.86f),
+                            card.gradient.getOrElse(1) { card.gradient[0] }.copy(alpha = if (isCenter) 0.98f else 0.88f),
+                            card.gradient.getOrElse(2) { card.gradient[1] }.copy(alpha = if (isCenter) 0.94f else 0.84f)
+                        )
+                    )
+                )
+                .border(
+                    width = if (isCenter) 2.dp else 1.dp,
+                    brush = if (isCenter) Brush.sweepGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.85f),
+                            Color.White.copy(alpha = 0.15f),
+                            Color(0xFFFFD700).copy(alpha = 0.7f),
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.85f)
+                        )
+                    ) else Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.12f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(26.rdp)
+                )
+                .clickable(onClick = onClick)
+        ) {
+            // ③ 装饰：旋转扫光（仅中央卡，弱透明度）
+            if (isCenter) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { rotationZ = sweepRot }
+                ) {
+                    drawCircle(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = 0.06f),
+                                Color.Transparent,
+                                Color(0xFFFFD700).copy(alpha = 0.05f),
+                                Color.Transparent
+                            )
+                        ),
+                        radius = size.maxDimension * 0.7f,
+                        center = Offset(size.width / 2f, size.height / 2.4f)
+                    )
+                }
+            }
+
+            // ③·b 金色火花粒子（仅中央卡，营销吸引）
+            if (isCenter) {
+                FloatingSparkles(seed = card.title.hashCode())
+            }
+
+            // ④ 流光横条
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val off = shimmer * size.width * 2.4f
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = if (isCenter) 0.25f else 0.12f),
+                            Color.Transparent
+                        ),
+                        startX = off - size.width * 1.0f,
+                        endX = off
+                    ),
+                    blendMode = BlendMode.Plus
+                )
+            }
+
+            // ⑤ 顶部高光带（玻璃质感）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.rdp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.14f),
+                                Color.White.copy(alpha = 0.04f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // ⑥ 主内容区
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.rdp)
+                    .padding(top = 24.rdp, bottom = 14.rdp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // —— 标题 ——（上方留出 24rdp 给悬浮 topLeftTag）
+                Text(
+                    text = card.title,
+                    fontSize = 22.rsp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    style = LocalTextStyle.current.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.55f),
+                            offset = Offset(0f, 2f),
+                            blurRadius = 10f
+                        )
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.rdp))
+
+                // —— 价格区（独立卡片）——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.rdp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.18f),
+                                    Color.Black.copy(alpha = 0.10f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.35f),
+                                    Color.White.copy(alpha = 0.08f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(16.rdp)
+                        )
+                        .padding(horizontal = 14.rdp, vertical = 10.rdp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 第一行：原价 + 折扣徽章（独立行，间距充足）
+                        if (card.originalPrice != null || card.discountLabel != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (card.originalPrice != null) {
+                                    Text(
+                                        text = "原价 ¥${card.originalPrice}",
+                                        fontSize = 11.rsp,
+                                        color = Color.White.copy(alpha = 0.55f),
+                                        textDecoration = TextDecoration.LineThrough,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                if (card.discountLabel != null) {
+                                    Spacer(modifier = Modifier.width(10.rdp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.rdp))
+                                            .background(
+                                                brush = Brush.horizontalGradient(
+                                                    colors = listOf(
+                                                        Color(0xFFFF1744),
+                                                        Color(0xFFFF5252)
+                                                    )
+                                                )
+                                            )
+                                            .padding(horizontal = 7.rdp, vertical = 2.rdp)
+                                    ) {
+                                        Text(
+                                            text = card.discountLabel,
+                                            fontSize = 10.rsp,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.rdp))
+                        }
+
+                        // 第二行：周期 chip + ¥ + 大数字（独立行，绝不挤压）
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            // 周期 chip
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.rdp))
+                                    .background(Color.White.copy(alpha = 0.18f))
+                                    .border(
+                                        width = 0.8.dp,
+                                        color = Color.White.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(10.rdp)
+                                    )
+                                    .padding(horizontal = 8.rdp, vertical = 3.rdp)
+                                    .alignByBaseline()
+                            ) {
+                                Text(
+                                    text = card.period,
+                                    fontSize = 10.rsp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.95f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.rdp))
+                            // ¥ 符号
+                            Text(
+                                text = "¥",
+                                fontSize = 20.rsp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.alignByBaseline(),
+                                style = LocalTextStyle.current.copy(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(Color(0xFFFFE082), Color.White)
+                                    ),
+                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                        color = Color(0xFFFFD700).copy(alpha = priceGlow * 0.7f),
+                                        blurRadius = 14f
+                                    )
+                                )
+                            )
+                            // 大数字
+                            Text(
+                                text = card.price,
+                                fontSize = 34.rsp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.alignByBaseline(),
+                                style = LocalTextStyle.current.copy(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color.White,
+                                            Color(0xFFFFE082),
+                                            Color.White
+                                        )
+                                    ),
+                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                        color = Color(0xFFFFD700).copy(alpha = priceGlow),
+                                        blurRadius = 22f
+                                    )
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.rdp))
+
+                // —— 图标区（固定圆形容器 + 发光环）——
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(80.rdp)
+                ) {
+                    // 外圈柔光
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = iconGlow * 0.35f),
+                                    Color.White.copy(alpha = iconGlow * 0.10f),
+                                    Color.Transparent
+                                )
+                            ),
+                            radius = size.minDimension / 2f
+                        )
+                    }
+                    // 渐变圆底
+                    Box(
+                        modifier = Modifier
+                            .size(64.rdp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.32f),
+                                        Color.White.copy(alpha = 0.08f)
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.2.dp,
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.7f),
+                                        Color.White.copy(alpha = 0.2f)
+                                    )
+                                ),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = card.icon,
+                            fontSize = 34.rsp,
+                            style = LocalTextStyle.current.copy(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    offset = Offset(0f, 3f),
+                                    blurRadius = 8f
+                                )
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.rdp))
+
+                // —— 渐变分割线 ——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.65f)
+                        .height(1.dp)
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = 0.5f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                Spacer(modifier = Modifier.height(8.rdp))
+
+                // —— 权益列表（最多 3 条，紧凑） + 「查看完整权益」入口 ——
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(5.rdp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    card.benefits.take(3).forEachIndexed { idx, benefit ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.rdp))
+                                .background(Color.White.copy(alpha = 0.07f + idx * 0.012f))
+                                .padding(horizontal = 10.rdp, vertical = 6.rdp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.rdp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.55f),
+                                                Color.White.copy(alpha = 0.2f)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "✓",
+                                    fontSize = 11.rsp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.rdp))
+                            Text(
+                                text = benefit,
+                                fontSize = 12.rsp,
+                                color = Color.White.copy(alpha = 0.96f),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                style = LocalTextStyle.current.copy(
+                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                        color = Color.Black.copy(alpha = 0.5f),
+                                        offset = Offset(0f, 1f),
+                                        blurRadius = 3f
+                                    )
+                                )
+                            )
+                        }
+                    }
+
+                    // —— 「查看完整权益」入口（fullBenefits 非空才显示）——
+                    if (card.level.fullBenefits.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.rdp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.rdp))
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.White.copy(alpha = 0.18f),
+                                            Color.White.copy(alpha = 0.10f),
+                                            Color.White.copy(alpha = 0.18f)
+                                        )
+                                    )
+                                )
+                                .clickable { onShowBenefits(card) }
+                                .padding(horizontal = 12.rdp, vertical = 6.rdp)
+                        ) {
+                            Text(
+                                text = "✨ 查看完整 ${card.level.fullBenefits.size} 项权益",
+                                fontSize = 11.rsp,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(modifier = Modifier.width(4.rdp))
+                            Text(
+                                text = "→",
+                                fontSize = 12.rsp,
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // —— 信任徽章组（已售/好评/保障）——
+                TrustBadgesRow()
+
+                Spacer(modifier = Modifier.height(6.rdp))
+
+                // —— 底部 CTA 提示条 ——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.rdp))
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.16f),
+                                    Color.White.copy(alpha = 0.08f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.4f),
+                                    Color.White.copy(alpha = 0.12f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(14.rdp)
+                        )
+                        .padding(vertical = 8.rdp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isCenter) "✨ 点击下方立即购买" else "← 滑动选择 →",
+                        fontSize = 11.rsp,
+                        color = Color.White.copy(alpha = 0.92f),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // ⑥·b 右上角"限时秒杀"丝带 — 已移除（与顶部跑马灯/倒计时重复）
+        }
+
+        // ⑥·c 右上角倾斜小标签（cornerTag：超值 / 热销 / 至尊）
+        if (card.cornerTag != null && card.cornerTagColor != null && isCenter) {
+            val cornerPulse by transition.animateFloat(
+                initialValue = 0.92f, targetValue = 1.08f,
+                animationSpec = infiniteRepeatable(
+                    tween(900, easing = FastOutSlowInEasing),
+                    RepeatMode.Reverse
+                ),
+                label = "cornerPulse"
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 14.rdp, end = 8.rdp)
+                    .graphicsLayer {
+                        rotationZ = 12f
+                        scaleX = cornerPulse
+                        scaleY = cornerPulse
+                    }
+                    .shadow(
+                        elevation = 10.dp,
+                        shape = RoundedCornerShape(10.rdp),
+                        ambientColor = card.cornerTagColor[0],
+                        spotColor = card.cornerTagColor.last()
+                    )
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 10.rdp, bottomEnd = 10.rdp,
+                            topEnd = 4.rdp, bottomStart = 4.rdp
+                        )
+                    )
+                    .background(
+                        brush = Brush.horizontalGradient(card.cornerTagColor)
+                    )
+                    .border(
+                        width = 1.2.dp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(
+                            topStart = 10.rdp, bottomEnd = 10.rdp,
+                            topEnd = 4.rdp, bottomStart = 4.rdp
+                        )
+                    )
+                    .padding(horizontal = 9.rdp, vertical = 3.rdp)
+                    .zIndex(15f)
+            ) {
+                Text(
+                    text = "⚡ ${card.cornerTag}",
+                    fontSize = 10.rsp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    style = LocalTextStyle.current.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            blurRadius = 3f
+                        )
+                    )
+                )
+            }
+        }
+
+        // ⑥·d 右下角飘带（saleBadge：🎁 首充特惠 / 🔥 爆款推荐）
+        if (card.saleBadge != null && isCenter) {
+            val ribbonShimmer by transition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(1800, easing = LinearEasing)),
+                label = "ribbonShimmer"
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 18.rdp, end = 0.rdp)
+                    .offset(x = 4.rdp)
+                    .graphicsLayer { rotationZ = -6f }
+                    .shadow(
+                        elevation = 12.dp,
+                        shape = RoundedCornerShape(
+                            topStart = 14.rdp, bottomStart = 14.rdp,
+                            topEnd = 4.rdp, bottomEnd = 4.rdp
+                        ),
+                        ambientColor = Color(0xFFFF1744),
+                        spotColor = Color(0xFFFF6D00)
+                    )
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 14.rdp, bottomStart = 14.rdp,
+                            topEnd = 4.rdp, bottomEnd = 4.rdp
+                        )
+                    )
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFFFF1744),
+                                Color(0xFFFF6D00),
+                                Color(0xFFFF1744)
+                            )
+                        )
+                    )
+                    .drawBehind {
+                        // 流光横扫
+                        val off = ribbonShimmer * size.width * 2.4f
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = 0.45f),
+                                    Color.Transparent
+                                ),
+                                startX = off - size.width * 0.4f,
+                                endX = off
+                            ),
+                            blendMode = BlendMode.Plus
+                        )
+                    }
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(
+                            topStart = 14.rdp, bottomStart = 14.rdp,
+                            topEnd = 4.rdp, bottomEnd = 4.rdp
+                        )
+                    )
+                    .padding(horizontal = 10.rdp, vertical = 4.rdp)
+                    .zIndex(15f)
+            ) {
+                Text(
+                    text = card.saleBadge,
+                    fontSize = 10.rsp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    style = LocalTextStyle.current.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            blurRadius = 3f
+                        )
+                    )
+                )
+            }
+        }
+
+        // ⑥·e 左下角"已售"实时数据徽章（吸引人冲会员）
+        if (isCenter) {
+            val soldCount = remember(card.title) {
+                when (card.level) {
+                    VipLevel.VIP1 -> "12,876"
+                    VipLevel.VIP2 -> "8,432"
+                    VipLevel.VIP3 -> "3,891"
+                    else -> "5,000"
+                }
+            }
+            val soldPulse by transition.animateFloat(
+                initialValue = 0.85f, targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    tween(1100, easing = FastOutSlowInEasing),
+                    RepeatMode.Reverse
+                ),
+                label = "soldPulse"
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.rdp),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(bottom = 18.rdp, start = 8.rdp)
+                    .graphicsLayer { rotationZ = 4f }
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = RoundedCornerShape(8.rdp),
+                        spotColor = Color(0xFF00C853)
+                    )
+                    .clip(RoundedCornerShape(8.rdp))
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.65f),
+                                Color(0xFF003300).copy(alpha = 0.65f)
+                            )
+                        )
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = Color(0xFF00E676).copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(8.rdp)
+                    )
+                    .padding(horizontal = 7.rdp, vertical = 3.rdp)
+                    .zIndex(15f)
+            ) {
+                // 闪烁的绿色实时点
+                Box(
+                    modifier = Modifier
+                        .size(6.rdp)
+                        .graphicsLayer { this.alpha = soldPulse }
+                        .background(Color(0xFF00E676), shape = CircleShape)
+                )
+                Text(
+                    text = "已售 $soldCount",
+                    fontSize = 9.rsp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFFB9F6CA)
+                )
+            }
+        }
+
+        // ⑦ 顶部促销标签（仅中央卡显示，悬浮在卡外，装饰大幅强化）
+        if (card.topLeftTag != null && card.topLeftTagColor != null && isCenter) {
+            val tagBounce by transition.animateFloat(
+                initialValue = 0f, targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    tween(900, easing = FastOutSlowInEasing),
+                    RepeatMode.Reverse
+                ),
+                label = "tagBounce"
+            )
+            val tagTilt by transition.animateFloat(
+                initialValue = -4f, targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    tween(1400, easing = FastOutSlowInEasing),
+                    RepeatMode.Reverse
+                ),
+                label = "tagTilt"
+            )
+            val tagShimmer by transition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing)),
+                label = "tagShimmer"
+            )
+            val tagGlow by transition.animateFloat(
+                initialValue = 0.5f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    tween(800, easing = FastOutSlowInEasing),
+                    RepeatMode.Reverse
+                ),
+                label = "tagGlow"
+            )
+            val tagSparkRot by transition.animateFloat(
+                initialValue = 0f, targetValue = 360f,
+                animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing)),
+                label = "tagSparkRot"
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = 6.rdp + tagBounce.dp)  // 不再飘出卡片外，改为浮在卡片内顶部
+                    .zIndex(20f)
+                    .graphicsLayer { rotationZ = tagTilt }
+            ) {
+                // —— 外圈光晕 ——（Canvas 不裁切，可在范围外绘制）
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                card.topLeftTagColor[0].copy(alpha = tagGlow * 0.45f),
+                                card.topLeftTagColor.lastOrNull()?.copy(alpha = tagGlow * 0.22f) ?: Color.Transparent,
+                                Color.Transparent
+                            ),
+                            radius = size.maxDimension * 1.1f
+                        ),
+                        radius = size.maxDimension * 1.1f,
+                        center = Offset(size.width / 2f, size.height / 2f)
+                    )
+                }
+
+                // —— 主标签胶囊 ——
+                Box(
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 14.dp,
+                            shape = RoundedCornerShape(14.rdp),
+                            ambientColor = card.topLeftTagColor[0],
+                            spotColor = card.topLeftTagColor.last()
+                        )
+                        .clip(RoundedCornerShape(14.rdp))
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = card.topLeftTagColor
+                            )
+                        )
+                        .drawBehind {
+                            // 顶部高光（mock 玻璃质感）
+                            drawRoundRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.45f),
+                                        Color.White.copy(alpha = 0.0f)
+                                    ),
+                                    endY = size.height * 0.5f
+                                ),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(40f, 40f)
+                            )
+                            // 流光横扫
+                            val off = tagShimmer * size.width * 2.4f
+                            drawRoundRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.White.copy(alpha = 0.55f),
+                                        Color.Transparent
+                                    ),
+                                    startX = off - size.width * 0.4f,
+                                    endX = off
+                                ),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(40f, 40f),
+                                blendMode = BlendMode.Plus
+                            )
+                        }
+                        .border(
+                            width = 1.8.dp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.95f),
+                                    Color(0xFFFFD700).copy(alpha = 0.95f),
+                                    Color.White.copy(alpha = 0.95f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(14.rdp)
+                        )
+                        .padding(horizontal = 14.rdp, vertical = 6.rdp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 旋转 emoji
+                        Box(
+                            modifier = Modifier.graphicsLayer { rotationZ = tagSparkRot * 0.5f }
+                        ) {
+                            Text(text = "🔥", fontSize = 13.rsp)
+                        }
+                        Spacer(modifier = Modifier.width(5.rdp))
+                        Text(
+                            text = card.topLeftTag,
+                            fontSize = 12.rsp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            style = LocalTextStyle.current.copy(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.8f),
+                                    offset = Offset(0f, 1f),
+                                    blurRadius = 4f
+                                )
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(3.rdp))
+                        // 装饰小星
+                        Text(
+                            text = "✨",
+                            fontSize = 11.rsp,
+                            modifier = Modifier.graphicsLayer {
+                                rotationZ = -tagSparkRot
+                                scaleX = 0.8f + 0.3f * sin(tagSparkRot.toDouble() * PI / 180).toFloat()
+                                scaleY = scaleX
+                            }
+                        )
+                    }
+                }
+
+                // —— 两侧悬浮装饰星（Canvas 不裁切，可在 matchParentSize 范围外绘制） ——
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val starColors = listOf(
+                        Color(0xFFFFE082),
+                        Color.White,
+                        card.topLeftTagColor[0]
+                    )
+                    repeat(6) { i ->
+                        val ang = (i * 60f + tagSparkRot) * PI.toFloat() / 180f
+                        // 椭圆轨迹半径：水平方向超出胶囊宽度
+                        val rx = size.width * 0.7f
+                        val ry = size.height * 0.6f
+                        val cx = size.width / 2f + cos(ang) * rx
+                        val cy = size.height / 2f + sin(ang) * ry
+                        val color = starColors[i % starColors.size]
+                        val alpha = (0.4f + 0.6f * sin((tagSparkRot + i * 60).toDouble() * PI / 180).toFloat()).coerceIn(0f, 1f)
+                        // 中心点
+                        drawCircle(
+                            color = color.copy(alpha = alpha),
+                            radius = 2.5f,
+                            center = Offset(cx, cy)
+                        )
+                        // 十字光线
+                        drawLine(
+                            color = color.copy(alpha = alpha * 0.7f),
+                            start = Offset(cx - 5f, cy),
+                            end = Offset(cx + 5f, cy),
+                            strokeWidth = 0.9f
+                        )
+                        drawLine(
+                            color = color.copy(alpha = alpha * 0.7f),
+                            start = Offset(cx, cy - 5f),
+                            end = Offset(cx, cy + 5f),
+                            strokeWidth = 0.9f
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun Perspective3DVipCard(
     card: VipCardData,
@@ -2556,7 +3844,8 @@ fun PremiumVipCard(
 
 @Composable
 fun PremiumPurchaseButton(
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.width(320.dp)
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "button")
     
@@ -2581,9 +3870,7 @@ fun PremiumPurchaseButton(
     )
     
     Box(
-        modifier = Modifier
-            .width(320.dp)
-            .height(60.dp),
+        modifier = modifier.height(60.dp),
         contentAlignment = Alignment.Center
     ) {
         // 外层呼吸光晕 - 用Canvas绘制避免矩形阴影
@@ -3559,3 +4846,848 @@ fun CuteLoadingAnimation() {
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+//  🛒 营销装饰组件（吸引冲会员）
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 限时倒计时徽章 — mm:ss 实时跳秒，营造紧迫感
+ */
+@Composable
+fun LimitedTimeCountdownChip() {
+    // 用进入页面时锚定一个 4 小时后的截止时间（按系统时钟，每秒重组一次）
+    val deadline = remember { System.currentTimeMillis() + 4 * 60 * 60 * 1000L }
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    val remain = (deadline - nowMs).coerceAtLeast(0L)
+    val hh = (remain / 3600_000L).toInt()
+    val mm = ((remain / 60_000L) % 60).toInt()
+    val ss = ((remain / 1000L) % 60).toInt()
+
+    val transition = rememberInfiniteTransition(label = "ctChip")
+    val pulse by transition.animateFloat(
+        initialValue = 0.96f, targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(tween(800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse"
+    )
+    val shimmer by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing)),
+        label = "shimmer"
+    )
+
+    Box(
+        modifier = Modifier
+            .graphicsLayer { scaleX = pulse; scaleY = pulse }
+            .shadow(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color(0xFFFF1744),
+                spotColor = Color(0xFFFF6D00)
+            )
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFF1744),
+                        Color(0xFFFF6D00),
+                        Color(0xFFFFD600),
+                        Color(0xFFFF6D00),
+                        Color(0xFFFF1744)
+                    )
+                )
+            )
+            .border(
+                width = 1.5.dp,
+                color = Color.White.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(horizontal = 14.rdp, vertical = 6.rdp)
+    ) {
+        // 流光叠层
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val off = shimmer * size.width * 2.2f
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.35f),
+                        Color.Transparent
+                    ),
+                    startX = off - size.width * 0.6f,
+                    endX = off
+                ),
+                blendMode = BlendMode.Plus
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "⏰", fontSize = 13.rsp)
+            Spacer(modifier = Modifier.width(6.rdp))
+            Text(
+                text = "限时特惠",
+                fontSize = 12.rsp,
+                color = Color.White,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(modifier = Modifier.width(8.rdp))
+            // 倒计时数字方块
+            CountdownBlock(value = "%02d".format(hh))
+            Text(":", fontSize = 14.rsp, color = Color.White, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 2.rdp))
+            CountdownBlock(value = "%02d".format(mm))
+            Text(":", fontSize = 14.rsp, color = Color.White, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 2.rdp))
+            CountdownBlock(value = "%02d".format(ss))
+        }
+    }
+}
+
+@Composable
+private fun CountdownBlock(value: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .padding(horizontal = 5.rdp, vertical = 1.rdp)
+    ) {
+        Text(
+            text = value,
+            fontSize = 12.rsp,
+            color = Color(0xFFFFE57F),
+            fontWeight = FontWeight.Black,
+            style = LocalTextStyle.current.copy(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color(0xFFFF1744).copy(alpha = 0.7f),
+                    blurRadius = 6f
+                )
+            )
+        )
+    }
+}
+
+/**
+ * 营销跑马灯 — 不断滚动的促销话术，营造抢购氛围
+ */
+@Composable
+fun MarketingMarqueeBar() {
+    val claims = remember {
+        listOf(
+            "🎉 用户「小**」刚刚开通了 终身VIP",
+            "🔥 今日已 12,876 人成功开通 VIP",
+            "💎 限时 5 折，仅剩 1 天 23 时",
+            "⭐ 用户「lucky_***」5 秒前抢购成功",
+            "🚀 VIP 累计为 86,520 位用户解锁特权",
+            "🎁 新人首充再送 ¥30 等值金币"
+        )
+    }
+
+    val transition = rememberInfiniteTransition(label = "marquee")
+    val scrollX by transition.animateFloat(
+        initialValue = 1f, targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(28000, easing = LinearEasing)),
+        label = "scroll"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .height(28.rdp)
+            .clip(RoundedCornerShape(14.rdp))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = 0.18f),
+                        Color(0xFFFF6D00).copy(alpha = 0.18f),
+                        Color(0xFFFFD700).copy(alpha = 0.18f)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = 0.6f),
+                        Color(0xFFFF1744).copy(alpha = 0.6f),
+                        Color(0xFFFFD700).copy(alpha = 0.6f)
+                    )
+                ),
+                shape = RoundedCornerShape(14.rdp)
+            )
+    ) {
+        // 左侧广播图标固定标签
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 8.rdp)
+                .clip(RoundedCornerShape(10.rdp))
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(Color(0xFFFF1744), Color(0xFFFF6D00))
+                    )
+                )
+                .padding(horizontal = 6.rdp, vertical = 2.rdp)
+                .zIndex(2f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("📢", fontSize = 10.rsp)
+            Spacer(modifier = Modifier.width(2.rdp))
+            Text(
+                "实时",
+                fontSize = 9.rsp,
+                color = Color.White,
+                fontWeight = FontWeight.Black
+            )
+        }
+        // 滚动文字 — 单条 Row 内拼接所有 claims，从右向左滚动
+        val combined = claims.joinToString("    ·    ") { it }
+        // 用 Modifier.offset 实现滚动；整段文字宽度通过 fillMaxWidth + horizontalScroll 模拟
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 56.rdp, end = 8.rdp)
+        ) {
+            // 我们在 Box 内放一个超宽 Row，用 graphicsLayer translationX 实现滚动
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .graphicsLayer {
+                        // scrollX 从 1 到 0；translationX 从 size.width 到 -textWidth
+                        // 这里我们用一个相对宽度估计（每字 12px），简化处理
+                        translationX = (scrollX - 0.5f) * 2400f
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$combined    ·    $combined",
+                    fontSize = 11.rsp,
+                    color = Color.White.copy(alpha = 0.95f),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 在中央 VIP 卡上叠加金色火花粒子（吸引点击）
+ */
+@Composable
+fun BoxScope.FloatingSparkles(seed: Int = 0) {
+    val transition = rememberInfiniteTransition(label = "sparks_$seed")
+    val t by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing)),
+        label = "t"
+    )
+    Canvas(modifier = Modifier.matchParentSize()) {
+        val rand = java.util.Random((seed + 17).toLong())
+        repeat(14) { idx ->
+            val phase = (t + idx * 0.07f) % 1f
+            val baseX = rand.nextFloat() * size.width
+            val baseY = rand.nextFloat() * size.height
+            val driftX = (rand.nextFloat() - 0.5f) * 18f
+            val driftY = -phase * 60f
+            val x = baseX + driftX * phase
+            val y = baseY + driftY
+            val a = (sin(phase * PI.toFloat()) * 0.9f).coerceIn(0f, 1f)
+            val r = 1.4f + rand.nextFloat() * 2.6f
+            // 金色十字星
+            drawCircle(
+                color = Color(0xFFFFE082).copy(alpha = a * 0.85f),
+                radius = r,
+                center = Offset(x, y)
+            )
+            drawLine(
+                color = Color.White.copy(alpha = a * 0.7f),
+                start = Offset(x - r * 2.2f, y),
+                end = Offset(x + r * 2.2f, y),
+                strokeWidth = 0.9f
+            )
+            drawLine(
+                color = Color.White.copy(alpha = a * 0.7f),
+                start = Offset(x, y - r * 2.2f),
+                end = Offset(x, y + r * 2.2f),
+                strokeWidth = 0.9f
+            )
+        }
+    }
+}
+
+/**
+ * 右上角"限时秒杀"丝带角标
+ */
+@Composable
+fun BoxScope.HotSaleCornerRibbon() {
+    val transition = rememberInfiniteTransition(label = "ribbon")
+    val flash by transition.animateFloat(
+        initialValue = 0.7f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "flash"
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 14.rdp, end = 4.rdp)
+            .graphicsLayer { rotationZ = 8f }
+            .shadow(8.dp, RoundedCornerShape(8.rdp), spotColor = Color(0xFFFF1744))
+            .clip(RoundedCornerShape(8.rdp))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFF1744),
+                        Color(0xFFFF6D00).copy(alpha = flash)
+                    )
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = flash), RoundedCornerShape(8.rdp))
+            .padding(horizontal = 8.rdp, vertical = 3.rdp)
+            .zIndex(15f)
+    ) {
+        Text(
+            text = "⚡ 限时秒杀",
+            fontSize = 10.rsp,
+            color = Color.White,
+            fontWeight = FontWeight.Black,
+            style = LocalTextStyle.current.copy(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.7f),
+                    blurRadius = 3f
+                )
+            )
+        )
+    }
+}
+
+/**
+ * 卡片底部信任徽章组（已售/好评率/保障）
+ */
+@Composable
+fun TrustBadgesRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.rdp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TrustBadgeItem(modifier = Modifier.weight(1f), icon = "🔥", text = "已售12.8k+", color = Color(0xFFFF6D00))
+        TrustBadgeItem(modifier = Modifier.weight(1f), icon = "⭐", text = "好评99%", color = Color(0xFFFFD700))
+        TrustBadgeItem(modifier = Modifier.weight(1f), icon = "🛡", text = "安全保障", color = Color(0xFF00E5FF))
+    }
+}
+
+/**
+ * 紧凑小标题 — 替代占用过多空间的 EpicTitle
+ * 一行精致渐变文字 + 两侧装饰光线
+ */
+@Composable
+fun CompactSubtitle() {
+    val infiniteTransition = rememberInfiniteTransition(label = "subtitle")
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing)),
+        label = "shimmer"
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 左侧装饰线
+        Box(
+            modifier = Modifier
+                .width(40.rdp)
+                .height(2.dp)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0xFFFFD700).copy(alpha = 0.7f)
+                        )
+                    )
+                )
+        )
+        Text(text = "✨", fontSize = 14.rsp)
+        Text(
+            text = "选择您的尊享会员",
+            fontSize = 16.rsp,
+            fontWeight = FontWeight.Black,
+            style = LocalTextStyle.current.copy(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFFE082),
+                        Color(0xFFFFD700),
+                        Color(0xFFFFE082)
+                    ),
+                    startX = shimmer * 400f - 200f,
+                    endX = shimmer * 400f + 200f
+                ),
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color(0xFFFFD700).copy(alpha = 0.5f),
+                    blurRadius = 12f
+                )
+            )
+        )
+        Text(text = "✨", fontSize = 14.rsp)
+        Box(
+            modifier = Modifier
+                .width(40.rdp)
+                .height(2.dp)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.7f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+    }
+}
+
+/**
+ * 统一金边胶囊操作栏 — 兑换码 + 立即开通整合在一个金边渐变胶囊里
+ * 视觉上连贯精致，不再是两个独立按钮
+ */
+@Composable
+fun UnifiedActionBar(
+    vipViewModel: VipViewModel,
+    onPurchase: () -> Unit
+) {
+    var showRedeemDialog by remember { mutableStateOf(false) }
+    val infiniteTransition = rememberInfiniteTransition(label = "actionBar")
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing)),
+        label = "shimmer"
+    )
+    val borderRotation by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(6000, easing = LinearEasing)),
+        label = "border"
+    )
+    val glowPulse by infiniteTransition.animateFloat(
+        initialValue = 0.5f, targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "glow"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .height(64.dp)
+            .shadow(
+                elevation = 20.dp,
+                shape = RoundedCornerShape(32.dp),
+                ambientColor = Color(0xFFFFD700),
+                spotColor = Color(0xFFFF00FF)
+            )
+            .clip(RoundedCornerShape(32.dp))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFF1A0F2E),
+                        Color(0xFF2A1545),
+                        Color(0xFF1A0F2E)
+                    )
+                )
+            )
+            .drawBehind {
+                // 旋转金边
+                rotate(borderRotation) {
+                    drawCircle(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700),
+                                Color(0xFFFF00FF),
+                                Color(0xFF00D9FF),
+                                Color(0xFFFFD700)
+                            )
+                        ),
+                        radius = size.maxDimension,
+                        style = Stroke(width = 6f),
+                        center = Offset(size.width / 2f, size.height / 2f)
+                    )
+                }
+                // 流光横扫
+                val off = shimmer * size.width * 2.4f
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0xFFFFD700).copy(alpha = 0.25f),
+                            Color.Transparent
+                        ),
+                        startX = off - size.width * 0.5f,
+                        endX = off
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(80f, 80f)
+                )
+            }
+            .border(
+                width = 2.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = glowPulse),
+                        Color(0xFFFF00FF).copy(alpha = glowPulse * 0.8f),
+                        Color(0xFF00D9FF).copy(alpha = glowPulse)
+                    )
+                ),
+                shape = RoundedCornerShape(32.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 左：兑换码区（约 25% 宽度）
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .clickable { showRedeemDialog = true }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(text = "🎁", fontSize = 22.sp)
+                    Text(
+                        text = "兑换码",
+                        fontSize = 10.sp,
+                        color = Color(0xFFFFE082),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // 中间分割线（金色渐变）
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight(0.6f)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0xFFFFD700).copy(alpha = 0.6f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // 右：立即开通（占满剩余空间）
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(onClick = onPurchase),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(text = "✨", fontSize = 20.sp)
+                    Text(
+                        text = "立即开通",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        style = LocalTextStyle.current.copy(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFE082),
+                                    Color(0xFFFFD700),
+                                    Color(0xFFFF6D00)
+                                )
+                            ),
+                            shadow = androidx.compose.ui.graphics.Shadow(
+                                color = Color(0xFFFFD700).copy(alpha = 0.9f),
+                                blurRadius = 14f
+                            )
+                        )
+                    )
+                    Text(
+                        text = "→",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFFFFD700)
+                    )
+                }
+            }
+        }
+    }
+
+    // 兑换码 Dialog — 重写后直接显示输入区，不再嵌套 collapse 状态
+    if (showRedeemDialog) {
+        RedeemCodeDialog(
+            vipViewModel = vipViewModel,
+            onDismiss = { showRedeemDialog = false }
+        )
+    }
+}
+
+/**
+ * 独立兑换码 Dialog — 内容自适应高度，不会被截断
+ */
+@Composable
+private fun RedeemCodeDialog(
+    vipViewModel: VipViewModel,
+    onDismiss: () -> Unit
+) {
+    var redeemCode by remember { mutableStateOf("") }
+    val infiniteTransition = rememberInfiniteTransition(label = "redeemDialog")
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
+        label = "shimmer"
+    )
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1A0F2E),
+                            Color(0xFF0F0820)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700),
+                            Color(0xFF9D4FFF),
+                            Color(0xFF00D9FF)
+                        )
+                    ),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .padding(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // —— 头部 ——
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "🎁", fontSize = 24.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "兑换码",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            style = LocalTextStyle.current.copy(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color(0xFFFFD700).copy(alpha = 0.6f),
+                                    blurRadius = 12f
+                                )
+                            )
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "关闭",
+                            tint = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+
+                // —— 输入框 ——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF1A1A2E).copy(alpha = 0.85f),
+                                    Color(0xFF16213E).copy(alpha = 0.85f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.5.dp,
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD700).copy(alpha = 0.6f),
+                                    Color(0xFFFF00FF).copy(alpha = 0.6f),
+                                    Color(0xFF00D9FF).copy(alpha = 0.6f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(28.dp)
+                        ),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    // 流光
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val off = shimmer * size.width * 2.4f
+                        drawRoundRect(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = 0.12f),
+                                    Color.Transparent
+                                ),
+                                startX = off - size.width * 0.5f,
+                                endX = off
+                            ),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(56f, 56f)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = redeemCode,
+                            onValueChange = { redeemCode = it.uppercase() },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp
+                            ),
+                            singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFFFFD700)),
+                            decorationBox = { innerTextField ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFD700).copy(alpha = 0.8f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        if (redeemCode.isEmpty()) {
+                                            Text(
+                                                text = "请输入兑换码",
+                                                color = Color.White.copy(alpha = 0.45f),
+                                                fontSize = 15.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                // —— 立即兑换 按钮 ——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(
+                            brush = if (redeemCode.isNotEmpty()) {
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFD700),
+                                        Color(0xFFFF9500),
+                                        Color(0xFFFFD700)
+                                    )
+                                )
+                            } else {
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFF444444),
+                                        Color(0xFF555555)
+                                    )
+                                )
+                            }
+                        )
+                        .clickable(enabled = redeemCode.isNotEmpty()) {
+                            vipViewModel.redeemCode(redeemCode)
+                            redeemCode = ""
+                            onDismiss()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "✨", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "立即兑换",
+                            color = Color.White,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Black,
+                            style = LocalTextStyle.current.copy(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.4f),
+                                    offset = Offset(0f, 2f),
+                                    blurRadius = 4f
+                                )
+                            )
+                        )
+                    }
+                }
+
+                // —— 提示文字 ——
+                Text(
+                    text = "💎 输入有效兑换码即可获得 VIP 特权或金币奖励",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrustBadgeItem(modifier: Modifier = Modifier, icon: String, text: String, color: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.rdp))
+            .background(Color.Black.copy(alpha = 0.22f))
+            .border(0.8.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.rdp))
+            .padding(horizontal = 4.rdp, vertical = 4.rdp)
+    ) {
+        Text(text = icon, fontSize = 10.rsp, maxLines = 1)
+        Spacer(modifier = Modifier.width(2.rdp))
+        Text(
+            text = text,
+            fontSize = 9.rsp,
+            color = Color.White.copy(alpha = 0.95f),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}

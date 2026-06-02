@@ -22,12 +22,72 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
     
     override fun onCreate() {
         super.onCreate()
-        
-        // 🔒 初始化安全系统（优先级最高）
+
+        // 🛡️ 全局崩溃兜底：必须最早安装，才能捕获后续初始化中的异常
+        com.example.funlife.utils.CrashHandler.install(this)
+
+        // � Debug 包：开启 StrictMode 检测主线程磁盘读写 / 网络
+        // Release 自动跳过，不影响性能与用户体验
+        if (BuildConfig.DEBUG) {
+            android.os.StrictMode.setThreadPolicy(
+                android.os.StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .penaltyLog()  // 只在 logcat 警告，不崩溃
+                    .build()
+            )
+            android.os.StrictMode.setVmPolicy(
+                android.os.StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .detectLeakedSqlLiteObjects()
+                    .penaltyLog()
+                    .build()
+            )
+        }
+
+        // �🔒 初始化安全系统（优先级最高）
         SecurityInitializer.initialize(this)
+
+        // 🔒 应用签名自校验：防重打包（仅在 BuildConfig.APP_SIGN_SHA256 已配置时生效）
+        try {
+            com.example.funlife.security.AppSignatureGuard.verify(this)
+        } catch (e: Exception) {
+            android.util.Log.w("FunLifeApplication", "AppSignatureGuard verify 失败", e)
+        }
+
+        // 🔒 防时间回拨：启动时把系统时间喂入时钟（仅当大于历史最大才更新）
+        try {
+            com.example.funlife.security.MonotonicClock.get(this).bootstrap()
+        } catch (e: Exception) {
+            android.util.Log.w("FunLifeApplication", "MonotonicClock bootstrap 失败", e)
+        }
         
         // 初始化审计日志系统
         AuditLogger.initialize(this)
+
+        // 🔄 VIP 运行时配置：缓存加载 + 异步刷新都放到 IO 线程
+        //   （loadFromCache 走 SharedPreferences + JSON 解析，主线程会触发 StrictMode）
+        try {
+            com.example.funlife.vip.VipRuntimeConfig.bootstrapAsync(this)
+        } catch (e: Exception) {
+            android.util.Log.w("FunLifeApplication", "VipRuntimeConfig 初始化失败", e)
+        }
+
+        // 🔄 进程级前台监听：App 从后台回到前台时刷新 VIP 配置
+        //   节流交给 VipRuntimeConfig 内部 30s 控制，这里只是触发
+        try {
+            androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
+                object : androidx.lifecycle.DefaultLifecycleObserver {
+                    override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
+                        // 仅在 App 已 bootstrap 过后触发；首次启动 bootstrap 已经做了 force=true
+                        com.example.funlife.vip.VipRuntimeConfig.refreshAsync(applicationContext)
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("FunLifeApplication", "ProcessLifecycleOwner 注册失败", e)
+        }
         
         // 执行安全自检（可选，仅在调试模式下）
         try {
@@ -42,6 +102,23 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
         }
     }
     
+    // 🚀 系统内存压力时主动释放图片缓存，防止 OOM
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        when (level) {
+            TRIM_MEMORY_RUNNING_CRITICAL,
+            TRIM_MEMORY_COMPLETE -> com.example.funlife.utils.ImageCache.clear()
+            TRIM_MEMORY_RUNNING_LOW,
+            TRIM_MEMORY_MODERATE,
+            TRIM_MEMORY_BACKGROUND -> com.example.funlife.utils.ImageCache.trim()
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        com.example.funlife.utils.ImageCache.clear()
+    }
+
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .components {

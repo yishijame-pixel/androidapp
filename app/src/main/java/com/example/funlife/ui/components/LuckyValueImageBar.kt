@@ -48,14 +48,7 @@ fun LuckyValueImageBar(
     
     // 加载图片
     val bitmap = remember {
-        try {
-            context.assets.open("dibu/xyz.png").use { inputStream ->
-                BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("LuckyValueImageBar", "Failed to load image: ${e.message}")
-            null
-        }
+        com.example.funlife.utils.ImageCache.loadImage(context, "dibu/xyz.png", sampleSize = 2)
     }
     
     // 按钮动画状态

@@ -8,8 +8,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -475,9 +477,12 @@ fun BillDetailScreen(
     // 编辑账单弹窗
     editingBill?.let { bill ->
         val categories = listOf("餐饮", "交通", "购物", "娱乐", "社交", "居住", "医疗", "教育", "服饰", "其他")
+        // 🆕 账户选择（账单可绑定/改绑账户）
+        val allAccounts by viewModel.allAccounts.collectAsState()
         var editAmount by remember { mutableStateOf(String.format("%.2f", kotlin.math.abs(bill.amount))) }
         var editCategory by remember { mutableStateOf(bill.category) }
         var editNote by remember { mutableStateOf(bill.note) }
+        var editAccountId by remember { mutableStateOf<Long?>(bill.accountId) }
 
         AlertDialog(
             onDismissRequest = { editingBill = null },
@@ -553,6 +558,59 @@ fun BillDetailScreen(
                     }
 
                     Spacer(Modifier.height(10.dp))
+                    // 🆕 账户选择
+                    if (allAccounts.isNotEmpty()) {
+                        Text("账户", fontSize = 12.sp, color = TextSecondary)
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            // "未绑定"选项
+                            run {
+                                val sel = editAccountId == null
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (sel) NeonCyan.copy(alpha = 0.18f) else Color.Transparent)
+                                        .border(1.dp, if (sel) NeonCyan else GlowLine, RoundedCornerShape(8.dp))
+                                        .clickable { editAccountId = null }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        "🚫 未绑定",
+                                        fontSize = 11.sp,
+                                        color = if (sel) NeonCyan else TextSecondary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            allAccounts.forEach { acc ->
+                                val sel = editAccountId == acc.id
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (sel) NeonCyan.copy(alpha = 0.18f) else Color.Transparent)
+                                        .border(1.dp, if (sel) NeonCyan else GlowLine, RoundedCornerShape(8.dp))
+                                        .clickable { editAccountId = acc.id }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(acc.icon, fontSize = 12.sp)
+                                        Text(
+                                            acc.name,
+                                            fontSize = 11.sp,
+                                            color = if (sel) NeonCyan else TextSecondary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
                     // 备注
                     OutlinedTextField(
                         value = editNote,
@@ -578,7 +636,8 @@ fun BillDetailScreen(
                             bill.copy(
                                 amount = -kotlin.math.abs(newAmount),
                                 category = editCategory,
-                                note = editNote
+                                note = editNote,
+                                accountId = editAccountId
                             )
                         )
                         editingBill = null

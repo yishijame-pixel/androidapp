@@ -52,14 +52,19 @@ object ImageHelper {
     
     /**
      * 删除图片文件
-     * @param imageUri 图片URI字符串
+     * 🔒 路径白名单：只允许删除应用私有目录下 anniversary_images/ 里的文件，
+     *    防止恶意/损坏的 imageUri 字段触发越权删除（防御性编程）。
      */
-    fun deleteImage(imageUri: String?) {
+    fun deleteImage(context: Context, imageUri: String?) {
         if (imageUri.isNullOrEmpty()) return
-        
         try {
             val uri = Uri.parse(imageUri)
-            val file = File(uri.path ?: return)
+            val file = File(uri.path ?: return).canonicalFile
+            val baseDir = File(context.filesDir, IMAGES_DIR).canonicalFile
+            if (!file.absolutePath.startsWith(baseDir.absolutePath + File.separator)) {
+                Log.w(TAG, "拒绝删除 ${file.absolutePath}：不在白名单目录内")
+                return
+            }
             if (file.exists()) {
                 file.delete()
                 Log.d(TAG, "删除图片: $imageUri")
@@ -67,6 +72,12 @@ object ImageHelper {
         } catch (e: Exception) {
             Log.e(TAG, "删除图片失败", e)
         }
+    }
+
+    /** 旧签名兼容（无 context），强制不删除以确保安全 */
+    @Deprecated("使用带 context 的版本以启用路径白名单", ReplaceWith("deleteImage(context, imageUri)"))
+    fun deleteImage(imageUri: String?) {
+        Log.w(TAG, "调用了无 context 的 deleteImage（已忽略，请改用带 context 版本）")
     }
     
     /**

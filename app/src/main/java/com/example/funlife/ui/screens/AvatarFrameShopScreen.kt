@@ -157,8 +157,8 @@ fun AvatarFrameShopScreen(
                         .background(Color.White.copy(alpha = 0.5f), CircleShape)
                 )
                 
-                Column {
-                    Spacer(Modifier.height(48.dp))
+                Column(modifier = Modifier.statusBarsPadding()) {
+                    Spacer(Modifier.height(8.dp))
                     
                     // 顶部栏
                     Row(
@@ -389,7 +389,7 @@ fun AvatarFrameShopScreen(
                         }
                     }
                 } else {
-                    itemsIndexed(filtered) { index, frame ->
+                    itemsIndexed(filtered, key = { _, frame -> frame.id }) { index, frame ->
                         val isOwned = ownedFrames.any { it.frameId == frame.id }
                         val rarityDisplay = rarityMap[frame.rarity] ?: "普通"
                         val isVip = isUserVip  // 🔥 获取VIP状态

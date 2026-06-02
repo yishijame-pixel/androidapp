@@ -12,7 +12,7 @@ class GoalRepository(private val goalDao: GoalDao) {
     fun getCompletedGoals(userId: Long): Flow<List<Goal>> = goalDao.getCompletedGoals(userId)
     fun getAllCountdowns(userId: Long): Flow<List<Countdown>> = goalDao.getAllCountdowns(userId)
     
-    suspend fun insertGoal(goal: Goal) = goalDao.insertGoal(goal)
+    suspend fun insertGoal(goal: Goal): Long = goalDao.insertGoal(goal)
     
     suspend fun updateGoal(goal: Goal) = goalDao.updateGoal(goal)
     

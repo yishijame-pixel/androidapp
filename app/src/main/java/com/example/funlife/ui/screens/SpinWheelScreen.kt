@@ -65,6 +65,7 @@ fun SpinWheelScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .height(64.dp)
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -286,7 +287,8 @@ fun EditOptionsDialog(
                     onValueChange = { optionsText = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp),
+                        // 🔥 自适应高度：小屏/键盘弹出时可压缩到 160dp，理想 240dp
+                        .heightIn(min = 160.dp, max = 240.dp),
                     placeholder = { 
                         Text(
                             "吃火锅\n看电影\n打游戏\n去旅行",

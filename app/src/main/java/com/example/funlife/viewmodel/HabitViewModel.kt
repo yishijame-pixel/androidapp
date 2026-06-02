@@ -46,7 +46,22 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     // 刷新触发器
     private val _refreshTrigger = MutableStateFlow(0)
     
-    // 🔥 改用实时获取userId，而不是在init时缓存
+    // � 反刷金币：每个 (userId, habitId, date) 只能领一次首次打卡奖励，
+    //    避免"取消打卡 → 重新打卡"循环薅金币。用 SharedPreferences 持久化标记。
+    private val rewardPrefs = context.getSharedPreferences("habit_rewards_paid", android.content.Context.MODE_PRIVATE)
+    private fun rewardKey(userId: Long, habitId: Int, date: String) = "u${userId}_h${habitId}_d$date"
+    private fun isRewardPaid(userId: Long, habitId: Int, date: String): Boolean =
+        rewardPrefs.getBoolean(rewardKey(userId, habitId, date), false)
+    private fun markRewardPaid(userId: Long, habitId: Int, date: String) {
+        rewardPrefs.edit().putBoolean(rewardKey(userId, habitId, date), true).apply()
+    }
+    private fun isStreakBonusPaid(userId: Long, habitId: Int, date: String): Boolean =
+        rewardPrefs.getBoolean(rewardKey(userId, habitId, date) + "_streak", false)
+    private fun markStreakBonusPaid(userId: Long, habitId: Int, date: String) {
+        rewardPrefs.edit().putBoolean(rewardKey(userId, habitId, date) + "_streak", true).apply()
+    }
+
+    // � 改用实时获取userId，而不是在init时缓存
     private fun getCurrentUserId(): Long {
         val sessionManager = com.example.funlife.utils.UserSessionManager(context)
         val userId = sessionManager.getCurrentUserId().takeIf { it > 0 } ?: 0L
@@ -57,7 +72,7 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val database = AppDatabase.getDatabase(application)
         repository = HabitRepository(database.habitDao())
-        coinRepository = CoinRepository(database.coinDao())
+        coinRepository = CoinRepository(database.coinDao(), application.applicationContext)
         
         // 🔥 启动时立即加载数据
         loadHabits()
@@ -235,37 +250,49 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
         
         // 打卡
         if (targetDate == today) {
-            // 今天打卡，直接打卡并奖励金币
+            // 今天打卡，直接打卡
             repository.checkIn(userId, habitId, targetDate, LocalDateTime.now().toString())
-            
-            // 奖励10金币
-            coinRepository.addCoins(userId, 10)
-            
-            // 连续打卡7天奖励1张补卡卡片和额外50金币
+
+            // 🔒 同一 (userId, habitId, date) 仅首次打卡发奖励
+            val firstReward = !isRewardPaid(userId, habitId, targetDate)
+            var paidCoins = 0
+            if (firstReward) {
+                coinRepository.addCoins(userId, 10)
+                markRewardPaid(userId, habitId, targetDate)
+                paidCoins = 10
+            }
+
+            // 连续打卡7天奖励 — 同样 dedupe，每天最多一次 streak bonus
             val habit = habits.value.find { it.id == habitId }
             var bonusCoins = 0
-            if (habit != null) {
+            if (habit != null && firstReward) {
                 val stats = calculateHabitStats(habit)
-                if (stats.currentStreak > 0 && (stats.currentStreak + 1) % 7 == 0) {
+                if (stats.currentStreak > 0 && (stats.currentStreak + 1) % 7 == 0
+                    && !isStreakBonusPaid(userId, habitId, targetDate)) {
                     repository.earnMakeupCard(userId, habitId)
                     coinRepository.addCoins(userId, 50)
+                    markStreakBonusPaid(userId, habitId, targetDate)
                     bonusCoins = 50
                 }
             }
-            
-            // 刷新统计数据
+
             refreshStats()
-            emit(CheckInResult.Success(10 + bonusCoins, bonusCoins > 0))
+            emit(CheckInResult.Success(paidCoins + bonusCoins, bonusCoins > 0))
         } else {
             // 补卡，需要消耗补卡卡片
             val success = repository.useMakeupCard(userId, habitId)
             if (success) {
                 repository.checkIn(userId, habitId, targetDate, LocalDateTime.now().toString())
-                // 补卡也奖励5金币
-                coinRepository.addCoins(userId, 5)
-                // 刷新统计数据
+                // 补卡奖励同样 dedupe
+                val firstReward = !isRewardPaid(userId, habitId, targetDate)
+                var paidCoins = 0
+                if (firstReward) {
+                    coinRepository.addCoins(userId, 5)
+                    markRewardPaid(userId, habitId, targetDate)
+                    paidCoins = 5
+                }
                 refreshStats()
-                emit(CheckInResult.Success(5, false))
+                emit(CheckInResult.Success(paidCoins, false))
             } else {
                 emit(CheckInResult.Failed("补卡卡片不足"))
             }
@@ -284,6 +311,14 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     
     fun deleteHabit(habit: Habit) {
         viewModelScope.launch {
+            // 🔥 §1.6 删除前清理自定义图标文件（严格按 userId 前缀校验）
+            try {
+                com.example.funlife.ui.components.deleteCustomHabitIcon(
+                    context = context,
+                    iconPath = habit.icon,
+                    userId = habit.userId
+                )
+            } catch (_: Exception) {}
             repository.deleteHabit(habit)
         }
     }

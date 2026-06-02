@@ -37,7 +37,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         val database = AppDatabase.getDatabase(application)
         templateRepository = SpinWheelTemplateRepository(database.spinWheelTemplateDao())
         historyRepository = SpinWheelHistoryRepository(database.spinWheelHistoryDao())
-        coinRepository = CoinRepository(database.coinDao())
+        coinRepository = CoinRepository(database.coinDao(), application.applicationContext)
         guaranteeCounterDao = database.guaranteeCounterDao()
         customModeRepository = com.example.funlife.repository.CustomSpinModeRepository(database.customSpinModeDao())
         preferencesRepository = com.example.funlife.repository.UserPreferencesRepository(database.userPreferencesDao())  // 🔥 新增
@@ -220,14 +220,8 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             
             android.util.Log.d("SpinWheelViewModel", "Current mode restored: ${_currentMode.value.name}")
             
-            // 初始化金币（如果还没有记录）
+            // 初始化金币（如果还没有记录），但不再赠送任何初始金币
             coinRepository.initializeCoins(userId)
-            
-            // 给新用户一些初始金币（100金币）
-            val currentCoins = coinRepository.getCoinsAmount(userId)
-            if (currentCoins == 0) {
-                coinRepository.addCoins(userId, 100)
-            }
             
             createDefaultTemplatesIfNeeded()
             customModeRepository.initializeDefaultModes(userId)
@@ -410,36 +404,18 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
     // 检查并扣除金币（开始旋转时调用）
     suspend fun checkAndDeductCoins(): Boolean {
         val mode = _currentMode.value
-        val coins = userCoins.value
-        
-        // 检查金币
-        if (!mode.canAfford(coins)) {
-            return false
-        }
-        
-        // 扣除金币
-        if (mode.costPerSpin > 0) {
-            coinRepository.spendCoins(getCurrentUserId(), mode.costPerSpin)
-        }
-        
-        return true
+        val cost = mode.costPerSpin
+        if (cost <= 0) return true
+        // 🔒 直接走原子扣费：返回值 = true 表示真的扣到了，否则余额不足。
+        //    去掉了之前的"先看缓存余额再扣"两步操作，避免缓存与 DB 不一致时
+        //    判断通过但实际扣费失败仍然返回 true → 用户能零成本转盘。
+        return coinRepository.spendCoins(getCurrentUserId(), cost)
     }
     
-    // 🔥 新增：连抽模式一次性扣除金币
+    // 🔥 连抽模式一次性扣除金币（🔒 仅依赖原子扣费返回值，缓存余额不可信）
     suspend fun deductCoinsForMultiSpin(totalCost: Int): Boolean {
-        val coins = userCoins.value
-        
-        // 检查金币
-        if (coins < totalCost) {
-            return false
-        }
-        
-        // 一次性扣除总金额
-        if (totalCost > 0) {
-            return coinRepository.spendCoins(getCurrentUserId(), totalCost)
-        }
-        
-        return true
+        if (totalCost <= 0) return true
+        return coinRepository.spendCoins(getCurrentUserId(), totalCost)
     }
     
     // 处理旋转结果（旋转完成后调用）
@@ -453,15 +429,22 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             0
         }
         
+        // 🎯 积分掉落（仅 LUCKY / ADVANCED 这两种"扣金币"的模式，小概率）
+        val shopPointsReward = rollShopPointsReward(mode)
+        
         // 发放奖励
+        val uid = getCurrentUserId()
         if (coinReward > 0) {
-            coinRepository.addCoins(getCurrentUserId(), coinReward)
+            coinRepository.addCoins(uid, coinReward, reason = "spin_lucky")
+        }
+        if (shopPointsReward > 0) {
+            coinRepository.addShopPoints(uid, shopPointsReward, reason = "spin_${mode.name.lowercase()}_drop")
         }
         
         // 保存历史
         saveResultToHistory(selectedResult, mode, coinReward)
         
-        return SpinResult.Success(selectedResult, coinReward)
+        return SpinResult.Success(selectedResult, coinReward, shopPointsReward)
     }
     
     // 执行转盘（带权重和金币逻辑）- 保留用于兼容
@@ -552,14 +535,32 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         return result
     }
     
-    // 计算幸运奖励
-    private fun calculateLuckyReward(): Int {
-        val chance = Random.nextInt(100)
+    // 🔒 转盘不再发金币（原期望奖励 18.5 金币/spin > 成本 10 金币，可被无限刷）
+    private fun calculateLuckyReward(): Int = 0
+
+    /**
+     * 🎯 积分掉落算法（反作弊）
+     *
+     * 触发条件：仅 LUCKY / ADVANCED 这两种扣金币的模式
+     * 触发概率：3%（约 33 次旋转触发一次）
+     * 奖励分布（加权随机）：
+     *   1 分 40% · 2 分 25% · 3 分 15% · 5 分 12% · 8 分 5% · 10 分 3%
+     *   期望值 ≈ 2.65 积分/触发 → 单次旋转期望 ≈ 0.08 积分
+     *   按转盘成本 10 金币/spin 折算：每积分约 125 金币
+     *   远高于商店"花 50 金币购买送 5 积分"= 10 金币/积分的兑换比，
+     *   不构成无限刷积分的套利路径。
+     */
+    private fun rollShopPointsReward(mode: SpinWheelMode): Int {
+        if (mode != SpinWheelMode.LUCKY && mode != SpinWheelMode.ADVANCED) return 0
+        if (Random.nextInt(100) >= 3) return 0  // 3% 触发概率
+        val r = Random.nextInt(100)
         return when {
-            chance < 5 -> 100  // 5% 概率获得100金币
-            chance < 20 -> 50  // 15% 概率获得50金币
-            chance < 50 -> 20  // 30% 概率获得20金币
-            else -> 0          // 50% 概率无奖励
+            r < 40 -> 1
+            r < 65 -> 2
+            r < 80 -> 3
+            r < 92 -> 5
+            r < 97 -> 8
+            else   -> 10
         }
     }
     
@@ -660,8 +661,7 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             _saveMessage.value = "选项已保存 (${uniqueOptions.size}个)"
         } catch (e: Exception) {
             android.util.Log.e("SpinWheelViewModel", "✗ Failed to save options", e)
-            e.printStackTrace()
-            _saveMessage.value = "保存失败：${e.message}"
+            _saveMessage.value = "保存失败，请重试"
         }
     }
     
@@ -1123,45 +1123,48 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         }
         
         val totalCost = getMultiSpinCost()
-        val coins = userCoins.value
-        
-        // 检查金币
-        if (coins < totalCost) {
-            return MultiSpinResult.InsufficientCoins
+
+        // 🔒 直接走原子扣费，不再相信缓存余额（防止扣费失败仍执行抽奖）
+        if (totalCost > 0) {
+            val ok = coinRepository.spendCoins(getCurrentUserId(), totalCost)
+            if (!ok) return MultiSpinResult.InsufficientCoins
         }
-        
         _isMultiSpinning.value = true
-        
-        // 扣除金币
-        coinRepository.spendCoins(getCurrentUserId(), totalCost)
         
         // 执行多次抽取
         val results = mutableListOf<String>()
         var totalReward = 0
+        var totalShopPoints = 0
         
         for (i in 0 until count) {
             val result = selectOptionByWeight()
             results.add(result)
             
-            // 计算奖励（仅幸运模式）
+            // 计算金币奖励（仅幸运模式）
             if (_currentMode.value == SpinWheelMode.LUCKY) {
                 val reward = calculateLuckyReward()
                 totalReward += reward
             }
+            // 🎯 每次都独立 roll 积分掉落（仅 LUCKY/ADVANCED 模式）
+            totalShopPoints += rollShopPointsReward(_currentMode.value)
             
             // 保存每次的历史记录
             saveResultToHistory(result, _currentMode.value, 0)
         }
         
         // 发放总奖励
+        val uid = getCurrentUserId()
         if (totalReward > 0) {
-            coinRepository.addCoins(getCurrentUserId(), totalReward)
+            coinRepository.addCoins(uid, totalReward, reason = "spin_lucky_multi")
+        }
+        if (totalShopPoints > 0) {
+            coinRepository.addShopPoints(uid, totalShopPoints, reason = "spin_${_currentMode.value.name.lowercase()}_drop_multi")
         }
         
         _multiSpinResults.value = results
         _isMultiSpinning.value = false
         
-        return MultiSpinResult.Success(results, totalReward)
+        return MultiSpinResult.Success(results, totalReward, totalShopPoints)
     }
     
     // 清除连抽结果
@@ -1351,14 +1354,16 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             return ProductSpinResult.InsufficientPoints
         }
         
-        // 扣除10积分
-        val success = coinRepository.spendShopPoints(userId, 10)
+        // 🔒 先校验奖池非空再扣积分，避免扣后退款的非原子中间态
+        val totalWeight = productPrizes.sumOf { it.weight }
+        if (productPrizes.isEmpty() || totalWeight <= 0) {
+            return ProductSpinResult.InsufficientPoints
+        }
+        // 扣除 10 积分
+        val success = coinRepository.spendShopPoints(userId, 10, reason = "product_spin")
         if (!success) {
             return ProductSpinResult.InsufficientPoints
         }
-        
-        // 根据权重随机选择奖品
-        val totalWeight = productPrizes.sumOf { it.weight }
         var random = Random.nextInt(totalWeight)
         var selectedPrize = productPrizes.last()
         
@@ -1370,10 +1375,10 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
         
-        // 发放奖励
+        // 发放奖励（金币奖项已取消）
         when (selectedPrize.type) {
             "coins" -> {
-                coinRepository.addCoins(userId, selectedPrize.value)
+                // 🔒 不再发放金币，避免商品转盘被刷
             }
             "item" -> {
                 // 添加到背包
@@ -1421,6 +1426,25 @@ class SpinWheelViewModel(application: Application) : AndroidViewModel(applicatio
         return ProductSpinResult.Success(selectedPrize)
     }
     
+    // 🧪 测试用：商品转盘演练 — 不扣积分、不发奖励，仅随机选个奖品供 UI 演示
+    suspend fun performTestProductSpin(): ProductSpinResult {
+        val totalWeight = productPrizes.sumOf { it.weight }
+        if (totalWeight <= 0 || productPrizes.isEmpty()) {
+            return ProductSpinResult.InsufficientPoints
+        }
+        var random = Random.nextInt(totalWeight)
+        var selectedPrize = productPrizes.last()
+        for (prize in productPrizes) {
+            random -= prize.weight
+            if (random < 0) {
+                selectedPrize = prize
+                break
+            }
+        }
+        android.util.Log.d("SpinWheelViewModel", "🧪 测试商品转盘结果: ${selectedPrize.name}")
+        return ProductSpinResult.Success(selectedPrize)
+    }
+
     // 导出历史记录为 JSON
     fun exportHistoryToJson(): String {
         val history = recentHistory.value
@@ -1464,13 +1488,13 @@ data class LuckyStats(
 
 // 转盘结果
 sealed class SpinResult {
-    data class Success(val result: String, val coinReward: Int) : SpinResult()
+    data class Success(val result: String, val coinReward: Int, val shopPointsReward: Int = 0) : SpinResult()
     object InsufficientCoins : SpinResult()
 }
 
 // 连抽结果
 sealed class MultiSpinResult {
-    data class Success(val results: List<String>, val totalReward: Int) : MultiSpinResult()
+    data class Success(val results: List<String>, val totalReward: Int, val totalShopPointsReward: Int = 0) : MultiSpinResult()
     object InsufficientCoins : MultiSpinResult()
     data class Error(val message: String) : MultiSpinResult()
 }

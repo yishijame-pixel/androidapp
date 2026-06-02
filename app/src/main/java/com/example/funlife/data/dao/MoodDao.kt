@@ -25,4 +25,12 @@ interface MoodDao {
     
     @Query("SELECT * FROM mood_entries WHERE userId = :userId ORDER BY date DESC LIMIT :limit")
     fun getRecentMoods(userId: Long, limit: Int): Flow<List<MoodEntry>>
+
+    /** 自 sinceDate（YYYY-MM-DD 字符串）以来 moodLevel 平均值，无记录返回 null（v53 心情低谷召回用） */
+    @Query("SELECT AVG(moodLevel) FROM mood_entries WHERE userId = :userId AND date >= :sinceDate")
+    suspend fun avgLevelSince(userId: Long, sinceDate: String): Double?
+
+    /** 自 sinceDate 以来记录条数 */
+    @Query("SELECT COUNT(*) FROM mood_entries WHERE userId = :userId AND date >= :sinceDate")
+    suspend fun countSince(userId: Long, sinceDate: String): Int
 }

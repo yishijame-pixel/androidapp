@@ -56,8 +56,8 @@ class ScoreViewModel(application: Application) : AndroidViewModel(application) {
                 initialValue = emptyList()
             )
         
-        // 初始化胜利记录流
-        victoryRecords = victoryRecordDao.getAllRecords()
+        // 初始化胜利记录流（仅当前用户）
+        victoryRecords = victoryRecordDao.getAllRecords(getCurrentUserId())
             .catch { e ->
                 android.util.Log.e("ScoreViewModel", "Error loading victory records", e)
                 emit(emptyList())
@@ -136,14 +136,16 @@ class ScoreViewModel(application: Application) : AndroidViewModel(application) {
     
     // 记录操作
     private suspend fun recordOperation(player: Player, operation: Int, scoreBefore: Int, scoreAfter: Int) {
+        val userId = getCurrentUserId()
         if (currentGameSessionId == 0L) {
             // 如果还没有会话ID，创建一个新的
-            val latestId = scoreOperationDao.getLatestSessionId() ?: 0L
+            val latestId = scoreOperationDao.getLatestSessionId(userId) ?: 0L
             currentGameSessionId = latestId + 1
             Log.d("ScoreViewModel", "Auto-started new game session: $currentGameSessionId")
         }
         
         val scoreOperation = com.example.funlife.data.model.ScoreOperation(
+            userId = userId,
             gameSessionId = currentGameSessionId,
             playerId = player.id,
             playerName = player.name,
@@ -172,7 +174,7 @@ class ScoreViewModel(application: Application) : AndroidViewModel(application) {
     // 开始新游戏会话
     fun startNewGameSession() {
         viewModelScope.launch {
-            val latestId = scoreOperationDao.getLatestSessionId() ?: 0L
+            val latestId = scoreOperationDao.getLatestSessionId(getCurrentUserId()) ?: 0L
             currentGameSessionId = latestId + 1
             Log.d("ScoreViewModel", "=== START NEW GAME SESSION ===")
             Log.d("ScoreViewModel", "Latest session ID: $latestId")
@@ -216,15 +218,15 @@ class ScoreViewModel(application: Application) : AndroidViewModel(application) {
     fun recordVictory(playerName: String, avatar: String) {
         viewModelScope.launch {
             Log.d("ScoreViewModel", "Recording victory for player: $playerName")
-            victoryRecordDao.recordVictory(playerName, avatar)
+            victoryRecordDao.recordVictory(getCurrentUserId(), playerName, avatar)
         }
     }
     
-    // 🔥 清空所有胜利记录
+    // 🔥 清空胜利记录（仅当前用户）
     fun clearVictoryRecords() {
         viewModelScope.launch {
-            Log.d("ScoreViewModel", "Clearing all victory records")
-            victoryRecordDao.deleteAll()
+            Log.d("ScoreViewModel", "Clearing victory records (current user only)")
+            victoryRecordDao.deleteAll(getCurrentUserId())
         }
     }
     
@@ -232,15 +234,15 @@ class ScoreViewModel(application: Application) : AndroidViewModel(application) {
     fun clearPlayerOperations(playerId: Int) {
         viewModelScope.launch {
             Log.d("ScoreViewModel", "Clearing operations for player ID: $playerId")
-            scoreOperationDao.deleteByPlayerId(playerId)
+            scoreOperationDao.deleteByPlayerId(getCurrentUserId(), playerId)
         }
     }
     
-    // 🔥 清空所有操作记录
+    // 🔥 清空操作记录（仅当前用户）
     fun clearAllOperations() {
         viewModelScope.launch {
-            Log.d("ScoreViewModel", "Clearing all operations")
-            scoreOperationDao.deleteAll()
+            Log.d("ScoreViewModel", "Clearing all operations (current user only)")
+            scoreOperationDao.deleteAll(getCurrentUserId())
         }
     }
 }

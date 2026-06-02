@@ -67,8 +67,8 @@ class DailyCoinManager(private val context: Context) {
             val lastClaimTimestamp = SecurityManager.verifySecureTimestamp(context, lastClaimToken)
                 ?: return true  // 令牌无效，允许领取但会重置
             
-            // 4. 计算时间差
-            val now = System.currentTimeMillis()
+            // 4. 计算时间差（🔒 用防回拨时间，避免用户改系统时间反复领取）
+            val now = MonotonicClock.get(context).effectiveNowSec() * 1000
             val hoursPassed = ChronoUnit.HOURS.between(
                 Instant.ofEpochMilli(lastClaimTimestamp).atZone(ZoneId.systemDefault()),
                 Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())
@@ -79,13 +79,16 @@ class DailyCoinManager(private val context: Context) {
                 return false
             }
             
-            // 6. 额外验证：检查日期是否真的不同
+            // 6. 额外验证：检查日期是否真的不同（用防回拨时间）
             val lastDate = LocalDateTime.ofInstant(
                 Instant.ofEpochMilli(lastClaimTimestamp),
                 ZoneId.systemDefault()
             ).toLocalDate()
             
-            val currentDate = LocalDateTime.now().toLocalDate()
+            val currentDate = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(now),
+                ZoneId.systemDefault()
+            ).toLocalDate()
             
             // 必须是不同的日期，且至少间隔24小时
             return currentDate.isAfter(lastDate) && hoursPassed >= HOURS_24
@@ -108,7 +111,7 @@ class DailyCoinManager(private val context: Context) {
             val lastClaimTimestamp = SecurityManager.verifySecureTimestamp(context, lastClaimToken)
                 ?: return 0L
             
-            val now = System.currentTimeMillis()
+            val now = MonotonicClock.get(context).effectiveNowSec() * 1000
             val nextClaimTime = lastClaimTimestamp + (HOURS_24 * 60 * 60 * 1000)
             
             val remainingMs = nextClaimTime - now
@@ -124,7 +127,8 @@ class DailyCoinManager(private val context: Context) {
      */
     fun recordClaim(userId: Long): Boolean {
         try {
-            val now = System.currentTimeMillis()
+            // 🔒 用防回拨时间记录，避免回拨后下次比较失效
+            val now = MonotonicClock.get(context).effectiveNowSec() * 1000
             
             // 1. 生成安全的时间戳令牌
             val secureToken = SecurityManager.generateSecureTimestamp(context, now)

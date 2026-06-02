@@ -67,26 +67,12 @@ fun ImageBasedSpinWheel(
     
     // 根据模式加载转盘图片
     val wheelBitmap = remember(wheelMode) {
-        try {
-            context.assets.open(wheelMode.wheelImage).use { inputStream ->
-                BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("ImageBasedSpinWheel", "Failed to load wheel image: ${e.message}")
-            null
-        }
+        com.example.funlife.utils.ImageCache.loadImage(context, wheelMode.wheelImage)
     }
     
     // 根据模式加载指针图片
     val pointerBitmap = remember(wheelMode) {
-        try {
-            context.assets.open(wheelMode.pointerImage).use { inputStream ->
-                BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("ImageBasedSpinWheel", "Failed to load pointer image: ${e.message}")
-            null
-        }
+        com.example.funlife.utils.ImageCache.loadImage(context, wheelMode.pointerImage)
     }
     
     // 旋转状态（使用 Animatable 实现流畅动画）

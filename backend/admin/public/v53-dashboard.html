@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>📖 v53 阅光书房 · 内容审核 / AI 监控</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #0f1830; --card: #1b2545; --ink: #e9ecf3;
+      --ink-2: #aab3c5; --accent: #ffd27a; --rose: #e57373;
+      --orange: #ffab66; --leaf: #9fc089; --sky: #7fb7e0;
+      --danger: #d32f2f; --safe: #2e7d32;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+      background: linear-gradient(180deg, var(--bg) 0%, #1a2746 100%);
+      color: var(--ink); min-height: 100vh;
+    }
+    header {
+      padding: 16px 24px; display: flex; align-items: center; gap: 16px;
+      border-bottom: 1px solid #ffffff14; background: #0d1428cc; backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 10;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 800; }
+    header .meta { color: var(--ink-2); font-size: 12px; }
+    header .back { margin-left: auto; padding: 6px 12px; background: var(--card);
+      color: var(--ink); border-radius: 8px; border: 1px solid #ffffff22;
+      text-decoration: none; font-size: 12px; }
+    main { padding: 20px 24px 80px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab {
+      padding: 8px 16px; background: var(--card); border: 1px solid #ffffff14;
+      border-radius: 10px; cursor: pointer; font-size: 13px; color: var(--ink-2);
+      transition: all 0.15s;
+    }
+    .tab.active { background: var(--accent); color: #0f1830; border-color: var(--accent); font-weight: 700; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat {
+      background: var(--card); padding: 16px; border-radius: 14px;
+      border: 1px solid #ffffff10;
+    }
+    .stat .label { color: var(--ink-2); font-size: 11px; }
+    .stat .value { font-size: 26px; font-weight: 800; margin-top: 4px; }
+    .stat .value.warn { color: var(--rose); }
+    .stat .value.ok { color: var(--leaf); }
+    .stat .value.cost { color: var(--orange); }
+    .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .filters select, .filters button {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid #ffffff22;
+      background: var(--card); color: var(--ink); font-size: 12px; cursor: pointer;
+    }
+    .filters button.primary { background: var(--accent); color: #0f1830; font-weight: 700; border-color: var(--accent); }
+    table {
+      width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px;
+      overflow: hidden; font-size: 12px;
+    }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ffffff10; vertical-align: top; }
+    th { background: #ffffff08; font-weight: 600; color: var(--ink-2); font-size: 11px; }
+    tr:last-child td { border-bottom: none; }
+    .text { max-width: 360px; word-break: break-word; line-height: 1.5; font-style: italic; }
+    .badge {
+      display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 700;
+      background: #ffffff15; color: var(--ink-2);
+    }
+    .badge.danger { background: #d3262615; color: var(--rose); }
+    .badge.warn { background: #ffab6615; color: var(--orange); }
+    .badge.ok { background: #9fc08915; color: var(--leaf); }
+    .actions button {
+      padding: 4px 10px; margin-right: 4px; border-radius: 6px; border: 1px solid #ffffff22;
+      background: transparent; color: var(--ink); cursor: pointer; font-size: 11px;
+    }
+    .actions button.danger { color: var(--rose); border-color: var(--rose); }
+    .actions button.safe { color: var(--leaf); border-color: var(--leaf); }
+    .actions button:hover { opacity: 0.8; }
+    .empty { padding: 60px 20px; text-align: center; color: var(--ink-2); }
+    .loading { padding: 40px; text-align: center; color: var(--ink-2); font-style: italic; }
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      padding: 10px 20px; border-radius: 10px; background: var(--card); color: var(--ink);
+      border: 1px solid var(--accent); font-size: 13px; z-index: 100; opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <header>
+    <span style="font-size: 22px;">📖</span>
+    <div>
+      <h1>v53 阅光书房 · 内容审核 / AI 监控</h1>
+      <div class="meta">摘抄星河 · 明信片漂流 · AI 调用三桶分摊</div>
+    </div>
+    <a class="back" href="/">← 返回主面板</a>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <div class="tab active" data-tab="galaxy">🌌 摘抄星河</div>
+      <div class="tab" data-tab="postcards">📮 明信片漂流</div>
+      <div class="tab" data-tab="ai">🤖 AI 调用</div>
+    </div>
+
+    <!-- 星河 -->
+    <section class="panel active" id="panel-galaxy">
+      <div class="grid" id="galaxy-stats"></div>
+      <div class="filters">
+        <select id="galaxy-status">
+          <option value="needsReview">⚠ 软警告（含联系方式/广告词等）</option>
+          <option value="reported">仅看被举报（reportCount&gt;0）</option>
+          <option value="hidden">仅看已隐藏</option>
+          <option value="all">全部</option>
+        </select>
+        <button class="primary" onclick="loadGalaxy()">🔄 刷新</button>
+      </div>
+      <div id="galaxy-list" class="loading">加载中...</div>
+    </section>
+
+    <!-- 明信片 -->
+    <section class="panel" id="panel-postcards">
+      <div class="grid" id="postcards-stats"></div>
+      <div class="filters">
+        <select id="postcards-status">
+          <option value="all">全部</option>
+          <option value="hidden">仅看已隐藏</option>
+        </select>
+        <button class="primary" onclick="loadPostcards()">🔄 刷新</button>
+      </div>
+      <div id="postcards-list" class="loading">加载中...</div>
+    </section>
+
+    <!-- AI -->
+    <section class="panel" id="panel-ai">
+      <div class="grid" id="ai-stats"></div>
+      <h3 style="margin-top:24px;font-size:14px;color:var(--ink-2)">今日调用 Top 20 设备</h3>
+      <div id="ai-top" class="loading">加载中...</div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ───── Tab 切换 ─────
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        const id = t.dataset.tab;
+        document.getElementById('panel-' + id).classList.add('active');
+        if (id === 'galaxy') loadGalaxy();
+        if (id === 'postcards') loadPostcards();
+        if (id === 'ai') loadAi();
+      });
+    });
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 1800);
+    }
+
+    function escape(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function fmtTime(ts) {
+      if (!ts) return '—';
+      const d = new Date(typeof ts === 'number' ? ts : Date.parse(ts));
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString('zh-CN', { hour12: false });
+    }
+    async function api(path, method, body) {
+      const r = await fetch(path, {
+        method: method || 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.msg || j.error || 'request failed');
+      return j.data;
+    }
+
+    // ───── 星河 ─────
+    async function loadGalaxy() {
+      const status = document.getElementById('galaxy-status').value;
+      try {
+        const stats = await api('/api/v53/galaxy/stats');
+        document.getElementById('galaxy-stats').innerHTML = `
+          <div class="stat"><div class="label">总条数</div><div class="value">${stats.total}</div></div>
+          <div class="stat"><div class="label">⚠ 待复审</div><div class="value warn">${stats.needsReview || 0}</div></div>
+          <div class="stat"><div class="label">已隐藏</div><div class="value warn">${stats.hidden}</div></div>
+          <div class="stat"><div class="label">被举报过</div><div class="value warn">${stats.reported}</div></div>
+          <div class="stat"><div class="label">总点亮数</div><div class="value ok">${stats.totalLights}</div></div>
+          <div class="stat"><div class="label">总举报次数</div><div class="value">${stats.totalReports}</div></div>
+        `;
+
+        const items = await api('/api/v53/galaxy/items?status=' + status + '&limit=200');
+        const box = document.getElementById('galaxy-list');
+        if (!items.length) {
+          box.className = 'empty';
+          box.textContent = '没有匹配的内容';
+          return;
+        }
+        box.className = '';
+        let html = '<table><thead><tr>'
+          + '<th style="width:80px">ID</th><th>内容</th>'
+          + '<th>书名</th><th style="width:80px">点亮</th>'
+          + '<th style="width:80px">举报</th><th style="width:90px">状态</th>'
+          + '<th style="width:140px">发布时间</th><th style="width:150px">操作</th>'
+          + '</tr></thead><tbody>';
+        items.forEach(it => {
+          const id = it._id || it.id || '';
+          const hidden = !!it.hidden;
+          const reportCount = it.reportCount || 0;
+          const stateBadges = [];
+          if (hidden) stateBadges.push('<span class="badge danger">已隐藏</span>');
+          else if (reportCount > 0) stateBadges.push('<span class="badge warn">被举报</span>');
+          else stateBadges.push('<span class="badge ok">正常</span>');
+          if (it.needsReview) stateBadges.push('<span class="badge warn" style="margin-left:4px">⚠待复审</span>');
+          const warnHits = (it.warnMatched || []).map(w => escape(w.kind + ':' + w.hit)).join(', ');
+          html += '<tr>'
+            + `<td><code style="font-size:10px;color:var(--ink-2)">${escape(id.slice(0, 8))}</code></td>`
+            + `<td class="text">${escape(it.text || '')}${warnHits ? '<div style="margin-top:6px;font-style:normal;font-size:10px;color:var(--orange)">⚠ ' + warnHits + '</div>' : ''}</td>`
+            + `<td>${escape(it.bookTitle || '—')}</td>`
+            + `<td>${it.lightCount || 0}</td>`
+            + `<td>${reportCount}</td>`
+            + `<td>${stateBadges.join('')}</td>`
+            + `<td>${fmtTime(it.publishedAt)}</td>`
+            + `<td class="actions">`
+            + (hidden
+                ? `<button class="safe" onclick="restoreGalaxy('${id}')">恢复</button>`
+                : `<button class="danger" onclick="hideGalaxy('${id}')">隐藏</button>`)
+            + (reportCount > 0 ? `<button onclick="viewGalaxyReports('${id}')">查举报</button>` : '')
+            + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        box.innerHTML = html;
+      } catch (e) {
+        document.getElementById('galaxy-list').innerHTML = '<div class="empty">加载失败：' + escape(e.message) + '</div>';
+      }
+    }
+    async function hideGalaxy(id) {
+      const reason = prompt('隐藏原因（可留空）：') || '';
+      if (reason === null) return;
+      try { await api('/api/v53/galaxy/items/' + id + '/hide', 'POST', { reason }); toast('✓ 已隐藏'); loadGalaxy(); }
+      catch (e) { toast('❌ ' + e.message); }
+    }
+    async function restoreGalaxy(id) {
+      if (!confirm('确认恢复这条内容？')) return;
+      try { await api('/api/v53/galaxy/items/' + id + '/restore', 'POST'); toast('✓ 已恢复'); loadGalaxy(); }
+      catch (e) { toast('❌ ' + e.message); }
+    }
+    async function viewGalaxyReports(id) {
+      try {
+        const items = await api('/api/v53/galaxy/items/' + id + '/reports');
+        if (!items.length) { alert('没有举报记录'); return; }
+        const lines = items.map(r => `· ${fmtTime(r.at)} [${r.deviceId || '匿名'}] ${r.reason || '（未填）'}`);
+        alert('举报记录（共 ' + items.length + ' 条）：\n\n' + lines.join('\n'));
+      } catch (e) { toast('❌ ' + e.message); }
+    }
+
+    // ───── 明信片 ─────
+    async function loadPostcards() {
+      const status = document.getElementById('postcards-status').value;
+      try {
+        const stats = await api('/api/v53/postcards/stats');
+        document.getElementById('postcards-stats').innerHTML = `
+          <div class="stat"><div class="label">总数</div><div class="value">${stats.total}</div></div>
+          <div class="stat"><div class="label">收到 ❤</div><div class="value ok">${stats.reacted}</div></div>
+          <div class="stat"><div class="label">已隐藏</div><div class="value warn">${stats.hidden}</div></div>
+        `;
+        const items = await api('/api/v53/postcards/items?status=' + status + '&limit=200');
+        const box = document.getElementById('postcards-list');
+        if (!items.length) {
+          box.className = 'empty';
+          box.textContent = '没有匹配的明信片';
+          return;
+        }
+        box.className = '';
+        let html = '<table><thead><tr>'
+          + '<th style="width:80px">ID</th><th>内容</th>'
+          + '<th>书名</th><th style="width:60px">❤</th>'
+          + '<th style="width:90px">状态</th><th style="width:140px">寄出时间</th>'
+          + '<th style="width:100px">操作</th></tr></thead><tbody>';
+        items.forEach(it => {
+          const id = it._id || it.id || '';
+          const hidden = !!it.hidden;
+          const reacted = !!it.reactedHeart;
+          const stateBadges = [];
+          if (hidden) stateBadges.push('<span class="badge danger">已隐藏</span>');
+          else if (reacted) stateBadges.push('<span class="badge ok">已心动</span>');
+          else stateBadges.push('<span class="badge">在途</span>');
+          if (it.needsReview) stateBadges.push('<span class="badge warn" style="margin-left:4px">⚠待复审</span>');
+          const warnHits = (it.warnMatched || []).map(w => escape(w.kind + ':' + w.hit)).join(', ');
+          html += '<tr>'
+            + `<td><code style="font-size:10px;color:var(--ink-2)">${escape(id.slice(0, 8))}</code></td>`
+            + `<td class="text">${escape(it.text || '')}${warnHits ? '<div style="margin-top:6px;font-style:normal;font-size:10px;color:var(--orange)">⚠ ' + warnHits + '</div>' : ''}</td>`
+            + `<td>${escape(it.bookTitle || '—')}</td>`
+            + `<td>${reacted ? '❤' : '—'}</td>`
+            + `<td>${stateBadges.join('')}</td>`
+            + `<td>${fmtTime(it.sentAt)}</td>`
+            + `<td class="actions">`
+            + (hidden ? '' : `<button class="danger" onclick="hidePostcard('${id}')">隐藏</button>`)
+            + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        box.innerHTML = html;
+      } catch (e) {
+        document.getElementById('postcards-list').innerHTML = '<div class="empty">加载失败：' + escape(e.message) + '</div>';
+      }
+    }
+    async function hidePostcard(id) {
+      const reason = prompt('隐藏原因（可留空）：') || '';
+      if (reason === null) return;
+      try { await api('/api/v53/postcards/items/' + id + '/hide', 'POST', { reason }); toast('✓ 已隐藏'); loadPostcards(); }
+      catch (e) { toast('❌ ' + e.message); }
+    }
+
+    // ───── AI ─────
+    async function loadAi() {
+      try {
+        const s = await api('/api/v53/ai/stats');
+        document.getElementById('ai-stats').innerHTML = `
+          <div class="stat"><div class="label">日期</div><div class="value" style="font-size:18px">${s.ymd}</div></div>
+          <div class="stat"><div class="label">聊天/记账 调用</div><div class="value">${s.chat.total}</div><div class="label">${s.chat.devices} 设备 · 均 ${s.chat.avg} · 峰 ${s.chat.max}</div></div>
+          <div class="stat"><div class="label">📖 阅读伴侣</div><div class="value">${s.book.total}</div><div class="label">${s.book.devices} 设备 · 均 ${s.book.avg} · 峰 ${s.book.max}</div></div>
+          <div class="stat"><div class="label">🧬 读者 DNA</div><div class="value">${s.reader_dna.total}</div><div class="label">${s.reader_dna.devices} 设备 · 均 ${s.reader_dna.avg} · 峰 ${s.reader_dna.max}</div></div>
+          <div class="stat"><div class="label">今日成本估算</div><div class="value cost">$ ${(s.cost_estimate.chat + s.cost_estimate.book + s.cost_estimate.reader_dna).toFixed(4)}</div><div class="label">chat ${s.cost_estimate.chat} · book ${s.cost_estimate.book} · dna ${s.cost_estimate.reader_dna}</div></div>
+        `;
+        const top = await api('/api/v53/ai/top_devices');
+        const box = document.getElementById('ai-top');
+        if (!top.length) { box.className = 'empty'; box.textContent = '今日尚无调用'; return; }
+        box.className = '';
+        let html = '<table><thead><tr><th style="width:50px">#</th><th>设备 ID</th><th style="width:80px">chat</th><th style="width:80px">book</th><th style="width:80px">dna</th><th style="width:80px">合计</th></tr></thead><tbody>';
+        top.forEach((d, i) => {
+          html += `<tr>
+            <td>${i + 1}</td>
+            <td><code style="font-size:11px">${escape(d.deviceId)}</code></td>
+            <td>${d.chat}</td>
+            <td>${d.book}</td>
+            <td>${d.reader_dna}</td>
+            <td><b>${d.total}</b></td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        box.innerHTML = html;
+      } catch (e) {
+        document.getElementById('ai-top').innerHTML = '<div class="empty">加载失败：' + escape(e.message) + '</div>';
+      }
+    }
+
+    // ───── 启动 ─────
+    loadGalaxy();
+  </script>
+</body>
+</html>

@@ -70,8 +70,10 @@ fun FunLifeTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+            // 🔥 沉浸式：状态栏保持透明（由 MainActivity onCreate 统一设置），
+            // 此处只调整图标色按主题亮暗反色
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
         }
     }
 

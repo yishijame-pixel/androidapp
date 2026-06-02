@@ -1,124 +1,416 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- 外层光晕 -->
-    <path
-        android:fillColor="#FFE082"
-        android:fillAlpha="0.3"
-        android:pathData="M54,54m-52,0a52,52 0,1 1,104 0a52,52 0,1 1,-104 0"/>
-    
-    <!-- 主背景圆形 -->
-    <path
-        android:fillColor="#FFB74D"
-        android:pathData="M54,54m-48,0a48,48 0,1 1,96 0a48,48 0,1 1,-96 0"/>
-    
-    <!-- 小狗头部主体 - 放大并居中 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,35 C40,35 28,47 28,61 C28,75 40,87 54,87 C68,87 80,75 80,61 C80,47 68,35 54,35Z"/>
-    
-    <!-- 头部阴影 -->
-    <path
-        android:fillColor="#F5F5F5"
-        android:pathData="M54,35 C46,35 39,39 34,45 C31,49 29,54 29,61 C29,68 31,73 34,77 C39,83 46,87 54,87 C54,87 54,35 54,35Z"/>
-    
-    <!-- 左耳朵外层 -->
-    <path
-        android:fillColor="#FFB74D"
-        android:pathData="M32,35 C29,35 26,38 26,41 L26,54 C26,57 29,60 32,60 C35,60 38,57 38,54 L38,41 C38,38 35,35 32,35Z"/>
-    
-    <!-- 左耳朵内层 -->
-    <path
-        android:fillColor="#FF8A65"
-        android:pathData="M32,39 C31,39 30,40 30,41 L30,52 C30,53 31,54 32,54 C33,54 34,53 34,52 L34,41 C34,40 33,39 32,39Z"/>
-    
-    <!-- 右耳朵外层 -->
-    <path
-        android:fillColor="#FFB74D"
-        android:pathData="M76,35 C73,35 70,38 70,41 L70,54 C70,57 73,60 76,60 C79,60 82,57 82,54 L82,41 C82,38 79,35 76,35Z"/>
-    
-    <!-- 右耳朵内层 -->
-    <path
-        android:fillColor="#FF8A65"
-        android:pathData="M76,39 C75,39 74,40 74,41 L74,52 C74,53 75,54 76,54 C77,54 78,53 78,52 L78,41 C78,40 77,39 76,39Z"/>
-    
-    <!-- 左眼睛外圈 -->
-    <path
-        android:fillColor="#424242"
-        android:pathData="M42,54 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"/>
-    
-    <!-- 左眼睛高光 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M43,53 m-1.2,0 a1.2,1.2 0,1 1,2.4 0 a1.2,1.2 0,1 1,-2.4 0"/>
-    
-    <!-- 右眼睛外圈 -->
-    <path
-        android:fillColor="#424242"
-        android:pathData="M66,54 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0"/>
-    
-    <!-- 右眼睛高光 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M67,53 m-1.2,0 a1.2,1.2 0,1 1,2.4 0 a1.2,1.2 0,1 1,-2.4 0"/>
-    
-    <!-- 鼻子主体 -->
-    <path
-        android:fillColor="#424242"
-        android:pathData="M54,63 m-3.5,0 a3.5,3.5 0,1 1,7 0 a3.5,3.5 0,1 1,-7 0"/>
-    
-    <!-- 鼻子高光 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.6"
-        android:pathData="M53,62 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
-    
-    <!-- 嘴巴 -->
-    <path
-        android:strokeColor="#424242"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M54,66 L54,71 M54,71 Q47,75 42,71 M54,71 Q61,75 66,71"/>
-    
-    <!-- 舌头 -->
-    <path
-        android:fillColor="#FF6B9D"
-        android:pathData="M54,71 Q51,73 48,72 Q49,75 54,75 Q59,75 60,72 Q57,73 54,71Z"/>
-    
-    <!-- 左脸颊腮红 -->
-    <path
-        android:fillColor="#FF8A65"
-        android:fillAlpha="0.4"
-        android:pathData="M36,61 m-5,0 a5,5 0,1 1,10 0 a5,5 0,1 1,-10 0"/>
-    
-    <!-- 右脸颊腮红 -->
-    <path
-        android:fillColor="#FF8A65"
-        android:fillAlpha="0.4"
-        android:pathData="M72,61 m-5,0 a5,5 0,1 1,10 0 a5,5 0,1 1,-10 0"/>
-    
-    <!-- 头顶毛发 -->
-    <path
-        android:fillColor="#FFB74D"
-        android:pathData="M54,31 Q51,28 48,31 Q50,34 54,35 Q58,34 60,31 Q57,28 54,31Z"/>
-    
-    <!-- 项圈 -->
-    <path
-        android:fillColor="#FF5252"
-        android:pathData="M38,83 L38,87 L70,87 L70,83 Q54,80 38,83Z"/>
-    
-    <!-- 项圈装饰 -->
-    <path
-        android:fillColor="#FFD700"
-        android:pathData="M54,83 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0"/>
-    
-    <!-- 项圈高光 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.5"
-        android:pathData="M54,82 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         馃惗 涓€鍗?Mascot 路 鍩轰簬鏈€鍒濈増鍔犲己鏀硅繘
+         淇濈暀锛氭鍦嗚儗鏅?+ 鐧借劯 + 绔嬭€?+ 澶у渾榛戠溂 + 椤瑰湀
+         鍔犲己锛氱珛浣撳厜褰?/ 铏硅啘鐬冲瓟 / 楠ㄥご鍚婄墝 / 瀹屾暣澶撮儴灞呬腑
+         viewport 108x108
+         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+
+    <!-- 鈹€鈹€鈹€ 澶栧厜鏅曪紙鏌斿厜姘涘洿锛?鈹€鈹€鈹€ -->
+    <path android:pathData="M54,54 m-52,0 a52,52 0,1 1,104 0 a52,52 0,1 1,-104 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="54" android:centerY="50" android:gradientRadius="54">
+                <item android:offset="0.0" android:color="#33FFE082"/>
+                <item android:offset="0.7" android:color="#11FFE082"/>
+                <item android:offset="1.0" android:color="#00FFE082"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 鈹€鈹€鈹€ 涓昏儗鏅渾锛堟鑹插緞鍚戯紝绔嬩綋鎰燂級 鈹€鈹€鈹€ -->
+    <path android:pathData="M54,54 m-46,0 a46,46 0,1 1,92 0 a46,46 0,1 1,-92 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="42" android:centerY="42" android:gradientRadius="58">
+                <item android:offset="0.0" android:color="#FFFFD180"/>
+                <item android:offset="0.55" android:color="#FFFFB74D"/>
+                <item android:offset="1.0" android:color="#FFFB8C00"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- 涓昏儗鏅渾椤堕儴鏌斿拰楂樺厜 -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.22"
+        android:pathData="M54,22 m-22,-3 a22,7 0,1 1,44 0 a22,7 0,1 1,-44 0"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         澶撮《姣涘彂锛圴 褰?+ 闃村奖绔嬩綋锛?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <!-- 闃村奖 -->
+    <!-- ═══ Top-of-head fur: continuous wavy bangs (4 peaks rooted on the head curve) ═══ -->
+    <!-- bangs shadow -->
+    <path android:fillColor="#33000000"
+        android:pathData="M36,44 Q39,33 43,42 Q47,30 51,40 Q55,30 59,40 Q63,30 67,42 Q71,33 74,44 Q60,48 36,44 Z"/>
+    <!-- 涓讳綋锛堟繁妫曟娓愬彉锛?-->
+    <!-- bangs main body (continuous 4-peak wave) -->
+    <path android:pathData="M36,42 Q39,31 43,40 Q47,28 51,38 Q55,28 59,38 Q63,28 67,40 Q71,31 74,42 Q60,46 36,42 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="36" android:startY="28" android:endX="74" android:endY="44">
+                <item android:offset="0.0" android:color="#FFFFE0B2"/>
+                <item android:offset="0.4" android:color="#FFFFB74D"/>
+                <item android:offset="0.8" android:color="#FFA0613B"/>
+                <item android:offset="1.0" android:color="#FF6D4C41"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- bangs glossy stripe (silky reflection) -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45"
+        android:pathData="M40,40 Q44,34 48,40 Q52,33 56,40 Q60,33 64,40 Q68,34 70,42 Q60,42 40,42 Z"/>
+    <!-- tip highlight on each peak (4 small bright dots) -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7"
+        android:pathData="M43,33 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7"
+        android:pathData="M51,30 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7"
+        android:pathData="M59,30 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7"
+        android:pathData="M67,33 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         宸︾珛鑰筹紙鍦嗚鐭╁舰妫掔姸 鈥?淇濈暀鏈€鍒濈増椋庢牸 + 闃村奖 + 楂樺厜锛?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <!-- ═══ Left ear: compact triangular standing ear ═══ -->
+    <!-- shadow -->
+    <path android:fillColor="#33000000"
+        android:pathData="M30,32 Q24,34 23,44 Q23,52 30,52 Q38,52 38,42 Q36,33 30,32 Z"/>
+    <!-- outer body (deep brown gradient) -->
+    <path android:pathData="M30,30 Q24,32 23,42 Q23,50 30,50 Q38,50 38,40 Q36,31 30,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="23" android:startY="30" android:endX="38" android:endY="50">
+                <item android:offset="0.0" android:color="#FFB07355"/>
+                <item android:offset="0.55" android:color="#FF8D5524"/>
+                <item android:offset="1.0" android:color="#FF4E2A0E"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- inner ear (soft pink) -->
+    <path android:fillColor="#FFFFCDD2"
+        android:pathData="M30,33 Q26,35 25,43 Q26,49 31,48 Q35,47 35,42 Q34,34 30,33 Z"/>
+    <!-- inner ear deeper depth -->
+    <path android:fillColor="#FFFFAB91" android:fillAlpha="0.75"
+        android:pathData="M30,36 Q27,38 27,43 Q28,47 31,46 Q33,45 33,42 Q33,37 30,36 Z"/>
+    <!-- inner ear sparkle highlight -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.55"
+        android:pathData="M28,39 m-1.2,0 a1.2,2 0,1 1,2.4 0 a1.2,2 0,1 1,-2.4 0"/>
+    <!-- ear edge top highlight -->
+    <path android:strokeColor="#FFFFE0B2" android:strokeWidth="0.9"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M25,38 Q27,32 30,30.5"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         鍙崇珛鑰筹紙瀵圭О锛?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <!-- ═══ Right ear: compact triangular standing ear (mirror) ═══ -->
+    <path android:fillColor="#33000000"
+        android:pathData="M78,32 Q84,34 85,44 Q85,52 78,52 Q70,52 70,42 Q72,33 78,32 Z"/>
+    <path android:pathData="M78,30 Q84,32 85,42 Q85,50 78,50 Q70,50 70,40 Q72,31 78,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="85" android:startY="30" android:endX="70" android:endY="50">
+                <item android:offset="0.0" android:color="#FFB07355"/>
+                <item android:offset="0.55" android:color="#FF8D5524"/>
+                <item android:offset="1.0" android:color="#FF4E2A0E"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFCDD2"
+        android:pathData="M78,33 Q82,35 83,43 Q82,49 77,48 Q73,47 73,42 Q74,34 78,33 Z"/>
+    <path android:fillColor="#FFFFAB91" android:fillAlpha="0.75"
+        android:pathData="M78,36 Q81,38 81,43 Q80,47 77,46 Q75,45 75,42 Q75,37 78,36 Z"/>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.55"
+        android:pathData="M80,39 m-1.2,0 a1.2,2 0,1 1,2.4 0 a1.2,2 0,1 1,-2.4 0"/>
+    <path android:strokeColor="#FFFFE0B2" android:strokeWidth="0.9"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M83,38 Q81,32 78,30.5"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         涓诲ご閮紙鐧借壊寰勫悜 鈥?绔嬩綋鐞冮潰鎰燂級
+         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <!-- 鎶曞奖 -->
+    <path android:fillColor="#22000000"
+        android:pathData="M54,37 C40,37 28,49 28,63 C28,77 40,89 54,89 C68,89 80,77 80,63 C80,49 68,37 54,37 Z"/>
+    <!-- 涓讳綋 -->
+    <path android:pathData="M54,35 C40,35 28,47 28,61 C28,75 40,87 54,87 C68,87 80,75 80,61 C80,47 68,35 54,35 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="44" android:centerY="48" android:gradientRadius="38">
+                <item android:offset="0.0" android:color="#FFFFFFFF"/>
+                <item android:offset="0.65" android:color="#FFF5F5F5"/>
+                <item android:offset="1.0" android:color="#FFD7CCC8"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- 澶撮《鐧介珮鍏?-->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.65"
+        android:pathData="M54,42 m-15,-3 a15,4 0,1 1,30 0 a15,4 0,1 1,-30 0"/>
+    <!-- ═══════════════════════════════════════════════════════
+         👑 GOLDEN CROWN (sits ON TOP of the head, above hairline)
+         All Y coordinates shifted up by 13: base band y=33-36
+         sits exactly on head crown y=35; spikes rise above into y=18-30
+         ═══════════════════════════════════════════════════════ -->
+    <!-- crown shadow (slightly below + offset) -->
+    <path android:fillColor="#33000000"
+        android:pathData="M37,42 L40,33 L44,39 L48,26 L54,39 L60,26 L64,39 L68,33 L71,42 Z"/>
+    <!-- crown main body (5 spikes, middle peak tallest) -->
+    <path android:pathData="M37,40 L40,31 L44,37 L48,24 L54,37 L60,24 L64,37 L68,31 L71,40 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="37" android:startY="24" android:endX="71" android:endY="40">
+                <item android:offset="0.0" android:color="#FFFFF59D"/>
+                <item android:offset="0.45" android:color="#FFFFC107"/>
+                <item android:offset="1.0" android:color="#FFE65100"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- crown base band (horizontal gold bar sitting on head crown) -->
+    <path android:pathData="M37,39 L71,39 L71,42 Q54,44 37,42 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="37" android:startY="39" android:endX="37" android:endY="43">
+                <item android:offset="0.0" android:color="#FFFFE082"/>
+                <item android:offset="1.0" android:color="#FFE65100"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- base band top highlight -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7"
+        android:pathData="M38,39.3 L70,39.3 L70,39.9 L38,39.9 Z"/>
+    <!-- base band bottom shadow line -->
+    <path android:fillColor="#FF8D6E63" android:fillAlpha="0.45"
+        android:pathData="M38,42 Q54,43 70,42 L70,42.5 Q54,43.5 38,42.5 Z"/>
+
+    <!-- crown gold edge highlight (shimmer line on left silhouette) -->
+    <path android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.7" android:strokeWidth="0.8"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M40,31 L44,36.5 M48,25 L53,36.5"/>
+
+    <!-- ═══ 5 jewels on top of each crown spike ═══ -->
+    <!-- spike 1 jewel: red ruby -->
+    <path android:pathData="M40,31 m-1.6,0 a1.6,1.6 0,1 1,3.2 0 a1.6,1.6 0,1 1,-3.2 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="39.5" android:centerY="30.5" android:gradientRadius="2">
+                <item android:offset="0.0" android:color="#FFFF8A80"/>
+                <item android:offset="1.0" android:color="#FFC62828"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.85"
+        android:pathData="M39.4,30.4 m-0.5,0 a0.5,0.5 0,1 1,1 0 a0.5,0.5 0,1 1,-1 0"/>
+
+    <!-- spike 2 jewel: blue sapphire -->
+    <path android:pathData="M48,24 m-1.7,0 a1.7,1.7 0,1 1,3.4 0 a1.7,1.7 0,1 1,-3.4 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="47.5" android:centerY="23.5" android:gradientRadius="2.2">
+                <item android:offset="0.0" android:color="#FF80D8FF"/>
+                <item android:offset="1.0" android:color="#FF1565C0"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.85"
+        android:pathData="M47.4,23.4 m-0.55,0 a0.55,0.55 0,1 1,1.1 0 a0.55,0.55 0,1 1,-1.1 0"/>
+
+    <!-- spike 3 jewel: PURPLE — center, biggest -->
+    <path android:pathData="M54,22 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="53.5" android:centerY="21.5" android:gradientRadius="2.6">
+                <item android:offset="0.0" android:color="#FFE1BEE7"/>
+                <item android:offset="0.5" android:color="#FFAB47BC"/>
+                <item android:offset="1.0" android:color="#FF6A1B9A"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.9"
+        android:pathData="M53.4,21.4 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+    <!-- center jewel sparkle cross -->
+    <path android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.95" android:strokeWidth="0.45"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M54,19.5 L54,24.5 M51.5,22 L56.5,22"/>
+
+    <!-- spike 4 jewel: green emerald -->
+    <path android:pathData="M60,24 m-1.7,0 a1.7,1.7 0,1 1,3.4 0 a1.7,1.7 0,1 1,-3.4 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="59.5" android:centerY="23.5" android:gradientRadius="2.2">
+                <item android:offset="0.0" android:color="#FFB9F6CA"/>
+                <item android:offset="1.0" android:color="#FF2E7D32"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.85"
+        android:pathData="M59.4,23.4 m-0.55,0 a0.55,0.55 0,1 1,1.1 0 a0.55,0.55 0,1 1,-1.1 0"/>
+
+    <!-- spike 5 jewel: pink topaz -->
+    <path android:pathData="M68,31 m-1.6,0 a1.6,1.6 0,1 1,3.2 0 a1.6,1.6 0,1 1,-3.2 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="67.5" android:centerY="30.5" android:gradientRadius="2">
+                <item android:offset="0.0" android:color="#FFFFB6C1"/>
+                <item android:offset="1.0" android:color="#FFAD1457"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.85"
+        android:pathData="M67.4,30.4 m-0.5,0 a0.5,0.5 0,1 1,1 0 a0.5,0.5 0,1 1,-1 0"/>
+
+    <!-- 4 small pearls on the base band -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M44,40.6 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M51,40.7 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M57,40.7 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M64,40.6 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+
+    <!-- forehead details removed (covered by crown) -->
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         鑵孩锛堝弻灞?鈥?涓昏壊 + 涓績鎻愪寒锛?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <path android:fillColor="#FFFF8A65" android:fillAlpha="0.5"
+        android:pathData="M36,62 m-5,0 a5,5 0,1 1,10 0 a5,5 0,1 1,-10 0"/>
+    <path android:fillColor="#FFFFAB91" android:fillAlpha="0.6"
+        android:pathData="M36,61.5 m-3,0 a3,2.5 0,1 1,6 0 a3,2.5 0,1 1,-6 0"/>
+
+    <path android:fillColor="#FFFF8A65" android:fillAlpha="0.5"
+        android:pathData="M72,62 m-5,0 a5,5 0,1 1,10 0 a5,5 0,1 1,-10 0"/>
+    <path android:fillColor="#FFFFAB91" android:fillAlpha="0.6"
+        android:pathData="M72,61.5 m-3,0 a3,2.5 0,1 1,6 0 a3,2.5 0,1 1,-6 0"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         宸︾溂鐫涳紙榛戝鍦?+ 妫曡櫣鑶?+ 澶х櫧楂樺厜 + 灏忎寒鐐癸級
+         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <path android:fillColor="#FF1B1B1B"
+        android:pathData="M42,55 m-4.5,0 a4.5,5 0,1 1,9 0 a4.5,5 0,1 1,-9 0"/>
+    <!-- 铏硅啘锛堟繁妫曪級 -->
+    <path android:fillColor="#FF4E342E"
+        android:pathData="M42,55 m-3,0 a3,3.5 0,1 1,6 0 a3,3.5 0,1 1,-6 0"/>
+    <!-- 澶х櫧楂樺厜 -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M43.5,53 m-1.6,0 a1.6,1.8 0,1 1,3.2 0 a1.6,1.8 0,1 1,-3.2 0"/>
+    <!-- 灏忎寒鐐?-->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M40.5,57 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         鍙崇溂鐫涳紙瀵圭О锛?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <path android:fillColor="#FF1B1B1B"
+        android:pathData="M66,55 m-4.5,0 a4.5,5 0,1 1,9 0 a4.5,5 0,1 1,-9 0"/>
+    <path android:fillColor="#FF4E342E"
+        android:pathData="M66,55 m-3,0 a3,3.5 0,1 1,6 0 a3,3.5 0,1 1,-6 0"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M67.5,53 m-1.6,0 a1.6,1.8 0,1 1,3.2 0 a1.6,1.8 0,1 1,-3.2 0"/>
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M64.5,57 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         榧诲瓙锛堥粦妞渾 + 澶х櫧楂樺厜锛?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <path android:fillColor="#FF1B1B1B"
+        android:pathData="M54,64 m-4,0 a4,3.5 0,1 1,8 0 a4,3.5 0,1 1,-8 0"/>
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.85"
+        android:pathData="M52.8,63 m-1.2,0 a1.2,0.9 0,1 1,2.4 0 a1.2,0.9 0,1 1,-2.4 0"/>
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         鍢?+ 鑸?         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <!-- 榧讳笅涓珫 -->
+    <!-- mouth: philtrum (nose-to-lip vertical) -->
+    <path android:strokeColor="#FF1B1B1B" android:strokeWidth="2.8"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M54,68 L54,72.5"/>
+    <!-- mouth: left smile arc (sweeter, longer) -->
+    <path android:strokeColor="#FF1B1B1B" android:strokeWidth="2.8"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M54,72.5 Q48.5,78 43,73.5"/>
+    <!-- mouth: right smile arc -->
+    <path android:strokeColor="#FF1B1B1B" android:strokeWidth="2.8"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M54,72.5 Q59.5,78 65,73.5"/>
+    <!-- mouth corner upturn dots (cuteness) -->
+    <path android:fillColor="#FF1B1B1B"
+        android:pathData="M43,73.5 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+    <path android:fillColor="#FF1B1B1B"
+        android:pathData="M65,73.5 m-1,0 a1,1 0,1 1,2 0 a1,1 0,1 1,-2 0"/>
+
+    <!-- tongue removed by user request: closed mouth (no pink under nose) -->
+
+    <!-- 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+         椤瑰湀锛堢孩鑹?+ 閲戦澶村悐鐗岋級
+         鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 -->
+    <!-- 椤瑰湀闃村奖 -->
+    <!-- collar shadow -->
+    <path android:fillColor="#33000000"
+        android:pathData="M38,84 L38,88 L70,88 L70,84 Q54,81 38,84 Z"/>
+    <!-- collar main body -->
+    <path android:pathData="M38,82 L38,86 L70,86 L70,82 Q54,79 38,82 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="38" android:startY="79" android:endX="38" android:endY="86">
+                <item android:offset="0.0" android:color="#FFFF5252"/>
+                <item android:offset="1.0" android:color="#FFC62828"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- collar top highlight -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45"
+        android:pathData="M40,80.5 L68,80.5 L68,82 Q54,79.8 40,82 Z"/>
+
+    <!-- ═══ Gold bone tag (rebuilt as 3 independent paths to avoid even-odd punch) ═══ -->
+    <!-- bone tag shadow (3 ovals fused) -->
+    <path android:fillColor="#33000000"
+        android:pathData="M50,86.5 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0 Z"/>
+    <path android:fillColor="#33000000"
+        android:pathData="M58,86.5 m-2.5,0 a2.5,2.5 0,1 1,5 0 a2.5,2.5 0,1 1,-5 0 Z"/>
+    <path android:fillColor="#33000000"
+        android:pathData="M49.5,85 L58.5,85 L58.5,88 L49.5,88 Z"/>
+    <!-- bone tag center rectangle (gold) -->
+    <path android:pathData="M49.5,84 L58.5,84 L58.5,87 L49.5,87 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="49" android:startY="84" android:endX="49" android:endY="87">
+                <item android:offset="0.0" android:color="#FFFFEE58"/>
+                <item android:offset="1.0" android:color="#FFFF8F00"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- bone tag left circle -->
+    <path android:pathData="M50,85.5 m-2.4,0 a2.4,2.4 0,1 1,4.8 0 a2.4,2.4 0,1 1,-4.8 0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="49" android:centerY="84.5" android:gradientRadius="3.2">
+                <item android:offset="0.0" android:color="#FFFFF59D"/>
+                <item android:offset="1.0" android:color="#FFFF8F00"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- bone tag right circle -->
+    <path android:pathData="M58,85.5 m-2.4,0 a2.4,2.4 0,1 1,4.8 0 a2.4,2.4 0,1 1,-4.8 0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="57" android:centerY="84.5" android:gradientRadius="3.2">
+                <item android:offset="0.0" android:color="#FFFFF59D"/>
+                <item android:offset="1.0" android:color="#FFFF8F00"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- bone tag top highlight -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7"
+        android:pathData="M50,84.4 L58,84.4 L58,85 L50,85 Z"/>
+    <!-- bone tag left circle highlight -->
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.6"
+        android:pathData="M48.8,84.5 m-0.7,0 a0.7,0.7 0,1 1,1.4 0 a0.7,0.7 0,1 1,-1.4 0"/>
+    <!-- 椤瑰湀涓讳綋 -->
+    <!-- 椤瑰湀楂樺厜绾?-->
+
+    <!-- 閲戣壊楠ㄥご鍚婄墝锛堝乏鍦?+ 涓暱 + 鍙冲渾锛岀畝鍖栭澶村舰锛?-->
+    <!-- 闃村奖 -->
+    <!-- 涓讳綋 -->
 </vector>

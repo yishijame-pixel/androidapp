@@ -107,16 +107,9 @@ fun EnhancedSpinWheelScreen(
         .collectAsState(initial = null)
     val buttonSkin = userPreferences?.spinButtonSkin ?: "pf_1"
     
-    // 加载按钮皮肤图片
+    // 加载按钮皮肤图片（🚀 跨页面缓存）
     val buttonSkinBitmap = remember(buttonSkin) {
-        try {
-            context.assets.open("login/$buttonSkin.png").use { inputStream ->
-                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("EnhancedSpinWheel", "Failed to load button skin: $buttonSkin", e)
-            null
-        }
+        com.example.funlife.utils.ImageCache.loadImage(context, "login/$buttonSkin.png", sampleSize = 2)
     }
     
     // 🔥 按钮皮肤文字位置映射 - 根据每个皮肤的设计调整文字位置
@@ -189,6 +182,9 @@ fun EnhancedSpinWheelScreen(
     var showMultiSpinResultAnimation by remember { mutableStateOf(false) }
     var animationResult by remember { mutableStateOf("") }
     var multiSpinAnimationResult by remember { mutableStateOf("") }
+    // 🎯 积分掉落奖励浮层
+    var shopPointsRewardAmount by remember { mutableStateOf(0) }
+    var showShopPointsReward by remember { mutableStateOf(false) }
     var resultMessage by remember { mutableStateOf("") }
     var showHistoryFilterDialog by remember { mutableStateOf(false) }
     var showMultiSpinDialog by remember { mutableStateOf(false) }
@@ -223,7 +219,7 @@ fun EnhancedSpinWheelScreen(
         topBar = {
             // 自定义头部导航栏 - 透明背景，融入整体渐变
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().statusBarsPadding(),
                 color = Color.Transparent, // 透明背景
                 shadowElevation = 0.dp
             ) {
@@ -359,24 +355,24 @@ fun EnhancedSpinWheelScreen(
                         .padding(padding)
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                 
                 // ═══════════════════════════════════════════════════════
-                // 🎯 转盘模式切换 - 带动画滑块的分段控制器
+                // 🎯 转盘模式切换 - 紧凑胶囊分段控制器（不再占独立大行）
                 // ═══════════════════════════════════════════════════════
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 32.dp, vertical = 6.dp),
+                        .padding(horizontal = 60.dp, vertical = 0.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // 外框容器
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp)
-                            .clip(RoundedCornerShape(23.dp))
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(Color(0xFFF3E8FF).copy(alpha = 0.8f))
                     ) {
                         // 动画滑动指示器
@@ -402,7 +398,7 @@ fun EnhancedSpinWheelScreen(
                                     .offset(
                                         x = (halfWidth - indicatorPadding) * indicatorFraction
                                     )
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(13.dp))
                                     .background(
                                         Brush.horizontalGradient(
                                             colors = if (isProductWheelMode) listOf(
@@ -412,7 +408,7 @@ fun EnhancedSpinWheelScreen(
                                             )
                                         )
                                     )
-                                    .shadow(6.dp, RoundedCornerShape(20.dp))
+                                    .shadow(4.dp, RoundedCornerShape(13.dp))
                             )
                         }
                         
@@ -438,7 +434,7 @@ fun EnhancedSpinWheelScreen(
                                     "🎯 幸运转盘",
                                     color = textColor,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 12.sp
                                 )
                             }
                             
@@ -466,7 +462,7 @@ fun EnhancedSpinWheelScreen(
                                         "🎁 商品转盘",
                                         color = textColor,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
+                                        fontSize = 12.sp
                                     )
                                     if (userShopPoints >= 10) {
                                         Spacer(Modifier.width(4.dp))
@@ -555,7 +551,25 @@ fun EnhancedSpinWheelScreen(
                             onResultDismiss = {
                                 productSpinResult = null
                             },
-                            modifier = Modifier.padding(bottom = 16.dp)
+                            modifier = Modifier.padding(bottom = 16.dp),
+                            // 🧪 测试转盘（不扣积分），仅 Debug 显示按钮
+                            onTestSpin = {
+                                isProductSpinning = true
+                                scope.launch {
+                                    val result = viewModel.performTestProductSpin()
+                                    when (result) {
+                                        is ProductSpinResult.Success -> {
+                                            productSpinResult = result.prize
+                                            kotlinx.coroutines.delay(4500)
+                                            isProductSpinning = false
+                                        }
+                                        is ProductSpinResult.InsufficientPoints -> {
+                                            isProductSpinning = false
+                                            snackbarHostState.showSnackbar("奖品列表为空，无法测试")
+                                        }
+                                    }
+                                }
+                            }
                         )
                     } else {
                     Column(
@@ -764,6 +778,13 @@ fun EnhancedSpinWheelScreen(
                                 }
                                 
                                 val spinResult = viewModel.processSpinResult(result)
+                                // 🎯 积分掉落：拿到积分则触发全屏浮层（凌驾于常规结果动画之上）
+                                val ptsReward = (spinResult as? SpinResult.Success)?.shopPointsReward ?: 0
+                                if (ptsReward > 0) {
+                                    shopPointsRewardAmount = ptsReward
+                                    showShopPointsReward = true
+                                    soundManager.play(SoundEffect.RESULT_NORMAL, volume = 1.0f)
+                                }
                                 
                                 if (multiSpinMode) {
                                     currentSpinIndex++
@@ -1576,6 +1597,16 @@ fun EnhancedSpinWheelScreen(
             onDismiss = { showMultiSpinResultAnimation = false }
         )
     }
+
+    // 🎯 积分掉落奖励浮层（最高 zIndex，会盖在普通结果动画之上）
+    com.example.funlife.ui.components.ShopPointsRewardOverlay(
+        visible = showShopPointsReward,
+        pointsAmount = shopPointsRewardAmount,
+        onDismiss = {
+            showShopPointsReward = false
+            shopPointsRewardAmount = 0
+        }
+    )
     
     // 模式选择对话框
     if (showModeDialog) {
@@ -2666,7 +2697,8 @@ fun EditOptionsDialog(
                     onValueChange = { optionsText = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        // 🔥 自适应高度：小屏/键盘弹出时可压缩到 160dp，理想 240dp
+                        .heightIn(min = 160.dp, max = 240.dp)
                         .verticalScroll(rememberScrollState()),
                     placeholder = { 
                         Text(

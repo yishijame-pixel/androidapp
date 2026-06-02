@@ -1,6 +1,7 @@
 // NavGraph.kt - 导航图
 package com.example.funlife.navigation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
@@ -30,6 +31,76 @@ import com.example.funlife.viewmodel.GoalViewModel
 import com.example.funlife.viewmodel.PetViewModel
 import com.example.funlife.viewmodel.ChatViewModel
 
+/**
+ * 🛡️ 安全导航：当目标路由不存在 / 无法解析时，吃掉异常并提示用户，
+ * 避免应用崩溃或停留在空白页。所有调用 navigate(route) 的地方都应使用此扩展。
+ */
+fun NavHostController.safeNavigate(
+    route: String,
+    context: android.content.Context? = null,
+    builder: (androidx.navigation.NavOptionsBuilder.() -> Unit)? = null
+) {
+    try {
+        if (builder != null) this.navigate(route, builder) else this.navigate(route)
+    } catch (e: IllegalArgumentException) {
+        android.util.Log.e("NavGraph", "🚧 未知路由: $route", e)
+        context?.let {
+            android.widget.Toast.makeText(it, "页面暂未开放 🚧", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("NavGraph", "导航失败: $route", e)
+        context?.let {
+            android.widget.Toast.makeText(it, "跳转失败，请稍后再试", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+/**
+ * � 完全重启 MainActivity（清空 task），用于"退出登录 / 切换账号"。
+ *
+ * 为什么必须重启而不是 Activity.recreate()：
+ *   1. recreate() 会保存 savedInstanceState，Compose Navigation 自动恢复回退栈，
+ *      用户退出后还会停在 Profile/Home 页，回不到 Welcome
+ *   2. 重启可清空所有 Activity-scoped ViewModel，避免新账号看到旧账号数据
+ *   3. CLEAR_TASK 确保整个任务栈被清空，等同冷启动到 startDestination = Welcome
+ *
+ * 调用方应已先 authViewModel.logout() 清掉 session，再调本函数。
+ */
+fun restartAppForLogout(context: android.content.Context) {
+    val act = context as? android.app.Activity ?: return
+    val intent = android.content.Intent(act, com.example.funlife.MainActivity::class.java).apply {
+        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+    }
+    act.startActivity(intent)
+    act.finish()
+    act.overridePendingTransition(0, 0)
+}
+
+/**
+ * � 加载占位：用于路由分支判定中（如 userSession == null 跳登录的等待期），
+ * 显示一个友好的加载界面而不是空白。
+ */
+@Composable
+private fun LoadingFallback(message: String = "加载中…") {
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color(0xFFFFF8E1)),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.foundation.layout.Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                color = androidx.compose.ui.graphics.Color(0xFFFFB74D)
+            )
+            Text(message, fontSize = 14.sp, color = androidx.compose.ui.graphics.Color(0xFF8D6E63))
+        }
+    }
+}
+
 sealed class Screen(val route: String, val title: String) {
     object Welcome : Screen("welcome", "欢迎")
     object Login : Screen("login", "登录")
@@ -44,6 +115,7 @@ sealed class Screen(val route: String, val title: String) {
     object Statistics : Screen("statistics", "统计")
     object History : Screen("history", "历史")
     object Settings : Screen("settings", "设置")
+    object Help : Screen("help", "帮助中心")
     object Profile : Screen("profile", "我的")
     object Inventory : Screen("inventory", "背包")
     object Vip : Screen("vip", "VIP会员")
@@ -51,6 +123,38 @@ sealed class Screen(val route: String, val title: String) {
     object AvatarFrameShop : Screen("avatar_frame_shop", "头像框商城")
     object ChatBill : Screen("chat_bill", "聊天记账")
     object BillDetail : Screen("bill_detail", "记账详情")
+    object BudgetManager : Screen("budget_manager", "预算管理")
+    object AccountManager : Screen("account_manager", "账户管理")
+    object Notifications : Screen("notifications", "通知中心")
+    object Inbox : Screen("inbox", "通知收件箱")
+    // 🆕 v51 时光信箱
+    object LetterMailbox : Screen("letter_mailbox", "时光信箱")
+    object LetterCompose : Screen("letter_compose?recipientId={recipientId}", "写信") {
+        fun routeWith(recipientId: Long?) =
+            if (recipientId == null) "letter_compose" else "letter_compose?recipientId=$recipientId"
+    }
+    object LetterDetail : Screen("letter_detail/{letterId}", "信件详情") {
+        fun routeWith(letterId: Long) = "letter_detail/$letterId"
+    }
+    object LetterRecipients : Screen("letter_recipients", "收信人")
+    // 🆕 v52 人生书架
+    object Bookshelf : Screen("bookshelf", "人生书架")
+    // 🆕 v53 阅光书房
+    object ReadingRoom : Screen("reading_room", "阅光书房")
+    object BookDetail : Screen("book_detail/{bookId}", "书籍详情") {
+        fun routeWith(bookId: Long) = "book_detail/$bookId"
+    }
+    object BookChat : Screen("book_chat/{bookId}?sessionId={sessionId}", "AI 读书伴侣") {
+        fun routeWith(bookId: Long, sessionId: Long = 0L) =
+            if (sessionId > 0L) "book_chat/$bookId?sessionId=$sessionId"
+            else "book_chat/$bookId?sessionId=0"
+    }
+    object QuoteGalaxy : Screen("quote_galaxy", "摘抄星河")
+    object ReaderDna : Screen("reader_dna", "读者 DNA")
+    object PostcardDrift : Screen("postcard_drift", "明信片漂流")
+    // 🆕 v55 古籍日记本
+    object DiaryBook : Screen("diary_book", "日记本")
+    object DiaryBookFull : Screen("diary_book_full", "日记本")
 }
 
 @Composable
@@ -182,17 +286,49 @@ fun NavGraph(
             )
         }
         
+        composable(Screen.Help.route) {
+            HelpScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Notifications.route) {
+            com.example.funlife.ui.screens.NotificationSettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Inbox.route) {
+            com.example.funlife.ui.screens.InboxScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onDeepLink = { route ->
+                    val target = when (route) {
+                        "home" -> Screen.Home.route
+                        "goal" -> Screen.Goal.route
+                        "habit" -> Screen.Habit.route
+                        "mood" -> Screen.Mood.route
+                        "anniversary" -> Screen.Anniversary.route
+                        else -> route
+                    }
+                    navController.navigate(target)
+                }
+            )
+        }
+
         composable(Screen.Settings.route) {
             SettingsScreen(
                 viewModel = viewModel(),
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToHelp = { navController.navigate(Screen.Help.route) },
+                onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) }
             )
         }
         
         composable("shop") {
+            val ctx = LocalContext.current
             ShopScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigate = { route -> navController.navigate(route) }
+                onNavigate = { route -> navController.safeNavigate(route, ctx) }
             )
         }
         
@@ -206,7 +342,7 @@ fun NavGraph(
                     PetViewModel(
                         petRepository = PetRepository(application.database.petDao()),
                         petItemRepository = PetItemRepository(application.database.petItemDao()),
-                        coinRepository = CoinRepository(application.database.coinDao()),
+                        coinRepository = CoinRepository(application.database.coinDao(), context.applicationContext),
                         userId = userSession.userId,
                         appContext = context.applicationContext
                     )
@@ -237,6 +373,7 @@ fun NavGraph(
                 )
             } else {
                 // 如果没有登录，返回登录页
+                LoadingFallback("正在跳转登录…")
                 LaunchedEffect(Unit) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -249,16 +386,15 @@ fun NavGraph(
             val ctx = LocalContext.current
             ProfileScreen(
                 authViewModel = authViewModel,
-                onLogout = {
-                    // 🔒 安全修复：退出登录后重建 Activity，销毁所有 Activity范围的 ViewModel
-                    // （anniversary / score / goal / pet 等默认 viewModel()），避免新账号看到旧账号数据
-                    (ctx as? android.app.Activity)?.recreate()
-                },
+                onLogout = { restartAppForLogout(ctx) },
                 onNavigateToInventory = {
                     navController.navigate(Screen.Inventory.route)
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onNavigateToInbox = {
+                    navController.navigate(Screen.Inbox.route)
                 }
             )
         }
@@ -271,6 +407,7 @@ fun NavGraph(
 
             if (userSession == null) {
                 // 🔒 未登录直接跳到登录页，避免使用默认 userId 加载错乱数据
+                LoadingFallback("正在跳转登录…")
                 LaunchedEffect(Unit) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -325,10 +462,7 @@ fun NavGraph(
             VipProfileScreen(
                 authViewModel = authViewModel,
                 scoreViewModel = scoreViewModel,
-                onLogout = {
-                    // 🔒 同上：退出后重建 Activity、清理所有 ViewModel缓存
-                    (ctx as? android.app.Activity)?.recreate()
-                }
+                onLogout = { restartAppForLogout(ctx) }
             )
         }
         
@@ -351,9 +485,12 @@ fun NavGraph(
                     viewModel = chatViewModel,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToBillDetail = { navController.navigate(Screen.BillDetail.route) },
+                    onNavigateToBudgetManager = { navController.navigate(Screen.BudgetManager.route) },
+                    onNavigateToAccountManager = { navController.navigate(Screen.AccountManager.route) },
                     avatarUri = userAvatar?.avatarUri
                 )
             } else {
+                LoadingFallback("正在跳转登录…")
                 LaunchedEffect(Unit) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -378,6 +515,7 @@ fun NavGraph(
                     onNavigateBack = { navController.popBackStack() }
                 )
             } else {
+                LoadingFallback("正在跳转登录…")
                 LaunchedEffect(Unit) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -385,7 +523,53 @@ fun NavGraph(
                 }
             }
         }
-        
+
+        // 🆕 v48 账户管理
+        composable(Screen.AccountManager.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                val chatViewModel = remember(userSession.userId) {
+                    ChatViewModel(application, userSession.userId)
+                }
+                AccountManagerScreen(
+                    viewModel = chatViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+
+        // 🆕 v49 预算管理
+        composable(Screen.BudgetManager.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                val chatViewModel = remember(userSession.userId) {
+                    ChatViewModel(application, userSession.userId)
+                }
+                BudgetManagerScreen(
+                    viewModel = chatViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+
         // 🔥 头像框商城
         composable(Screen.AvatarFrameShop.route) {
             val context = LocalContext.current
@@ -408,10 +592,296 @@ fun NavGraph(
                 )
             } else {
                 // 如果没有登录，返回登录页
+                LoadingFallback("正在跳转登录…")
                 LaunchedEffect(Unit) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
+                }
+            }
+        }
+
+        // ════════════════════════════════════════════════════════
+        // 🆕 v51 时光信箱
+        // ════════════════════════════════════════════════════════
+
+        // 🆕 v52 人生书架
+        // 🆕 v53 阅光书房 · 总入口（4-Tab）
+        composable(Screen.ReadingRoom.route) {
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                com.example.funlife.ui.screens.ReadingRoomScreen(
+                    userId = s.userId,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenBookshelf = { navController.navigate(Screen.Bookshelf.route) },
+                    onOpenGalaxy = { navController.navigate(Screen.QuoteGalaxy.route) },
+                    onOpenDna = { navController.navigate(Screen.ReaderDna.route) },
+                    onOpenPostcard = { navController.navigate(Screen.PostcardDrift.route) },
+                    onOpenBookDetail = { id -> navController.navigate(Screen.BookDetail.routeWith(id)) },
+                )
+            }
+        }
+        // 🆕 v53 单本书详情
+        composable(
+            Screen.BookDetail.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("bookId") {
+                    type = androidx.navigation.NavType.LongType
+                }
+            )
+        ) { backStack ->
+            val s = authViewModel.getCurrentSession()
+            val bid = backStack.arguments?.getLong("bookId") ?: 0L
+            if (s != null && bid > 0L) {
+                com.example.funlife.ui.screens.BookDetailScreen(
+                    userId = s.userId,
+                    bookId = bid,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenChat = { id, sid -> navController.navigate(Screen.BookChat.routeWith(id, sid)) },
+                    onOpenSnapshot = { /* 由 Screen 内部用 SnapshotShareDialog 弹出 */ },
+                )
+            }
+        }
+        // 🆕 v53 AI 读书伴侣（v54 加 sessionId）
+        composable(
+            Screen.BookChat.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("bookId") {
+                    type = androidx.navigation.NavType.LongType
+                },
+                androidx.navigation.navArgument("sessionId") {
+                    type = androidx.navigation.NavType.LongType
+                    defaultValue = 0L
+                }
+            )
+        ) { backStack ->
+            val s = authViewModel.getCurrentSession()
+            val bid = backStack.arguments?.getLong("bookId") ?: 0L
+            val sid = backStack.arguments?.getLong("sessionId") ?: 0L
+            if (s != null && bid > 0L) {
+                com.example.funlife.ui.screens.BookChatScreen(
+                    userId = s.userId, bookId = bid, sessionId = sid,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+        }
+        // 🆕 v53 摘抄星河
+        composable(Screen.QuoteGalaxy.route) {
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                com.example.funlife.ui.screens.QuoteGalaxyScreen(
+                    userId = s.userId, onBack = { navController.popBackStack() }
+                )
+            }
+        }
+        // 🆕 v53 读者 DNA
+        composable(Screen.ReaderDna.route) {
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                com.example.funlife.ui.screens.ReaderDnaScreen(
+                    userId = s.userId, onBack = { navController.popBackStack() }
+                )
+            }
+        }
+        // 🆕 v55 古籍日记本·中心页（3D 魔法书入口）
+        composable(Screen.DiaryBook.route) {
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                com.example.funlife.ui.screens.DiaryHubScreen(
+                    userId = s.userId,
+                    onBack = { navController.popBackStack() },
+                    onOpenFullReader = {
+                        navController.navigate(Screen.DiaryBookFull.route)
+                    },
+                    onOpenWriteToday = {
+                        navController.navigate(Screen.DiaryBookFull.route + "?openEditor=1")
+                    }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+        // v55 日记本·全屏阅读
+        composable(
+            route = Screen.DiaryBookFull.route + "?openEditor={openEditor}",
+            arguments = listOf(
+                androidx.navigation.navArgument("openEditor") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = "0"
+                    nullable = true
+                }
+            )
+        ) { backStack ->
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                val openEditor = backStack.arguments?.getString("openEditor") == "1"
+                com.example.funlife.ui.screens.DiaryBookScreen(
+                    userId = s.userId,
+                    onBack = { navController.popBackStack() },
+                    openEditorOnLaunch = openEditor
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+        // 同路由，不带参数仍可访问
+        composable(Screen.DiaryBookFull.route) {
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                com.example.funlife.ui.screens.DiaryBookScreen(
+                    userId = s.userId,
+                    onBack = { navController.popBackStack() }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+        // 🆕 v53 明信片漂流
+        composable(Screen.PostcardDrift.route) {
+            val s = authViewModel.getCurrentSession()
+            if (s != null) {
+                com.example.funlife.ui.screens.PostcardDriftScreen(
+                    userId = s.userId, onBack = { navController.popBackStack() }
+                )
+            }
+        }
+
+        composable(Screen.Bookshelf.route) {
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                com.example.funlife.ui.screens.BookshelfScreen(
+                    userId = userSession.userId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+        }
+
+        composable(Screen.LetterMailbox.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                val vm = remember(userSession.userId) {
+                    com.example.funlife.viewmodel.LetterViewModel(application, userSession.userId)
+                }
+                com.example.funlife.ui.screens.LetterMailboxScreen(
+                    viewModel = vm,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToCompose = { rid ->
+                        navController.navigate(Screen.LetterCompose.routeWith(rid))
+                    },
+                    onNavigateToDetail = { lid ->
+                        navController.navigate(Screen.LetterDetail.routeWith(lid))
+                    },
+                    onManageRecipients = { navController.navigate(Screen.LetterRecipients.route) },
+                    onNavigateToVip = { navController.navigate(Screen.Vip.route) }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+        }
+
+        composable(
+            Screen.LetterCompose.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("recipientId") {
+                    type = androidx.navigation.NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) { backStack ->
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                val vm = remember(userSession.userId) {
+                    com.example.funlife.viewmodel.LetterViewModel(application, userSession.userId)
+                }
+                val rid = backStack.arguments?.getLong("recipientId", -1L)?.takeIf { it > 0L }
+                com.example.funlife.ui.screens.LetterComposeScreen(
+                    viewModel = vm,
+                    initialRecipientId = rid,
+                    onNavigateBack = { navController.popBackStack() },
+                    onSent = { navController.popBackStack() },
+                    onUpgrade = { navController.navigate(Screen.Vip.route) }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+        }
+
+        composable(
+            Screen.LetterDetail.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("letterId") { type = androidx.navigation.NavType.LongType }
+            )
+        ) { backStack ->
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                val vm = remember(userSession.userId) {
+                    com.example.funlife.viewmodel.LetterViewModel(application, userSession.userId)
+                }
+                val lid = backStack.arguments?.getLong("letterId") ?: 0L
+                com.example.funlife.ui.screens.LetterDetailScreen(
+                    viewModel = vm,
+                    letterId = lid,
+                    onNavigateBack = { navController.popBackStack() },
+                    onReply = { rid ->
+                        navController.navigate(Screen.LetterCompose.routeWith(rid))
+                    }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+        }
+
+        composable(Screen.LetterRecipients.route) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession != null) {
+                val vm = remember(userSession.userId) {
+                    com.example.funlife.viewmodel.LetterViewModel(application, userSession.userId)
+                }
+                com.example.funlife.ui.screens.LetterRecipientManagerScreen(
+                    viewModel = vm,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            } else {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
                 }
             }
         }

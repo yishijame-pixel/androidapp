@@ -47,8 +47,13 @@ class VipSecurityValidator(private val context: Context) {
                 }
             }
             
-            // 3. 签名验证（如果存在）
-            if (userVip.signature != null) {
+            // 3. 签名验证
+            //    🔒 严重漏洞修复：VIP 用户 (vipLevel > 0) 必须有 signature；
+            //    原逻辑仅"if signature != null 才验"，攻击者直接把 signature 置 NULL
+            //    就能绕过完整性校验，本地修改 vipLevel=99 永久白嫖 VIP。
+            if (userVip.vipLevel > 0 && userVip.signature.isNullOrBlank()) {
+                errors.add("VIP 用户缺少完整性签名（疑似被篡改）")
+            } else if (!userVip.signature.isNullOrBlank()) {
                 val isValid = SecurityManager.verifyVipSignature(
                     userVip.userId,
                     userVip.vipLevel,
@@ -56,18 +61,17 @@ class VipSecurityValidator(private val context: Context) {
                     userVip.signature,
                     context
                 )
-                
                 if (!isValid) {
                     errors.add("VIP状态签名验证失败（可能被篡改）")
                 }
             }
             
-            // 4. 逻辑一致性检查
-            if (userVip.vipLevel == 99 && userVip.expireDate != null) {
+            // 4. 逻辑一致性检查（vipLevel=3 终身 / 99 旧体系永久）
+            val isPermanentTier = userVip.vipLevel == 99 || userVip.vipLevel == 3
+            if (isPermanentTier && userVip.expireDate != null) {
                 errors.add("永久VIP不应有过期日期")
             }
-            
-            if (userVip.vipLevel > 0 && userVip.vipLevel < 99 && userVip.expireDate == null) {
+            if (userVip.vipLevel > 0 && !isPermanentTier && userVip.expireDate == null) {
                 errors.add("非永久VIP必须有过期日期")
             }
             
@@ -125,8 +129,9 @@ class VipSecurityValidator(private val context: Context) {
                 }
             }
             
-            // 3. 检查VIP等级合理性
-            if (userVip.vipLevel > 0 && userVip.expireDate == null && userVip.vipLevel != 99) {
+            // 3. 检查 VIP 等级合理性（vipLevel=3/99 为永久档）
+            if (userVip.vipLevel > 0 && userVip.expireDate == null
+                && userVip.vipLevel != 99 && userVip.vipLevel != 3) {
                 anomalies.add("非永久VIP缺少过期日期")
             }
             
@@ -154,8 +159,12 @@ class VipSecurityValidator(private val context: Context) {
             }
             
             // 2. 降级检查（通常不允许降级）
+            //    vipLevel=3 (终身) 与 99 (旧体系永久) 同档，互换不算降级
             if (currentVip != null && !currentVip.isExpired()) {
-                if (newVipLevel < currentVip.vipLevel && newVipLevel != 0) {
+                val curIsPerm = currentVip.vipLevel == 99 || currentVip.vipLevel == 3
+                val newIsPerm = newVipLevel == 99 || newVipLevel == 3
+                val isCrossPermanent = curIsPerm && newIsPerm
+                if (!isCrossPermanent && newVipLevel < currentVip.vipLevel && newVipLevel != 0) {
                     errors.add("不允许VIP降级")
                 }
             }
@@ -178,8 +187,8 @@ class VipSecurityValidator(private val context: Context) {
                 }
             }
             
-            // 4. 永久VIP验证
-            if (newVipLevel == 99 && newExpireDate != null) {
+            // 4. 永久 VIP 验证（vipLevel=3 终身 / 99 旧体系永久）
+            if ((newVipLevel == 99 || newVipLevel == 3) && newExpireDate != null) {
                 errors.add("永久VIP不应有过期日期")
             }
             

@@ -29,4 +29,12 @@ interface ChatMessageDao {
 
     @Query("SELECT * FROM chat_messages WHERE userId = :userId AND content LIKE '%' || :query || '%' ORDER BY timestamp DESC")
     fun searchMessages(userId: Long, query: String): Flow<List<ChatMessage>>
+
+    /**
+     * 🆕 v51 VIP 配额：统计指定时间窗口内本用户收到的 AI 回复条数。
+     * 用于聊天记账每日额度限制（VipQuota.chatAiDailyLimit）。
+     * 仅统计 role='ai'，避免把 type=bill / system 的本地账单消息算入。
+     */
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE userId = :userId AND role = 'ai' AND timestamp >= :startMs AND timestamp < :endMs")
+    suspend fun countAiBetween(userId: Long, startMs: Long, endMs: Long): Int
 }

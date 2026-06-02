@@ -97,3 +97,6 @@ hs_err_pid*.log
 # Backup files
 *.backup
 *.bak
+
+# º¬ HMAC_SECRET£¬½ûÖ¹Ìá½»
+backend/cloudbaserc.json

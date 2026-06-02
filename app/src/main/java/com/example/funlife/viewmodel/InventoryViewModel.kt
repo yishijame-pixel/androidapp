@@ -327,7 +327,7 @@ class InventoryViewModel(
                 _message.value = "装备成功！"
             } catch (e: Exception) {
                 android.util.Log.e("InventoryViewModel", "Error equipping avatar frame", e)
-                _message.value = "装备失败: ${e.message}"
+                _message.value = "装备失败，请重试"
             }
         }
     }

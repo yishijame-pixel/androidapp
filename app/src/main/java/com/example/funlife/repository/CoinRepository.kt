@@ -2,10 +2,12 @@
 package com.example.funlife.repository
 
 import android.content.Context
+import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.dao.CoinDao
 import com.example.funlife.data.model.UserCoins
 import com.example.funlife.security.CoinSecurityManager
 import com.example.funlife.security.CoinOperationType
+import com.example.funlife.vip.CoinCloudReporter
 import kotlinx.coroutines.flow.Flow
 
 class CoinRepository(
@@ -20,8 +22,30 @@ class CoinRepository(
     suspend fun initializeCoins(userId: Long) = coinDao.initializeCoins(userId)
     
     suspend fun getCoinsAmount(userId: Long): Int = coinDao.getCoinsAmount(userId) ?: 0
-    
-    suspend fun addCoins(userId: Long, amount: Int) {
+
+    /** 异步上报金币变动到云端（fire-and-forget；context 为空或获取用户名失败则跳过） */
+    private suspend fun reportToCloud(userId: Long, op: String, amount: Int, reason: String) {
+        val ctx = context ?: return
+        try {
+            val db = AppDatabase.getDatabase(ctx)
+            val user = db.userDao().getUserById(userId) ?: return
+            val balance = getCoinsAmount(userId)
+            val coins = db.coinDao().getCoinsAmount(userId)
+            val totalEarned = db.coinDao().getUserCoinsSync(userId)?.totalEarned ?: 0
+            CoinCloudReporter.report(
+                context = ctx,
+                username = user.username,
+                op = op,
+                amount = amount,
+                reason = reason,
+                balance = balance,
+                totalEarned = totalEarned,
+                totalSpent = (totalEarned - balance).coerceAtLeast(0),
+            )
+        } catch (_: Exception) { /* 静默 */ }
+    }
+
+    suspend fun addCoins(userId: Long, amount: Int, reason: String = "unknown") {
         // 安全验证
         securityManager?.let { manager ->
             val validation = manager.validateCoinOperation(userId, amount, CoinOperationType.EARN)
@@ -38,9 +62,12 @@ class CoinRepository(
             val currentBalance = getCoinsAmount(userId)
             manager.recordCoinOperation(userId, amount, CoinOperationType.EARN, currentBalance)
         }
+
+        // 云端上报（异步、非阻塞）
+        reportToCloud(userId, "earn", amount, reason)
     }
-    
-    suspend fun spendCoins(userId: Long, amount: Int): Boolean {
+
+    suspend fun spendCoins(userId: Long, amount: Int, reason: String = "unknown"): Boolean {
         // 安全验证
         securityManager?.let { manager ->
             val validation = manager.validateCoinOperation(userId, amount, CoinOperationType.SPEND)
@@ -65,6 +92,8 @@ class CoinRepository(
                 val currentBalance = getCoinsAmount(userId)
                 manager.recordCoinOperation(userId, amount, CoinOperationType.SPEND, currentBalance)
             }
+            // 云端上报（异步、非阻塞）
+            reportToCloud(userId, "spend", amount, reason)
         }
         
         return success
@@ -77,13 +106,114 @@ class CoinRepository(
     
     // 商城积分相关方法
     suspend fun getShopPoints(userId: Long): Int = coinDao.getShopPoints(userId) ?: 0
-    
-    suspend fun addShopPoints(userId: Long, amount: Int) {
-        coinDao.addShopPoints(userId, amount)
+
+    /** 异步上报积分变动到云端（fire-and-forget） */
+    private suspend fun reportPointsToCloud(userId: Long, op: String, amount: Int, reason: String) {
+        val ctx = context ?: return
+        try {
+            val db = AppDatabase.getDatabase(ctx)
+            val user = db.userDao().getUserById(userId) ?: return
+            val pointsBalance = getShopPoints(userId)
+            val coinsBalance = getCoinsAmount(userId)
+            val totalEarned = db.coinDao().getUserCoinsSync(userId)?.totalEarned ?: 0
+            CoinCloudReporter.report(
+                context = ctx,
+                username = user.username,
+                op = op,                          // "point_earn" / "point_spend"
+                amount = amount,
+                reason = reason,
+                balance = coinsBalance,           // 兼容字段：金币余额
+                totalEarned = totalEarned,
+                totalSpent = (totalEarned - coinsBalance).coerceAtLeast(0),
+                pointsBalance = pointsBalance,    // 🔒 新增：积分当前余额
+            )
+        } catch (_: Exception) { /* 静默 */ }
     }
-    
-    suspend fun spendShopPoints(userId: Long, amount: Int): Boolean {
+
+    /**
+     * 🔒 启动时快照上报：把当前金币+积分余额发到云端，让运营对账。
+     * 服务端可对比"累计 delta vs 余额"，发现"凭空增加"等异常。
+     * 失败完全静默，不影响主流程。
+     */
+    suspend fun reportBalancesSnapshot(userId: Long) {
+        val ctx = context ?: return
+        try {
+            val db = AppDatabase.getDatabase(ctx)
+            val user = db.userDao().getUserById(userId) ?: return
+            val coinsBalance = getCoinsAmount(userId)
+            val pointsBalance = getShopPoints(userId)
+            val totalEarned = db.coinDao().getUserCoinsSync(userId)?.totalEarned ?: 0
+            CoinCloudReporter.report(
+                context = ctx,
+                username = user.username,
+                op = "snapshot",
+                amount = 1,                  // 占位（不会计入累计）
+                reason = "startup_snapshot",
+                balance = coinsBalance,
+                totalEarned = totalEarned,
+                totalSpent = (totalEarned - coinsBalance).coerceAtLeast(0),
+                pointsBalance = pointsBalance,
+            )
+        } catch (_: Exception) { /* 静默 */ }
+    }
+
+    /**
+     * 🔒 已经在外部事务内 DAO 直写 user_coins 后，调用本方法补上"安全记录 + 云端上报"。
+     * 不重复入库，仅做审计与异常检测。
+     */
+    suspend fun notifyShopPointsAdded(userId: Long, amount: Int, reason: String) {
+        if (amount <= 0) return
+        try {
+            securityManager?.let { manager ->
+                val balance = getShopPoints(userId)
+                manager.recordCoinOperation(userId, amount, CoinOperationType.POINT_EARN, balance)
+            }
+            reportPointsToCloud(userId, "point_earn", amount, reason)
+        } catch (_: Exception) { /* 静默 */ }
+    }
+
+    suspend fun addShopPoints(userId: Long, amount: Int, reason: String = "unknown") {
+        if (amount <= 0) return
+        // 🔒 安全校验（积分阈值更严）
+        securityManager?.let { manager ->
+            val validation = manager.validateCoinOperation(userId, amount, CoinOperationType.POINT_EARN)
+            if (!validation.isValid) {
+                throw SecurityException("积分操作验证失败: ${validation.getErrorMessage()}")
+            }
+        }
+        coinDao.addShopPoints(userId, amount)
+        // 记录操作（用于频率检测）
+        securityManager?.let { manager ->
+            val balance = getShopPoints(userId)
+            manager.recordCoinOperation(userId, amount, CoinOperationType.POINT_EARN, balance)
+        }
+        // 云端上报（异步）
+        reportPointsToCloud(userId, "point_earn", amount, reason)
+    }
+
+    suspend fun spendShopPoints(userId: Long, amount: Int, reason: String = "unknown"): Boolean {
+        if (amount <= 0) return false
+        // 🔒 安全校验
+        securityManager?.let { manager ->
+            val validation = manager.validateCoinOperation(userId, amount, CoinOperationType.POINT_SPEND)
+            if (!validation.isValid) {
+                throw SecurityException("积分操作验证失败: ${validation.getErrorMessage()}")
+            }
+            val anomalies = manager.detectAnomalies(userId)
+            if (anomalies.isNotEmpty()) {
+                throw SecurityException("检测到异常行为: ${anomalies.joinToString(", ")}")
+            }
+        }
+        // 原子扣减
         val rowsAffected = coinDao.spendShopPointsAtomic(userId, amount)
-        return rowsAffected > 0
+        val success = rowsAffected > 0
+        if (success) {
+            securityManager?.let { manager ->
+                val balance = getShopPoints(userId)
+                manager.recordCoinOperation(userId, amount, CoinOperationType.POINT_SPEND, balance)
+            }
+            reportPointsToCloud(userId, "point_spend", amount, reason)
+        }
+        return success
     }
 }

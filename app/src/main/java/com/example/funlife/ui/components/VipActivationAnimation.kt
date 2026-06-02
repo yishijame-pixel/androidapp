@@ -1,1930 +1,742 @@
-// VipActivationAnimation.kt - 全新炫酷VIP激活动画（无矩形版）
+// VipActivationAnimation.kt
+// ════════════════════════════════════════════════════════════════════════
+// 全新设计：礼盒揭晓 + 光晕加冕（推倒重来 v3）
+// ------------------------------------------------------------------------
+// 6 大视觉层（按 z 顺序）：
+//   ① 全屏爆发闪光（150ms 强光闪一下）
+//   ② 旋转光柱（6 道从中心辐射的光，缓慢旋转）
+//   ③ 外圈彩环（双圈反向旋转）
+//   ④ 上升粒子（12 颗圆+星混合，错峰）
+//   ⑤ 礼花碎条 Confetti（18 条彩纸从顶部洒下）
+//   ⑥ 中央卡片（emoji 旋转 + 等级名艺术字 + 金币滚动）
+//
+// 等级专属：颜色集中在 VipTheme，VIP1 金 / VIP2 蓝钻 / VIP3 紫金 / PERMANENT 彩虹
+// 总时长 ~3.5s：入场 1.2s → 停留 1.6s → 退场 0.7s
+// ════════════════════════════════════════════════════════════════════════
+
 package com.example.funlife.ui.components
 
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.funlife.data.model.VipLevel
 import kotlinx.coroutines.delay
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
 import kotlin.random.Random
 
-/**
- * VIP 激活动画分发器 — 不同等级有截然不同的主题视觉风格
- *
- * - VIP1 ⭐ 金色星辰：暖金粒子 + 上升五角星 + 金光环
- * - VIP2 💎 冰晶蓝钻：青蓝钻石碎片爆裂 + 闪电弧 + 冷光柱
- * - VIP3 👑 紫金王冠：超新星开场闪 + 神圣几何曼陀罗 + 紫金双色风暴
- */
+// ─── 主题 ───────────────────────────────────────────
+private data class VipTheme(
+    val title: String,
+    val subtitle: String,
+    val emoji: String,
+    val gradientTop: Color,
+    val gradientBottom: Color,
+    val accent: Color,
+    val glow: Color,
+    val confettiColors: List<Color>,
+    val rayColor: Color,
+) {
+    companion object {
+        fun of(level: VipLevel): VipTheme = when (level) {
+            VipLevel.VIP1 -> VipTheme(
+                title = "月卡 VIP",
+                subtitle = "30 天精致体验已开启",
+                emoji = "⭐",
+                gradientTop = Color(0xFFFFE082),
+                gradientBottom = Color(0xFFFB8C00),
+                accent = Color(0xFFFFB300),
+                glow = Color(0xFFFFC107),
+                confettiColors = listOf(
+                    Color(0xFFFFE082), Color(0xFFFFB300), Color(0xFFFFD54F),
+                    Color(0xFFFF8F00), Color(0xFFFFFFFF),
+                ),
+                rayColor = Color(0xFFFFD54F),
+            )
+            VipLevel.VIP2 -> VipTheme(
+                title = "年卡 VIP",
+                subtitle = "365 天尊贵特权",
+                emoji = "💎",
+                gradientTop = Color(0xFF80D8FF),
+                gradientBottom = Color(0xFF0277BD),
+                accent = Color(0xFF00B0FF),
+                glow = Color(0xFF40C4FF),
+                confettiColors = listOf(
+                    Color(0xFFB3E5FC), Color(0xFF40C4FF), Color(0xFF0288D1),
+                    Color(0xFFE1F5FE), Color(0xFFFFFFFF),
+                ),
+                rayColor = Color(0xFF80D8FF),
+            )
+            // VIP3 与 PERMANENT 都是「终身 VIP」，统一紫金双色 + 皇冠
+            VipLevel.VIP3, VipLevel.PERMANENT -> VipTheme(
+                title = "终身 VIP",
+                subtitle = "一次买断 · 终身畅享",
+                emoji = "👑",
+                gradientTop = Color(0xFFFFD54F),
+                gradientBottom = Color(0xFFAB47BC),
+                accent = Color(0xFFFFD700),
+                glow = Color(0xFFE040FB),
+                confettiColors = listOf(
+                    Color(0xFFFFD700), Color(0xFFE040FB), Color(0xFF7C4DFF),
+                    Color(0xFFFFE082), Color(0xFFCE93D8), Color(0xFFFFFFFF),
+                ),
+                rayColor = Color(0xFFFFD700),
+            )
+            else -> VipTheme(
+                title = "会员激活成功",
+                subtitle = "感谢支持",
+                emoji = "🎉",
+                gradientTop = Color(0xFFFFCDD2),
+                gradientBottom = Color(0xFFE91E63),
+                accent = Color(0xFFEC407A),
+                glow = Color(0xFFFF80AB),
+                confettiColors = listOf(Color(0xFFFFCDD2), Color(0xFFEC407A), Color(0xFFE91E63)),
+                rayColor = Color(0xFFFF80AB),
+            )
+        }
+    }
+}
+
+private enum class Phase { Enter, Hold, Exit }
+
+private const val ENTER_MS = 1200
+private const val HOLD_MS = 1600L
+private const val EXIT_MS = 700
+
 @Composable
 fun VipActivationAnimation(
     vipLevel: VipLevel,
     coins: Int,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    val spec = remember(vipLevel) {
-        when (vipLevel) {
-            VipLevel.VIP1 -> VipAnimSpec(
-                primaryColor = Color(0xFFFFD700),
-                secondaryColor = Color(0xFFFF8C00),
-                accentColor = Color(0xFFFFE57F),
-                emoji = "⭐",
-                bgInner = Color(0xFF2A1F00),
-                showRisingStars = true,
-                showAuroraRibbon = true, // 🆕 金色极光丝带
-                showConfetti = true,     // 🆕 金色纸屑
-                showSpiralStream = false,
-                showShootingStars = false,
-                titleGradient = listOf(
-                    Color(0xFFFFE57F), Color(0xFFFFD700), Color(0xFFFF8C00)
-                )
-            )
-            VipLevel.VIP2 -> VipAnimSpec(
-                primaryColor = Color(0xFF00D9FF),
-                secondaryColor = Color(0xFF7C4DFF),
-                accentColor = Color(0xFF80DEEA),
-                emoji = "💎",
-                bgInner = Color(0xFF001A2E),
-                showCrystalShards = true,
-                showLightPillars = true, // 🆕 垂直光柱
-                showConfetti = true,     // 🆕 蓝紫纸屑
-                showSpiralStream = false,
-                titleGradient = listOf(
-                    Color(0xFF00FFFF), Color(0xFF00D9FF), Color(0xFF7C4DFF)
-                )
-            )
-            else -> VipAnimSpec( // VIP3 / PERMANENT
-                primaryColor = Color(0xFFFFD700),
-                secondaryColor = Color(0xFFE040FB),
-                accentColor = Color(0xFFFFFFFF),
-                emoji = if (vipLevel == VipLevel.PERMANENT) "🌟" else "👑",
-                bgInner = Color(0xFF1A0033),
-                showRoyalMandala = true,
-                showSupernova = true,
-                showDualParticles = true,
-                showBurstRays = true,    // 🆕 24 道太阳放射光线
-                showConfetti = true,     // 🆕 紫金纸屑
-                showScreenShake = true,  // 🆕 屏幕震动
-                titleGradient = listOf(
-                    Color(0xFFFFD700), Color(0xFFFFFFFF), Color(0xFFE040FB), Color(0xFFFFD700)
-                )
-            )
-        }
+    if (vipLevel == VipLevel.NORMAL) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
     }
+    val theme = remember(vipLevel) { VipTheme.of(vipLevel) }
 
-    var animationPhase by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        delay(100); animationPhase = 1
-        delay(1500); animationPhase = 2
-        delay(1500); animationPhase = 3
-        delay(3000); animationPhase = 4
-        delay(1000); onDismiss()
-    }
+    var phase by remember { mutableStateOf(Phase.Enter) }
 
-    // ─ VIP3 屏幕震动（前 1500ms 强烈，之后衰减为微震） ─
-    val shakeTransition = rememberInfiniteTransition(label = "shake")
-    val shakeX by shakeTransition.animateFloat(
-        initialValue = -10f, targetValue = 10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(80, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "sx"
+    val enterT by animateFloatAsState(
+        targetValue = if (phase == Phase.Enter) 0f else 1f,
+        animationSpec = tween(ENTER_MS, easing = FastOutSlowInEasing),
+        label = "enterT",
     )
-    val shakeY by shakeTransition.animateFloat(
-        initialValue = -6f, targetValue = 6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(70, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "sy"
+    val exitT by animateFloatAsState(
+        targetValue = if (phase == Phase.Exit) 1f else 0f,
+        animationSpec = tween(EXIT_MS, easing = FastOutLinearInEasing),
+        label = "exitT",
     )
-    val shakeAmplitude = if (spec.showScreenShake) {
-        when (animationPhase) {
-            1 -> 1f
-            2 -> 0.4f
-            else -> 0f
-        }
-    } else 0f
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(spec.bgInner, Color.Black.copy(alpha = 0.97f)),
-                    radius = 1500f
-                )
-            )
-            .zIndex(1000f)
-            .graphicsLayer {
-                translationX = shakeX * shakeAmplitude
-                translationY = shakeY * shakeAmplitude
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        // ─ VIP3 专属：超新星开场闪光 ─
-        if (spec.showSupernova && animationPhase >= 1) {
-            SupernovaFlash(spec.accentColor)
-        }
-
-        // ─ VIP3 专属：太阳放射光线爆发 ─
-        if (spec.showBurstRays && animationPhase >= 1) {
-            BurstRays(spec.primaryColor, spec.secondaryColor)
-        }
-
-        // ─ VIP1 专属：金色极光丝带 ─
-        if (spec.showAuroraRibbon && animationPhase >= 1) {
-            AuroraRibbon(spec.primaryColor, spec.accentColor)
-        }
-
-        // ─ VIP2 专属：垂直光柱 ─
-        if (spec.showLightPillars && animationPhase >= 1) {
-            LightPillars(spec.primaryColor, spec.secondaryColor)
-        }
-
-        // ─ 通用粒子层 ─
-        if (animationPhase >= 1) {
-            ParticleExplosion(spec.primaryColor)
-            SecondaryParticles(spec.secondaryColor)
-            if (spec.showDualParticles) {
-                SecondaryParticles(spec.primaryColor)
-            }
-            RippleWaves(spec.primaryColor)
-            RotatingRays(spec.primaryColor)
-            EnergyPulseRings(spec.primaryColor)
-            if (spec.showLightning) LightningBolts(spec.primaryColor)
-            if (spec.showSpiralStream) SpiralParticleStream(spec.primaryColor)
-        }
-
-        // ─ 主题专属粒子 ─
-        if (spec.showRisingStars && animationPhase >= 1) {
-            RisingStarsField(spec.primaryColor, spec.accentColor)
-        }
-        if (spec.showCrystalShards && animationPhase >= 1) {
-            CrystalShards(spec.primaryColor, spec.secondaryColor)
-        }
-        if (spec.showRoyalMandala && animationPhase >= 1) {
-            RoyalMandala(spec.primaryColor, spec.secondaryColor)
-        }
-
-        if (spec.showShootingStars && animationPhase >= 2) {
-            ShootingStars(spec.primaryColor)
-        }
-        // 五彩纸屑（phase 2 起始）
-        if (spec.showConfetti && animationPhase >= 2) {
-            ConfettiRain(spec.primaryColor, spec.secondaryColor)
-        }
-        if (animationPhase >= 3) CoinRain()
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Spacer(modifier = Modifier.weight(1f))
-
-            AnimatedVisibility(
-                visible = animationPhase >= 1,
-                enter = scaleIn(
-                    initialScale = 0.3f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                ) + fadeIn()
-            ) {
-                Box {
-                    VipEmojiAnimation(spec.emoji, spec.primaryColor)
-                    if (animationPhase >= 1) SparkleStars(spec.primaryColor)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            AnimatedVisibility(
-                visible = animationPhase >= 2,
-                enter = fadeIn(animationSpec = tween(800)) +
-                        slideInVertically(
-                            initialOffsetY = { it / 2 },
-                            animationSpec = tween(800, easing = FastOutSlowInEasing)
-                        )
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "🎉 恭喜您 🎉",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    // 等级标题：使用主题色渐变（VIP3 三色，VIP1/2 双色）
-                    Text(
-                        text = vipLevel.displayName,
-                        fontSize = 52.sp,
-                        fontWeight = FontWeight.Black,
-                        style = TextStyle(
-                            brush = Brush.linearGradient(spec.titleGradient)
-                        ),
-                        modifier = Modifier.drawBehind {
-                            repeat(4) { layer ->
-                                drawCircle(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            spec.primaryColor.copy(alpha = 0.45f - layer * 0.1f),
-                                            spec.secondaryColor.copy(alpha = 0.2f - layer * 0.05f),
-                                            Color.Transparent
-                                        ),
-                                        radius = 160f + layer * 55f
-                                    ),
-                                    radius = 160f + layer * 55f
-                                )
-                            }
-                        }
-                    )
-                    Text(
-                        text = "已激活",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.9f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(60.dp))
-
-            AnimatedVisibility(
-                visible = animationPhase >= 3,
-                enter = scaleIn(
-                    initialScale = 0.5f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                ) + fadeIn()
-            ) {
-                CoinReward(coins)
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-private data class VipAnimSpec(
-    val primaryColor: Color,
-    val secondaryColor: Color,
-    val accentColor: Color,
-    val emoji: String,
-    val bgInner: Color,
-    val showRisingStars: Boolean = false,
-    val showCrystalShards: Boolean = false,
-    val showRoyalMandala: Boolean = false,
-    val showSupernova: Boolean = false,
-    val showDualParticles: Boolean = false,
-    val showLightning: Boolean = true,
-    val showSpiralStream: Boolean = true,
-    val showShootingStars: Boolean = true,
-    val showAuroraRibbon: Boolean = false,
-    val showLightPillars: Boolean = false,
-    val showBurstRays: Boolean = false,
-    val showConfetti: Boolean = false,
-    val showScreenShake: Boolean = false,
-    val titleGradient: List<Color>
-)
-
-@Composable
-fun VipEmojiAnimation(emoji: String, color: Color) {
-    val infiniteTransition = rememberInfiniteTransition(label = "emoji")
-    
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = -15f,
-        targetValue = 15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "rotation"
+    val displayCoins by animateIntAsState(
+        targetValue = if (phase == Phase.Enter) 0 else coins,
+        animationSpec = tween(1100, delayMillis = 350, easing = FastOutSlowInEasing),
+        label = "coins",
     )
-    
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-    
-    // 新增：3D旋转效果
-    val rotationYValue by infiniteTransition.animateFloat(
-        initialValue = -10f,
-        targetValue = 10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "rotationY"
-    )
-    
-    Box(
-        modifier = Modifier
-            .size(250.dp)
-            .graphicsLayer {
-                rotationZ = rotation
-                rotationY = rotationYValue
-                scaleX = scale
-                scaleY = scale
-            }
-            .drawBehind {
-                // 增强光晕效果 - 多层渐变
-                repeat(8) { layer ->
-                    val radius = (80f + layer * 25f) * scale
-                    val alpha = (0.5f - layer * 0.06f) * scale
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color.copy(alpha = alpha),
-                                color.copy(alpha = alpha * 0.5f),
-                                Color.Transparent
-                            ),
-                            radius = radius
-                        ),
-                        radius = radius
-                    )
-                }
-                
-                // 新增：脉冲光环
-                val pulseRadius = 120f * scale
-                drawCircle(
-                    color = color.copy(alpha = 0.3f * scale),
-                    radius = pulseRadius,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = emoji,
-            fontSize = 180.sp,
-            color = Color.Unspecified,
-            modifier = Modifier.drawBehind {
-                // 为emoji添加发光边缘
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.3f),
-                            Color.Transparent
-                        ),
-                        radius = 100f
-                    ),
-                    radius = 100f
-                )
-            }
-        )
-    }
-}
 
-@Composable
-fun ParticleExplosion(color: Color) {
-    val particles = remember {
-        List(100) {
-            ParticleData(
-                angle = Random.nextFloat() * 360f,
-                speed = Random.nextFloat() * 400f + 200f,
-                size = Random.nextFloat() * 8f + 4f,
-                delay = Random.nextInt(0, 300),
-                color = color.copy(
-                    red = (color.red + Random.nextFloat() * 0.2f - 0.1f).coerceIn(0f, 1f),
-                    green = (color.green + Random.nextFloat() * 0.2f - 0.1f).coerceIn(0f, 1f),
-                    blue = (color.blue + Random.nextFloat() * 0.2f - 0.1f).coerceIn(0f, 1f)
-                )
-            )
-        }
-    }
-    
-    Box(modifier = Modifier.fillMaxSize()) {
-        particles.forEach { particle ->
-            AnimatedParticle(particle)
-        }
-    }
-}
-
-data class ParticleData(
-    val angle: Float,
-    val speed: Float,
-    val size: Float,
-    val delay: Int,
-    val color: Color
-)
-
-@Composable
-fun AnimatedParticle(particle: ParticleData) {
-    val infiniteTransition = rememberInfiniteTransition(label = "particle")
-    
-    val distance by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = particle.speed,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 2000,
-                delayMillis = particle.delay,
-                easing = FastOutSlowInEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "distance"
-    )
-    
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 2000,
-                delayMillis = particle.delay,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "alpha"
-    )
-    
-    val angleRad = particle.angle * (PI / 180f).toFloat()
-    val offsetX = cos(angleRad) * distance
-    val offsetY = sin(angleRad) * distance
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                val centerX = size.width / 2 + offsetX
-                val centerY = size.height / 2 + offsetY
-                
-                drawCircle(
-                    color = particle.color.copy(alpha = alpha.coerceAtLeast(0f)),
-                    radius = particle.size,
-                    center = Offset(centerX, centerY)
-                )
-                
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            particle.color.copy(alpha = alpha * 0.5f),
-                            Color.Transparent
-                        ),
-                        radius = particle.size * 2
-                    ),
-                    radius = particle.size * 2,
-                    center = Offset(centerX, centerY)
-                )
-            }
-    )
-}
-
-@Composable
-fun CoinRain() {
-    val coins = remember {
-        List(30) {
-            CoinData(
-                startX = Random.nextFloat(),
-                delay = Random.nextInt(0, 2000),
-                duration = Random.nextInt(2000, 3500),
-                size = Random.nextInt(24, 40)
-            )
-        }
-    }
-    
-    Box(modifier = Modifier.fillMaxSize()) {
-        coins.forEach { coin ->
-            FallingCoin(coin)
-        }
-    }
-}
-
-data class CoinData(
-    val startX: Float,
-    val delay: Int,
-    val duration: Int,
-    val size: Int
-)
-
-@Composable
-fun FallingCoin(coin: CoinData) {
-    val infiniteTransition = rememberInfiniteTransition(label = "coin")
-    
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = -100f,
-        targetValue = 1200f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = coin.duration,
-                delayMillis = coin.delay,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "offsetY"
-    )
-    
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 720f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = coin.duration,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                val x = coin.startX * size.width
-                val y = offsetY
-                
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFD700).copy(alpha = 0.4f),
-                            Color.Transparent
-                        ),
-                        radius = coin.size.toFloat() + 10f
-                    ),
-                    radius = coin.size.toFloat() + 10f,
-                    center = Offset(x, y)
-                )
-            }
-    ) {
-        Text(
-            text = "🪙",
-            fontSize = coin.size.sp,
-            modifier = Modifier
-                .offset(
-                    x = (coin.startX * 350).dp,
-                    y = offsetY.dp
-                )
-                .graphicsLayer {
-                    rotationZ = rotation
-                }
-        )
-    }
-}
-
-@Composable
-fun CoinReward(coins: Int) {
-    val infiniteTransition = rememberInfiniteTransition(label = "reward")
-    
-    val bounce by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "bounce"
-    )
-    
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.offset(y = bounce.dp)
-    ) {
-        Text(
-            text = "🪙",
-            fontSize = 80.sp
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "赠送金币",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.8f)
-        )
-        
-        Text(
-            text = "+$coins",
-            fontSize = 56.sp,
-            fontWeight = FontWeight.Black,
-            color = Color(0xFFFFD700),
-            modifier = Modifier.drawBehind {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFD700).copy(alpha = 0.4f),
-                            Color.Transparent
-                        ),
-                        radius = 150f
-                    ),
-                    radius = 150f
-                )
-            }
-        )
-    }
-}
-
-
-/**
- * 星星闪烁环绕效果
- */
-@Composable
-fun SparkleStars(color: Color) {
-    val starCount = 12
-    
-    repeat(starCount) { index ->
-        val infiniteTransition = rememberInfiniteTransition(label = "star$index")
-        
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = keyframes {
-                    durationMillis = 1500
-                    0.3f at 0
-                    1f at (index * 125) % 1500
-                    0.3f at 1500
-                },
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "alpha"
-        )
-        
-        val rotation by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(8000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "rotation"
-        )
-        
-        val angle = (index * 360f / starCount + rotation) * (PI / 180f).toFloat()
-        val radius = 140f
-        val offsetX = cos(angle) * radius
-        val offsetY = sin(angle) * radius
-        
-        Box(
-            modifier = Modifier
-                .size(250.dp)
-                .drawBehind {
-                    val centerX = size.width / 2 + offsetX
-                    val centerY = size.height / 2 + offsetY
-                    
-                    // 星星光点
-                    drawCircle(
-                        color = color.copy(alpha = alpha),
-                        radius = 6f,
-                        center = Offset(centerX, centerY)
-                    )
-                    
-                    // 十字光芒
-                    drawLine(
-                        color = color.copy(alpha = alpha * 0.8f),
-                        start = Offset(centerX - 10f, centerY),
-                        end = Offset(centerX + 10f, centerY),
-                        strokeWidth = 2f
-                    )
-                    drawLine(
-                        color = color.copy(alpha = alpha * 0.8f),
-                        start = Offset(centerX, centerY - 10f),
-                        end = Offset(centerX, centerY + 10f),
-                        strokeWidth = 2f
-                    )
-                }
-        )
-    }
-}
-
-/**
- * 旋转光线效果
- */
-@Composable
-fun RotatingRays(color: Color) {
-    val infiniteTransition = rememberInfiniteTransition(label = "rays")
-    
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-    
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                val centerX = size.width / 2
-                val centerY = size.height / 2
-                val rayCount = 16
-                
-                repeat(rayCount) { index ->
-                    val angle = ((index * 360f / rayCount) + rotation) * (PI / 180f).toFloat()
-                    val length = 300f
-                    
-                    val endX = centerX + cos(angle) * length
-                    val endY = centerY + sin(angle) * length
-                    
-                    // 绘制光线
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                color.copy(alpha = 0.6f),
-                                color.copy(alpha = 0.3f),
-                                Color.Transparent
-                            ),
-                            start = Offset(centerX, centerY),
-                            end = Offset(endX, endY)
-                        ),
-                        start = Offset(centerX, centerY),
-                        end = Offset(endX, endY),
-                        strokeWidth = 3f
-                    )
-                }
-            }
-    )
-}
-
-/**
- * 波纹扩散效果
- */
-@Composable
-fun RippleWaves(color: Color) {
-    repeat(3) { waveIndex ->
-        val infiniteTransition = rememberInfiniteTransition(label = "wave$waveIndex")
-        
-        val scale by infiniteTransition.animateFloat(
-            initialValue = 0.5f,
-            targetValue = 2.5f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 2000,
-                    delayMillis = waveIndex * 600,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "scale"
-        )
-        
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.6f,
-            targetValue = 0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 2000,
-                    delayMillis = waveIndex * 600,
-                    easing = LinearEasing
-                ),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "alpha"
-        )
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    val radius = 150f * scale
-                    
-                    // 绘制波纹圆环
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                color.copy(alpha = alpha * 0.5f),
-                                color.copy(alpha = alpha * 0.3f),
-                                Color.Transparent
-                            ),
-                            center = Offset(centerX, centerY),
-                            radius = radius
-                        ),
-                        radius = radius,
-                        center = Offset(centerX, centerY)
-                    )
-                }
-        )
-    }
-}
-
-/**
- * 第二层粒子效果（更小更密集）
- */
-@Composable
-fun SecondaryParticles(color: Color) {
-    val particles = remember {
-        List(60) {
-            ParticleData(
-                angle = Random.nextFloat() * 360f,
-                speed = Random.nextFloat() * 250f + 150f,
-                size = Random.nextFloat() * 4f + 2f,
-                delay = Random.nextInt(200, 800),
-                color = color.copy(
-                    alpha = Random.nextFloat() * 0.5f + 0.3f
-                )
-            )
-        }
-    }
-    
-    Box(modifier = Modifier.fillMaxSize()) {
-        particles.forEach { particle ->
-            AnimatedParticle(particle)
-        }
-    }
-}
-
-/**
- * 螺旋彩虹光束效果（带拖尾线条）
- */
-@Composable
-fun SpiralParticleStream(color: Color) {
-    val beamCount = 6  // 6条光束
-    
-    // 彩虹颜色数组
-    val rainbowColors = remember {
-        listOf(
-            Color(0xFFFF0000), // 红
-            Color(0xFFFF7F00), // 橙
-            Color(0xFFFFFF00), // 黄
-            Color(0xFF00FF00), // 绿
-            Color(0xFF00FFFF), // 青
-            Color(0xFF0000FF), // 蓝
-            Color(0xFF8B00FF)  // 紫
-        )
-    }
-    
-    repeat(beamCount) { beamIndex ->
-        val infiniteTransition = rememberInfiniteTransition(label = "beam$beamIndex")
-        
-        val progress by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 2500,
-                    delayMillis = beamIndex * 400,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "progress"
-        )
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    if (progress < 0.05f) return@drawBehind
-                    
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    
-                    // 螺旋轨迹参数
-                    val spiralTurns = 2f
-                    val maxRadius = 450f
-                    
-                    // 计算拖尾长度（光束的尾巴）
-                    val trailLength = 0.25f  // 拖尾占总进度的25%
-                    val trailStart = (progress - trailLength).coerceAtLeast(0f)
-                    
-                    // 绘制光束拖尾 - 使用连续的线段
-                    val segments = 50  // 线段数量，越多越平滑
-                    
-                    for (i in 0 until segments) {
-                        val t1 = trailStart + (progress - trailStart) * (i.toFloat() / segments)
-                        val t2 = trailStart + (progress - trailStart) * ((i + 1).toFloat() / segments)
-                        
-                        if (t1 <= 0f) continue
-                        
-                        // 计算起点和终点
-                        val angle1 = (beamIndex * 60f + t1 * spiralTurns * 360f) * (PI / 180f).toFloat()
-                        val radius1 = t1 * maxRadius
-                        val x1 = centerX + cos(angle1) * radius1
-                        val y1 = centerY + sin(angle1) * radius1
-                        
-                        val angle2 = (beamIndex * 60f + t2 * spiralTurns * 360f) * (PI / 180f).toFloat()
-                        val radius2 = t2 * maxRadius
-                        val x2 = centerX + cos(angle2) * radius2
-                        val y2 = centerY + sin(angle2) * radius2
-                        
-                        // 计算当前段的彩虹颜色
-                        val colorProgress = (t1 + t2) / 2f
-                        val colorIndex = ((colorProgress * rainbowColors.size * 1.5f) % rainbowColors.size).toInt()
-                        val beamColor = rainbowColors[colorIndex]
-                        
-                        // 透明度：从尾部到头部渐亮
-                        val segmentPosition = i.toFloat() / segments
-                        val alpha = (segmentPosition * 0.7f + 0.3f) * (1f - progress * 0.3f)
-                        
-                        // 光束宽度：头部粗，尾部细
-                        val strokeWidth = (4f + segmentPosition * 8f).coerceIn(3f, 12f)
-                        
-                        // 绘制光束主线
-                        drawLine(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    beamColor.copy(alpha = alpha * 0.8f),
-                                    beamColor.copy(alpha = alpha)
-                                ),
-                                start = Offset(x1, y1),
-                                end = Offset(x2, y2)
-                            ),
-                            start = Offset(x1, y1),
-                            end = Offset(x2, y2),
-                            strokeWidth = strokeWidth,
-                            cap = StrokeCap.Round
-                        )
-                        
-                        // 绘制外发光层
-                        drawLine(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    beamColor.copy(alpha = alpha * 0.3f),
-                                    beamColor.copy(alpha = alpha * 0.4f)
-                                ),
-                                start = Offset(x1, y1),
-                                end = Offset(x2, y2)
-                            ),
-                            start = Offset(x1, y1),
-                            end = Offset(x2, y2),
-                            strokeWidth = strokeWidth * 2.5f,
-                            cap = StrokeCap.Round
-                        )
-                    }
-                    
-                    // 绘制光束头部亮点
-                    val headAngle = (beamIndex * 60f + progress * spiralTurns * 360f) * (PI / 180f).toFloat()
-                    val headRadius = progress * maxRadius
-                    val headX = centerX + cos(headAngle) * headRadius
-                    val headY = centerY + sin(headAngle) * headRadius
-                    
-                    val headColorIndex = ((progress * rainbowColors.size * 1.5f) % rainbowColors.size).toInt()
-                    val headColor = rainbowColors[headColorIndex]
-                    
-                    // 头部白色核心
-                    drawCircle(
-                        color = Color.White.copy(alpha = (1f - progress) * 0.9f),
-                        radius = 8f,
-                        center = Offset(headX, headY)
-                    )
-                    
-                    // 头部彩色光晕
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                headColor.copy(alpha = (1f - progress) * 0.8f),
-                                headColor.copy(alpha = (1f - progress) * 0.4f),
-                                Color.Transparent
-                            ),
-                            radius = 30f
-                        ),
-                        radius = 30f,
-                        center = Offset(headX, headY)
-                    )
-                }
-        )
-    }
-}
-
-/**
- * 能量脉冲环效果
- */
-@Composable
-fun EnergyPulseRings(color: Color) {
-    repeat(5) { ringIndex ->
-        val infiniteTransition = rememberInfiniteTransition(label = "pulse$ringIndex")
-        
-        val scale by infiniteTransition.animateFloat(
-            initialValue = 0.8f,
-            targetValue = 1.2f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 1200,
-                    delayMillis = ringIndex * 240,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "scale"
-        )
-        
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 0.8f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 1200,
-                    delayMillis = ringIndex * 240,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "alpha"
-        )
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    val baseRadius = 100f + ringIndex * 30f
-                    val radius = baseRadius * scale
-                    
-                    // 绘制能量环
-                    drawCircle(
-                        color = color.copy(alpha = alpha * 0.3f),
-                        radius = radius,
-                        center = Offset(centerX, centerY),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
-                    )
-                    
-                    // 外发光
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                color.copy(alpha = alpha * 0.2f),
-                                Color.Transparent
-                            ),
-                            center = Offset(centerX, centerY),
-                            radius = radius + 10f
-                        ),
-                        radius = radius + 10f,
-                        center = Offset(centerX, centerY)
-                    )
-                }
-        )
-    }
-}
-
-/**
- * 闪电效果
- */
-@Composable
-fun LightningBolts(color: Color) {
-    val boltCount = 8
-    
-    repeat(boltCount) { index ->
-        val infiniteTransition = rememberInfiniteTransition(label = "lightning$index")
-        
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = keyframes {
-                    durationMillis = 3000
-                    0f at 0
-                    1f at (index * 375) % 3000
-                    0.8f at ((index * 375) + 50) % 3000
-                    0f at ((index * 375) + 150) % 3000
-                },
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "alpha"
-        )
-        
-        val angle = (index * 360f / boltCount) * (PI / 180f).toFloat()
-        val length = 200f
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    
-                    // 主闪电
-                    val endX = centerX + cos(angle) * length
-                    val endY = centerY + sin(angle) * length
-                    
-                    // 绘制闪电主干
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                color.copy(alpha = alpha),
-                                color.copy(alpha = alpha * 0.5f),
-                                Color.Transparent
-                            ),
-                            start = Offset(centerX, centerY),
-                            end = Offset(endX, endY)
-                        ),
-                        start = Offset(centerX, centerY),
-                        end = Offset(endX, endY),
-                        strokeWidth = 4f
-                    )
-                    
-                    // 闪电分支
-                    val branchAngle1 = angle + 0.5f
-                    val branchLength = length * 0.4f
-                    val branchStartX = centerX + cos(angle) * (length * 0.6f)
-                    val branchStartY = centerY + sin(angle) * (length * 0.6f)
-                    val branchEndX = branchStartX + cos(branchAngle1) * branchLength
-                    val branchEndY = branchStartY + sin(branchAngle1) * branchLength
-                    
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                color.copy(alpha = alpha * 0.7f),
-                                Color.Transparent
-                            ),
-                            start = Offset(branchStartX, branchStartY),
-                            end = Offset(branchEndX, branchEndY)
-                        ),
-                        start = Offset(branchStartX, branchStartY),
-                        end = Offset(branchEndX, branchEndY),
-                        strokeWidth = 2f
-                    )
-                }
-        )
-    }
-}
-
-/**
- * 流星雨效果
- */
-@Composable
-fun ShootingStars(color: Color) {
-    val starCount = 15
-    
-    repeat(starCount) { index ->
-        val infiniteTransition = rememberInfiniteTransition(label = "shooting$index")
-        
-        val progress by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 1500,
-                    delayMillis = index * 200,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "progress"
-        )
-        
-        val startAngle = Random.nextFloat() * 360f
-        val angle = startAngle * (PI / 180f).toFloat()
-        val distance = progress * 400f
-        val startDistance = -50f
-        
-        val startX = cos(angle) * startDistance
-        val startY = sin(angle) * startDistance
-        val endX = cos(angle) * distance
-        val endY = sin(angle) * distance
-        
-        val alpha = if (progress < 0.2f) {
-            progress / 0.2f
-        } else if (progress > 0.8f) {
-            (1f - progress) / 0.2f
-        } else {
-            1f
-        }
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    
-                    val currentX = centerX + endX
-                    val currentY = centerY + endY
-                    val tailX = centerX + startX + (endX - startX) * 0.7f
-                    val tailY = centerY + startY + (endY - startY) * 0.7f
-                    
-                    // 流星尾迹
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                color.copy(alpha = alpha * 0.6f),
-                                color.copy(alpha = alpha)
-                            ),
-                            start = Offset(tailX, tailY),
-                            end = Offset(currentX, currentY)
-                        ),
-                        start = Offset(tailX, tailY),
-                        end = Offset(currentX, currentY),
-                        strokeWidth = 3f
-                    )
-                    
-                    // 流星头部
-                    drawCircle(
-                        color = Color.White.copy(alpha = alpha),
-                        radius = 4f,
-                        center = Offset(currentX, currentY)
-                    )
-                    
-                    // 流星光晕
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color.copy(alpha = alpha * 0.8f),
-                                Color.Transparent
-                            ),
-                            radius = 12f
-                        ),
-                        radius = 12f,
-                        center = Offset(currentX, currentY)
-                    )
-                }
-        )
-    }
-}
-
-// ════════════════════════════════════════════════════════════════
-// 主题特效层（VIP1/VIP2/VIP3 各自独有）
-// ════════════════════════════════════════════════════════════════
-
-/**
- * VIP3 专属：超新星开场闪光（屏幕级白光爆裂 + 同心冲击波 + 太阳放射光线）
- * ⚠️ 注意：radius 必须 > 0，否则 Brush.radialGradient 会抛 IllegalArgumentException
- */
-@Composable
-fun SupernovaFlash(accentColor: Color) {
-    val transition = rememberInfiniteTransition(label = "nova")
-    val scale by transition.animateFloat(
-        initialValue = 0.05f, targetValue = 14f, // ⚠️ 必须 > 0
-        animationSpec = infiniteRepeatable(
-            animation = tween(1300, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "ns"
-    )
-    val alpha by transition.animateFloat(
-        initialValue = 1f, targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1300, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "na"
-    )
-    // 第二层冲击波（错相 600ms）
-    val scale2 by transition.animateFloat(
-        initialValue = 0.05f, targetValue = 14f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1300, delayMillis = 600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "ns2"
-    )
-    val alpha2 by transition.animateFloat(
-        initialValue = 1f, targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1300, delayMillis = 600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "na2"
-    )
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .drawBehind {
-            val cx = size.width / 2
-            val cy = size.height / 2
-            // ⚠️ coerceAtLeast 防止 radius=0 崩溃
-            val r1 = (80f * scale).coerceAtLeast(1f)
-            val r2 = (80f * scale2).coerceAtLeast(1f)
-
-            // 第一波超新星
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = alpha),
-                        accentColor.copy(alpha = alpha * 0.8f),
-                        accentColor.copy(alpha = alpha * 0.3f),
-                        Color.Transparent
-                    ),
-                    radius = r1
-                ),
-                radius = r1,
-                center = Offset(cx, cy)
-            )
-            // 冲击波光环（白色细圆环）
-            drawCircle(
-                color = Color.White.copy(alpha = alpha * 0.6f),
-                radius = r1,
-                center = Offset(cx, cy),
-                style = Stroke(width = (4f * (1f - alpha + 0.3f)).coerceAtLeast(1f))
-            )
-            // 第二波（错相）
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = alpha2 * 0.7f),
-                        accentColor.copy(alpha = alpha2 * 0.5f),
-                        Color.Transparent
-                    ),
-                    radius = r2
-                ),
-                radius = r2,
-                center = Offset(cx, cy)
-            )
-            drawCircle(
-                color = accentColor.copy(alpha = alpha2 * 0.5f),
-                radius = r2,
-                center = Offset(cx, cy),
-                style = Stroke(width = 3f)
-            )
-        }
-    )
-}
-
-/**
- * 太阳放射光线爆发（24 道金色长光线从中心射出，VIP3 专属增强）
- */
-@Composable
-fun BurstRays(primaryColor: Color, secondaryColor: Color) {
-    val transition = rememberInfiniteTransition(label = "burst")
-    val progress by transition.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "bp"
-    )
-    val rotation by transition.animateFloat(
+    // 持续旋转的光柱与外环（轻量 infinite，仅 1-2 个）
+    val rayInfinite = rememberInfiniteTransition(label = "rays")
+    val rayRot by rayInfinite.animateFloat(
         initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "br"
+        animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Restart),
+        label = "rayRot",
     )
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .drawBehind {
-            val cx = size.width / 2
-            val cy = size.height / 2
-            val rayCount = 24
-            val maxLen = (size.minDimension * 0.6f).coerceAtLeast(100f)
-            val len = maxLen * progress
-            val a = (1f - progress).coerceIn(0f, 1f)
-            repeat(rayCount) { i ->
-                val isAccent = i % 3 == 0
-                val color = if (isAccent) secondaryColor else primaryColor
-                val angle = (i * 360f / rayCount + rotation) * (PI / 180f).toFloat()
-                val sx = cx + cos(angle) * 60f
-                val sy = cy + sin(angle) * 60f
-                val ex = cx + cos(angle) * (60f + len)
-                val ey = cy + sin(angle) * (60f + len)
-                drawLine(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            color.copy(alpha = a * 0.9f),
-                            color.copy(alpha = a * 0.4f),
-                            Color.Transparent
-                        ),
-                        start = Offset(sx, sy),
-                        end = Offset(ex, ey)
-                    ),
-                    start = Offset(sx, sy),
-                    end = Offset(ex, ey),
-                    strokeWidth = if (isAccent) 4f else 2f,
-                    cap = StrokeCap.Round
-                )
-            }
-        }
+    val ringRot by rayInfinite.animateFloat(
+        initialValue = 0f, targetValue = -360f,
+        animationSpec = infiniteRepeatable(tween(12000, easing = LinearEasing), RepeatMode.Restart),
+        label = "ringRot",
     )
-}
 
-/**
- * VIP1 专属：极光丝带（顶部缓慢摇曳的金色波浪带）
- */
-@Composable
-fun AuroraRibbon(primaryColor: Color, accentColor: Color) {
-    val transition = rememberInfiniteTransition(label = "aurora")
-    val phase by transition.animateFloat(
-        initialValue = 0f, targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "ap"
-    )
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .drawBehind {
-            val w = size.width
-            val h = size.height
-            // 上方丝带
-            for (band in 0..2) {
-                val baseY = h * 0.18f + band * 18f
-                val amp = 32f - band * 6f
-                val path = Path()
-                val steps = 60
-                for (i in 0..steps) {
-                    val t = i.toFloat() / steps
-                    val x = t * w
-                    val y = baseY + sin(t * 4f * PI.toFloat() + phase + band * 0.6f) * amp
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                val color = if (band == 0) accentColor else primaryColor
-                drawPath(
-                    path,
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            color.copy(alpha = 0.55f - band * 0.12f),
-                            color.copy(alpha = 0.7f - band * 0.15f),
-                            color.copy(alpha = 0.55f - band * 0.12f),
-                            Color.Transparent
-                        )
-                    ),
-                    style = Stroke(width = 6f - band * 1.4f, cap = StrokeCap.Round)
-                )
-            }
-            // 下方丝带（反向）
-            for (band in 0..1) {
-                val baseY = h * 0.78f - band * 16f
-                val amp = 28f - band * 6f
-                val path = Path()
-                val steps = 60
-                for (i in 0..steps) {
-                    val t = i.toFloat() / steps
-                    val x = t * w
-                    val y = baseY + sin(t * 3.5f * PI.toFloat() - phase + band * 0.8f) * amp
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                drawPath(
-                    path,
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            primaryColor.copy(alpha = 0.45f),
-                            accentColor.copy(alpha = 0.6f),
-                            primaryColor.copy(alpha = 0.45f),
-                            Color.Transparent
-                        )
-                    ),
-                    style = Stroke(width = 4.5f, cap = StrokeCap.Round)
-                )
-            }
-        }
-    )
-}
-
-/**
- * VIP2 专属：垂直光柱（从屏幕底部向上升起的青蓝光束）
- */
-@Composable
-fun LightPillars(primaryColor: Color, secondaryColor: Color) {
-    data class PillarData(val xRel: Float, val delay: Int, val width: Float, val useSecondary: Boolean)
-    val pillars = remember {
-        List(8) { idx ->
-            PillarData(
-                xRel = (idx + 0.5f) / 8f + (Random.nextFloat() - 0.5f) * 0.05f,
-                delay = idx * 180,
-                width = Random.nextFloat() * 28f + 18f,
-                useSecondary = idx % 2 == 1
-            )
-        }
+    LaunchedEffect(Unit) {
+        delay(40)
+        phase = Phase.Hold
+        delay(ENTER_MS + HOLD_MS)
+        phase = Phase.Exit
+        delay(EXIT_MS.toLong() + 60)
+        onDismiss()
     }
-    val transition = rememberInfiniteTransition(label = "pillars")
-    Box(modifier = Modifier.fillMaxSize()) {
-        pillars.forEachIndexed { idx, p ->
-            val rise by transition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(2200, delayMillis = p.delay, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "lpr$idx"
-            )
-            val color = if (p.useSecondary) secondaryColor else primaryColor
-            Box(modifier = Modifier
+
+    val overall = (enterT * (1f - exitT)).coerceIn(0f, 1f)
+
+    // 一次性生成 confetti / 上升粒子的随机参数
+    val confetti = remember { generateConfetti(20) }
+    val particles = remember { generateParticles(14) }
+
+    Dialog(
+        onDismissRequest = { /* 等动画自然结束 */ },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
                 .fillMaxSize()
-                .drawBehind {
-                    val cx = p.xRel * size.width
-                    val height = size.height * rise * 0.85f
-                    val topY = size.height - height
-                    val a = (1f - rise).coerceIn(0f, 1f) *
-                            if (rise < 0.15f) rise / 0.15f else 1f
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                color.copy(alpha = a * 0.4f),
-                                Color.White.copy(alpha = a * 0.7f)
-                            ),
-                            startY = topY,
-                            endY = size.height
-                        ),
-                        topLeft = Offset(cx - p.width / 2, topY),
-                        size = androidx.compose.ui.geometry.Size(p.width, height)
-                    )
-                    // 中心亮线
-                    drawLine(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.White.copy(alpha = a * 0.95f)
-                            ),
-                            startY = topY,
-                            endY = size.height
-                        ),
-                        start = Offset(cx, topY),
-                        end = Offset(cx, size.height),
-                        strokeWidth = 2.5f
-                    )
-                }
+                .background(Color.Black.copy(alpha = 0.6f * overall)),
+            contentAlignment = Alignment.Center,
+        ) {
+            // ① 入场爆发闪光（前 200ms 全屏白光）
+            BurstFlash(t = enterT)
+
+            // ② 背景旋转光柱
+            RotatingRays(theme = theme, rot = rayRot, alpha = overall)
+
+            // ③ 外圈双层彩环
+            OuterRing(theme = theme, rot = ringRot, alpha = overall)
+
+            // ④ 中心径向辉光
+            BackgroundGlow(theme = theme, alpha = overall)
+
+            // ⑤ 上升粒子
+            FloatingParticles(theme = theme, t = enterT, particles = particles)
+
+            // ⑥ 顶部 confetti 礼花
+            ConfettiRain(t = enterT, items = confetti, theme = theme)
+
+            // ⑦ 中央卡片
+            CelebrationCard(
+                theme = theme,
+                coins = coins,
+                displayCoins = displayCoins,
+                enterT = enterT,
+                overall = overall,
+                rayRot = rayRot,
             )
         }
     }
 }
 
-/**
- * 五彩纸屑雨（phase 3 增强，所有 VIP 通用，参数控制色调）
- */
+// ════════════════════════════════════════════════════════════
+// ① 入场爆发闪光
+// ════════════════════════════════════════════════════════════
 @Composable
-fun ConfettiRain(primaryColor: Color, secondaryColor: Color) {
-    data class Confetti(
-        val xRel: Float,
-        val delay: Int,
-        val duration: Int,
-        val size: Float,
-        val rotSpeed: Float,
-        val swayAmp: Float,
-        val color: Color
+private fun BurstFlash(t: Float) {
+    if (t > 0.18f) return
+    val a = 1f - (t / 0.18f).coerceIn(0f, 1f)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White.copy(alpha = a * 0.85f))
     )
-    val palette = remember(primaryColor, secondaryColor) {
-        listOf(
-            primaryColor,
-            secondaryColor,
-            Color.White,
-            primaryColor.copy(alpha = 0.85f),
-            secondaryColor.copy(alpha = 0.85f)
+}
+
+// ════════════════════════════════════════════════════════════
+// ② 旋转光柱（6 道从中心辐射的光）
+// ════════════════════════════════════════════════════════════
+@Composable
+private fun RotatingRays(theme: VipTheme, rot: Float, alpha: Float) {
+    if (alpha < 0.05f) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val maxR = max(size.width, size.height) * 0.7f
+        rotate(rot, pivot = Offset(cx, cy)) {
+            for (i in 0 until 6) {
+                val baseAngle = i * 60f
+                rotate(baseAngle, pivot = Offset(cx, cy)) {
+                    // 用三角形 path 模拟"扇形光柱"
+                    val path = Path().apply {
+                        moveTo(cx, cy)
+                        lineTo(cx - maxR * 0.06f, cy - maxR)
+                        lineTo(cx + maxR * 0.06f, cy - maxR)
+                        close()
+                    }
+                    drawPath(
+                        path = path,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                theme.rayColor.copy(alpha = 0.18f * alpha),
+                                Color.Transparent,
+                            ),
+                            startY = cy,
+                            endY = cy - maxR,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// ③ 外圈双层彩环（在卡片外，绕中心旋转）
+// ════════════════════════════════════════════════════════════
+@Composable
+private fun OuterRing(theme: VipTheme, rot: Float, alpha: Float) {
+    if (alpha < 0.05f) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val r1 = size.minDimension * 0.46f
+        val r2 = size.minDimension * 0.52f
+        rotate(rot, pivot = Offset(cx, cy)) {
+            drawCircle(
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        theme.gradientTop.copy(alpha = 0.0f),
+                        theme.gradientTop.copy(alpha = 0.6f),
+                        theme.gradientBottom.copy(alpha = 0.0f),
+                        theme.glow.copy(alpha = 0.5f),
+                        theme.gradientTop.copy(alpha = 0.0f),
+                    ),
+                    center = Offset(cx, cy),
+                ),
+                radius = r1,
+                center = Offset(cx, cy),
+                style = Stroke(width = 2.5f),
+                alpha = alpha,
+            )
+        }
+        rotate(-rot * 0.6f, pivot = Offset(cx, cy)) {
+            drawCircle(
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        theme.glow.copy(alpha = 0.5f),
+                        Color.Transparent,
+                        theme.accent.copy(alpha = 0.5f),
+                        Color.Transparent,
+                    ),
+                    center = Offset(cx, cy),
+                ),
+                radius = r2,
+                center = Offset(cx, cy),
+                style = Stroke(width = 1.5f),
+                alpha = alpha,
+            )
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// ④ 中心径向辉光
+// ════════════════════════════════════════════════════════════
+@Composable
+private fun BackgroundGlow(theme: VipTheme, alpha: Float) {
+    if (alpha <= 0.01f) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val maxR = max(size.width, size.height) * 0.65f
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    theme.glow.copy(alpha = 0.5f * alpha),
+                    theme.glow.copy(alpha = 0.18f * alpha),
+                    Color.Transparent,
+                ),
+                center = Offset(cx, cy),
+                radius = maxR,
+            ),
+            radius = maxR,
+            center = Offset(cx, cy),
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.32f * alpha),
+                    theme.glow.copy(alpha = 0.22f * alpha),
+                    Color.Transparent,
+                ),
+                center = Offset(cx, cy),
+                radius = 220f,
+            ),
+            radius = 220f,
+            center = Offset(cx, cy),
         )
     }
-    val confetti = remember {
-        List(40) {
-            Confetti(
-                xRel = Random.nextFloat(),
-                delay = Random.nextInt(0, 2500),
-                duration = Random.nextInt(2800, 4500),
-                size = Random.nextFloat() * 8f + 6f,
-                rotSpeed = Random.nextFloat() * 720f + 360f,
-                swayAmp = Random.nextFloat() * 50f + 20f,
-                color = palette[Random.nextInt(palette.size)]
-            )
-        }
-    }
-    val transition = rememberInfiniteTransition(label = "confetti")
-    Box(modifier = Modifier.fillMaxSize()) {
-        confetti.forEachIndexed { idx, c ->
-            val progress by transition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(c.duration, delayMillis = c.delay, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "cfp$idx"
-            )
-            val rotation by transition.animateFloat(
-                initialValue = 0f, targetValue = c.rotSpeed,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(c.duration, delayMillis = c.delay, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "cfr$idx"
-            )
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val baseX = c.xRel * size.width
-                    val cx = baseX + sin(progress * 4f * PI.toFloat()) * c.swayAmp
-                    val cy = -50f + progress * (size.height + 100f)
-                    val a = if (progress < 0.05f) progress * 20f
-                            else if (progress > 0.92f) (1f - progress) / 0.08f
-                            else 1f
-                    val rad = rotation * (PI / 180f).toFloat()
-                    val cosR = cos(rad)
-                    val sinR = sin(rad)
-                    // 矩形纸片（用 4 顶点 path）
-                    val w = c.size
-                    val h = c.size * 0.5f
-                    fun rotated(x: Float, y: Float) =
-                        Offset(cx + x * cosR - y * sinR, cy + x * sinR + y * cosR)
-                    val path = Path().apply {
-                        val tl = rotated(-w, -h); val tr = rotated(w, -h)
-                        val br = rotated(w, h); val bl = rotated(-w, h)
-                        moveTo(tl.x, tl.y); lineTo(tr.x, tr.y)
-                        lineTo(br.x, br.y); lineTo(bl.x, bl.y); close()
-                    }
-                    drawPath(path, c.color.copy(alpha = a.coerceIn(0f, 1f)))
-                }
-            )
-        }
+}
+
+// ════════════════════════════════════════════════════════════
+// ⑤ 上升粒子（圆+星形混合）
+// ════════════════════════════════════════════════════════════
+private data class ParticleSpec(
+    val baseX: Float,        // 屏幕宽度的占比 0~1
+    val phaseDelay: Float,   // 启动延迟 0~0.5
+    val sizeBase: Float,     // 基础大小（px）
+    val isStar: Boolean,
+    val swayAmp: Float,      // 横向摆动幅度
+    val colorIdx: Int,       // 0=top 1=glow 2=accent
+)
+
+private fun generateParticles(n: Int): List<ParticleSpec> {
+    val rng = Random(42)
+    return List(n) {
+        ParticleSpec(
+            baseX = rng.nextFloat() * 0.9f + 0.05f,
+            phaseDelay = rng.nextFloat() * 0.5f,
+            sizeBase = 5f + rng.nextFloat() * 4f,
+            isStar = rng.nextFloat() > 0.55f,
+            swayAmp = 0.04f + rng.nextFloat() * 0.06f,
+            colorIdx = it % 3,
+        )
     }
 }
 
-
-/**
- * VIP1 专属：上升的金色五角星（从底部缓缓升起，伴随旋转闪烁）
- */
 @Composable
-fun RisingStarsField(primaryColor: Color, accentColor: Color) {
-    data class StarData(
-        val xRel: Float,
-        val delay: Int,
-        val duration: Int,
-        val sizeBase: Float,
-        val isAccent: Boolean
-    )
-    val stars = remember {
-        List(18) {
-            StarData(
-                xRel = Random.nextFloat(),
-                delay = Random.nextInt(0, 2200),
-                duration = Random.nextInt(2800, 4800),
-                sizeBase = Random.nextFloat() * 12f + 12f,
-                isAccent = Random.nextBoolean()
-            )
-        }
-    }
-    val transition = rememberInfiniteTransition(label = "rstars")
-    Box(modifier = Modifier.fillMaxSize()) {
-        stars.forEachIndexed { idx, s ->
-            val progress by transition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(s.duration, delayMillis = s.delay, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "rsp$idx"
-            )
-            val rotation by transition.animateFloat(
-                initialValue = 0f, targetValue = 360f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(s.duration, delayMillis = s.delay, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "rsr$idx"
-            )
-            val color = if (s.isAccent) accentColor else primaryColor
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val cx = s.xRel * size.width
-                    val cy = size.height * (1.05f - progress * 1.1f)
-                    val a = when {
-                        progress < 0.1f -> progress * 10f
-                        progress > 0.85f -> ((1f - progress) / 0.15f).coerceIn(0f, 1f)
-                        else -> 1f
-                    }
-                    // 外发光
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color.copy(alpha = a * 0.6f),
-                                Color.Transparent
-                            ),
-                            radius = s.sizeBase * 2.2f
-                        ),
-                        radius = s.sizeBase * 2.2f,
-                        center = Offset(cx, cy)
-                    )
-                    drawFiveStar(Offset(cx, cy), s.sizeBase, color.copy(alpha = a), rotation)
-                    // 中心白核
-                    drawCircle(
-                        color = Color.White.copy(alpha = a * 0.9f),
-                        radius = s.sizeBase * 0.18f,
-                        center = Offset(cx, cy)
-                    )
-                }
+private fun FloatingParticles(theme: VipTheme, t: Float, particles: List<ParticleSpec>) {
+    if (t <= 0.05f) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width; val h = size.height
+        particles.forEachIndexed { i, p ->
+            val local = ((t - p.phaseDelay).coerceAtLeast(0f) /
+                    (1f - p.phaseDelay).coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+            val y = h * 1.05f - local * (h * 0.85f)
+            val sway = sin((local * 6.28f * 1.2f + i * 0.7f).toDouble()).toFloat() * (w * p.swayAmp)
+            val x = w * p.baseX + sway
+            val a = when {
+                local < 0.2f -> local / 0.2f
+                local > 0.7f -> ((1f - local) / 0.3f).coerceAtLeast(0f)
+                else -> 1f
+            } * 0.85f
+            val color = when (p.colorIdx) {
+                0 -> theme.gradientTop
+                1 -> theme.glow
+                else -> theme.accent
+            }
+            if (p.isStar) {
+                drawSimpleStar(Offset(x, y), p.sizeBase * 1.3f, color.copy(alpha = a))
+            } else {
+                drawCircle(
+                    color = color.copy(alpha = a),
+                    radius = p.sizeBase,
+                    center = Offset(x, y),
+                )
+            }
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(color.copy(alpha = a * 0.4f), Color.Transparent)
+                ),
+                radius = p.sizeBase * 3.2f,
+                center = Offset(x, y),
             )
         }
     }
 }
 
-private fun DrawScope.drawFiveStar(center: Offset, radius: Float, color: Color, rotation: Float) {
+private fun DrawScope.drawSimpleStar(c: Offset, r: Float, color: Color) {
     val path = Path()
-    for (i in 0 until 10) {
-        val baseAngle = -90f + i * 36f + rotation
-        val r = if (i % 2 == 0) radius else radius * 0.42f
-        val rad = baseAngle * (PI / 180f).toFloat()
-        val px = center.x + cos(rad) * r
-        val py = center.y + sin(rad) * r
-        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+    for (i in 0..9) {
+        val ang = (PI * 2 * i / 10 - PI / 2).toFloat()
+        val rr = if (i % 2 == 0) r else r * 0.45f
+        val x = c.x + cos(ang) * rr
+        val y = c.y + sin(ang) * rr
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
     }
     path.close()
     drawPath(path, color)
-    // 描边亮光
-    drawPath(path, Color.White.copy(alpha = color.alpha * 0.6f), style = Stroke(width = 1.2f))
 }
 
-/**
- * VIP2 专属：水晶钻石碎片爆裂（菱形碎片从中心向外飞射，带旋转和高光）
- */
-@Composable
-fun CrystalShards(primaryColor: Color, secondaryColor: Color) {
-    data class ShardData(
-        val angle: Float,
-        val speed: Float,
-        val size: Float,
-        val rotationStart: Float,
-        val delay: Int,
-        val useSecondary: Boolean
-    )
-    val shards = remember {
-        List(28) { idx ->
-            ShardData(
-                angle = idx * (360f / 28f) + Random.nextFloat() * 12f,
-                speed = Random.nextFloat() * 380f + 280f,
-                size = Random.nextFloat() * 14f + 10f,
-                rotationStart = Random.nextFloat() * 360f,
-                delay = Random.nextInt(0, 600),
-                useSecondary = idx % 3 == 0
-            )
-        }
+// ════════════════════════════════════════════════════════════
+// ⑥ 顶部 confetti 礼花碎条
+// ════════════════════════════════════════════════════════════
+private data class ConfettiSpec(
+    val baseX: Float,        // 0~1 起始横坐标
+    val driftX: Float,       // 横向漂移幅度（屏宽占比，正负随机）
+    val rotSpeed: Float,     // 自旋速度（度/进度）
+    val initialRot: Float,
+    val phaseDelay: Float,   // 0~0.3
+    val colorIdx: Int,
+    val width: Float,
+    val height: Float,
+)
+
+private fun generateConfetti(n: Int): List<ConfettiSpec> {
+    val rng = Random(7)
+    return List(n) {
+        ConfettiSpec(
+            baseX = rng.nextFloat(),
+            driftX = (rng.nextFloat() - 0.5f) * 0.3f,
+            rotSpeed = (rng.nextFloat() - 0.5f) * 720f,
+            initialRot = rng.nextFloat() * 360f,
+            phaseDelay = rng.nextFloat() * 0.3f,
+            colorIdx = it,
+            width = 6f + rng.nextFloat() * 4f,
+            height = 12f + rng.nextFloat() * 8f,
+        )
     }
-    val transition = rememberInfiniteTransition(label = "crystal")
-    Box(modifier = Modifier.fillMaxSize()) {
-        shards.forEachIndexed { idx, s ->
-            val progress by transition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(2300, delayMillis = s.delay, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "csp$idx"
-            )
-            val rot by transition.animateFloat(
-                initialValue = s.rotationStart,
-                targetValue = s.rotationStart + 720f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(2300, delayMillis = s.delay, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ), label = "csr$idx"
-            )
-            val color = if (s.useSecondary) secondaryColor else primaryColor
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    val rad = s.angle * (PI / 180f).toFloat()
-                    val dist = progress * s.speed
-                    val cx = size.width / 2 + cos(rad) * dist
-                    val cy = size.height / 2 + sin(rad) * dist
-                    val a = (1f - progress).coerceIn(0f, 1f) *
-                            if (progress < 0.1f) progress * 10f else 1f
-                    drawDiamond(Offset(cx, cy), s.size, color.copy(alpha = a), rot)
-                }
-            )
+}
+
+@Composable
+private fun ConfettiRain(t: Float, items: List<ConfettiSpec>, theme: VipTheme) {
+    if (t <= 0.05f) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width; val h = size.height
+        items.forEach { c ->
+            val local = ((t - c.phaseDelay).coerceAtLeast(0f) /
+                    (1f - c.phaseDelay).coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+            // 从 -10% 屏高 → 110% 屏高
+            val y = -h * 0.1f + local * h * 1.2f
+            val x = w * c.baseX + w * c.driftX * local
+            val rot = c.initialRot + c.rotSpeed * local
+            val alpha = when {
+                local < 0.1f -> local / 0.1f
+                local > 0.85f -> ((1f - local) / 0.15f).coerceAtLeast(0f)
+                else -> 1f
+            }
+            val color = theme.confettiColors[c.colorIdx % theme.confettiColors.size]
+            rotate(rot, pivot = Offset(x, y)) {
+                drawRect(
+                    color = color.copy(alpha = alpha * 0.95f),
+                    topLeft = Offset(x - c.width / 2, y - c.height / 2),
+                    size = Size(c.width, c.height),
+                )
+            }
         }
     }
 }
 
-private fun DrawScope.drawDiamond(center: Offset, halfSize: Float, color: Color, rotation: Float) {
-    val rad = rotation * (PI / 180f).toFloat()
-    val cosR = cos(rad)
-    val sinR = sin(rad)
-    fun rotated(x: Float, y: Float): Offset =
-        Offset(center.x + x * cosR - y * sinR, center.y + x * sinR + y * cosR)
-
-    val top = rotated(0f, -halfSize)
-    val right = rotated(halfSize * 0.55f, 0f)
-    val bot = rotated(0f, halfSize)
-    val left = rotated(-halfSize * 0.55f, 0f)
-
-    // 主菱形填充
-    val path = Path().apply {
-        moveTo(top.x, top.y)
-        lineTo(right.x, right.y)
-        lineTo(bot.x, bot.y)
-        lineTo(left.x, left.y)
-        close()
-    }
-    drawPath(path, color)
-    // 内部高光（左上半）
-    val highlight = Path().apply {
-        moveTo(top.x, top.y)
-        lineTo(rotated(0f, -halfSize * 0.25f).x, rotated(0f, -halfSize * 0.25f).y)
-        lineTo(left.x, left.y)
-        close()
-    }
-    drawPath(highlight, Color.White.copy(alpha = color.alpha * 0.75f))
-    // 描边
-    drawPath(path, Color.White.copy(alpha = color.alpha * 0.5f), style = Stroke(width = 1f))
-}
-
-/**
- * VIP3 专属：神圣几何曼陀罗（双层六边形 + 六芒星 + 同心圆，旋转脉动）
- */
+// ════════════════════════════════════════════════════════════
+// ⑦ 中央卡片（礼盒揭晓）
+// ════════════════════════════════════════════════════════════
 @Composable
-fun RoyalMandala(primaryColor: Color, secondaryColor: Color) {
-    val transition = rememberInfiniteTransition(label = "mandala")
-    val rotation by transition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(18000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "mr"
-    )
-    val pulseScale by transition.animateFloat(
-        initialValue = 0.92f, targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "ms"
-    )
-    val secondRot by transition.animateFloat(
-        initialValue = 0f, targetValue = -360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(22000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "mr2"
-    )
-
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .drawBehind {
-            val cx = size.width / 2
-            val cy = size.height / 2
-            val baseR = 230f * pulseScale
-
-            // 外层同心圆光环
-            repeat(3) { i ->
-                drawCircle(
-                    color = primaryColor.copy(alpha = 0.18f - i * 0.05f),
-                    radius = baseR + i * 55f,
-                    center = Offset(cx, cy),
-                    style = Stroke(width = 1.4f)
-                )
+private fun CelebrationCard(
+    theme: VipTheme,
+    coins: Int,
+    displayCoins: Int,
+    enterT: Float,
+    overall: Float,
+    rayRot: Float,
+) {
+    // ease-out-back 弹入：0.4→1.06→1.0
+    val scale = remember(enterT) {
+        when {
+            enterT < 0.6f -> {
+                val k = enterT / 0.6f
+                val s = 1f - (1f - k) * (1f - k)
+                0.4f + s * 0.7f
             }
+            enterT < 0.85f -> {
+                val k = (enterT - 0.6f) / 0.25f
+                1.1f - k * 0.1f
+            }
+            else -> 1f
+        }
+    }
 
-            // 双层六边形（金色顺转 + 紫色逆转）
-            for (ringIdx in 0..1) {
-                val r = baseR + ringIdx * 35f
-                val color = if (ringIdx == 0) primaryColor else secondaryColor
-                val rot = if (ringIdx == 0) rotation else secondRot
-                val path = Path()
-                for (i in 0..6) {
-                    val a = (i * 60f + rot) * (PI / 180f).toFloat()
-                    val x = cx + cos(a) * r
-                    val y = cy + sin(a) * r
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(0.84f)
+            .graphicsLayer {
+                this.scaleX = scale
+                this.scaleY = scale
+                this.alpha = overall
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        // ─ 卡片背后的辐射光线（从卡片 emoji 位置向外的"加冕光"）
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val cx = size.width / 2f
+            val cy = size.height * 0.18f
+            val r = size.minDimension * 0.7f
+            rotate(rayRot * 0.5f, pivot = Offset(cx, cy)) {
+                for (i in 0 until 12) {
+                    rotate(i * 30f, pivot = Offset(cx, cy)) {
+                        drawLine(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    theme.glow.copy(alpha = 0.45f),
+                                    Color.Transparent,
+                                ),
+                                startY = cy,
+                                endY = cy - r,
+                            ),
+                            start = Offset(cx, cy),
+                            end = Offset(cx, cy - r),
+                            strokeWidth = 2f,
+                        )
+                    }
                 }
-                drawPath(
-                    path,
-                    color = color.copy(alpha = 0.55f),
-                    style = Stroke(width = 2.8f)
-                )
             }
+        }
 
-            // 六芒星（两个等边三角形重叠）
-            val starR = baseR * 0.72f
-            for (triIdx in 0..1) {
-                val color = if (triIdx == 0) primaryColor else secondaryColor
-                val rotOffset = if (triIdx == 0) 0f else 60f
-                val triRot = -rotation * 0.6f
-                val path = Path()
-                for (i in 0..3) {
-                    val a = (i * 120f + rotOffset + triRot) * (PI / 180f).toFloat()
-                    val x = cx + cos(a) * starR
-                    val y = cy + sin(a) * starR
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                drawPath(
-                    path,
-                    color = color.copy(alpha = 0.45f),
-                    style = Stroke(width = 2.2f)
-                )
-            }
-
-            // 中心放射 12 道短光线（沿曼陀罗中心向外）
-            val innerR = baseR * 0.4f
-            val outerR = baseR * 0.62f
-            repeat(12) { i ->
-                val a = (i * 30f + rotation * 1.2f) * (PI / 180f).toFloat()
-                drawLine(
-                    brush = Brush.linearGradient(
+        // ─ 卡片本体（玻璃拟态白底 + 等级渐变描边）
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    brush = Brush.verticalGradient(
                         colors = listOf(
-                            primaryColor.copy(alpha = 0.7f),
-                            Color.Transparent
-                        ),
-                        start = Offset(cx + cos(a) * innerR, cy + sin(a) * innerR),
-                        end = Offset(cx + cos(a) * outerR, cy + sin(a) * outerR)
-                    ),
-                    start = Offset(cx + cos(a) * innerR, cy + sin(a) * innerR),
-                    end = Offset(cx + cos(a) * outerR, cy + sin(a) * outerR),
-                    strokeWidth = 1.8f
+                            Color.White.copy(alpha = 0.97f),
+                            Color(0xFFFFFAFC),
+                            Color(0xFFF6EFFF),
+                        )
+                    )
                 )
+                .border(
+                    width = 2.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(theme.gradientTop, theme.gradientBottom, theme.gradientTop)
+                    ),
+                    shape = RoundedCornerShape(28.dp),
+                ),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                // ① 顶部 emoji（旋入 + 缩放）
+                val emojiAlpha = ((enterT - 0.10f) / 0.20f).coerceIn(0f, 1f)
+                val emojiRot = (1f - emojiAlpha) * 180f
+                Text(
+                    text = theme.emoji,
+                    fontSize = 56.sp,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = emojiAlpha
+                        rotationZ = emojiRot
+                        scaleX = 0.5f + emojiAlpha * 0.5f
+                        scaleY = 0.5f + emojiAlpha * 0.5f
+                    }
+                )
+
+                // ② "✨ 恭喜激活 ✨"
+                val titleAlpha = ((enterT - 0.30f) / 0.20f).coerceIn(0f, 1f)
+                Text(
+                    text = "✨  恭喜激活  ✨",
+                    fontSize = 14.sp,
+                    color = theme.accent.copy(alpha = titleAlpha),
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 3.sp,
+                )
+
+                // ③ 等级名（艺术字）
+                val nameAlpha = ((enterT - 0.35f) / 0.25f).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = nameAlpha
+                        val pop = 0.85f + nameAlpha * 0.15f
+                        scaleX = pop; scaleY = pop
+                    },
+                ) {
+                    Text(
+                        text = theme.title,
+                        style = TextStyle(
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            drawStyle = Stroke(width = 9f),
+                            shadow = Shadow(
+                                color = theme.glow.copy(alpha = 0.55f),
+                                blurRadius = 18f,
+                            ),
+                        ),
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = theme.title,
+                        style = TextStyle(
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Black,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(theme.gradientTop, theme.gradientBottom)
+                            ),
+                            shadow = Shadow(
+                                color = theme.gradientBottom.copy(alpha = 0.35f),
+                                offset = Offset(0f, 2f),
+                                blurRadius = 4f,
+                            ),
+                        ),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                // ④ subtitle
+                Text(
+                    text = theme.subtitle,
+                    fontSize = 13.sp,
+                    color = Color(0xFF555555).copy(
+                        alpha = ((enterT - 0.45f) / 0.20f).coerceIn(0f, 1f)
+                    ),
+                    fontWeight = FontWeight.Medium,
+                )
+
+                // ⑤ 金币奖励
+                if (coins > 0) {
+                    val coinAlpha = ((enterT - 0.50f) / 0.25f).coerceIn(0f, 1f)
+                    // 金币每跳一次 pop 强调
+                    val coinPop = remember(displayCoins) { Animatable(1f) }
+                    LaunchedEffect(displayCoins) {
+                        if (displayCoins > 0 && displayCoins < coins) {
+                            coinPop.snapTo(1.08f)
+                            coinPop.animateTo(1f, tween(180))
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .graphicsLayer {
+                                alpha = coinAlpha
+                                scaleX = coinPop.value
+                                scaleY = coinPop.value
+                            }
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        theme.gradientTop.copy(alpha = 0.25f),
+                                        theme.gradientBottom.copy(alpha = 0.25f),
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = theme.accent.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(50),
+                            )
+                            .padding(horizontal = 18.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("🪙", fontSize = 18.sp)
+                        Text(
+                            text = "+$displayCoins 金币",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            color = theme.accent,
+                        )
+                    }
+                    Text(
+                        text = "已自动发放至账户",
+                        fontSize = 11.sp,
+                        color = Color(0xFF999999).copy(alpha = coinAlpha),
+                    )
+                }
+
+                Spacer(Modifier.height(2.dp))
             }
         }
-    )
+    }
 }

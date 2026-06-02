@@ -4,10 +4,14 @@ package com.example.funlife.data.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "player_victory_records")
+@Entity(
+    tableName = "player_victory_records",
+    indices = [androidx.room.Index("userId")]
+)
 data class PlayerVictoryRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    val userId: Long = 0L,      // 🔒 多账号隔离
     val playerName: String,     // 玩家名字
     val avatar: String,         // 玩家头像
     val victoryCount: Int = 0,  // 胜利次数

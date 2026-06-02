@@ -2,9 +2,13 @@
 package com.example.funlife.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "players")
+@Entity(
+    tableName = "players",
+    indices = [Index(value = ["userId"], name = "index_players_userId")]
+)
 data class Player(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,

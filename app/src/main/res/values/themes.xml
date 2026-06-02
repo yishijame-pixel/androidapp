@@ -5,8 +5,9 @@
         <item name="android:windowBackground">@drawable/splash_screen_layer</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:statusBarColor">#FFF8E1</item>
-        <item name="android:navigationBarColor">#FFCA28</item>
+        <!-- 状态/导航栏色匹配新 splash 渐变（顶 #FFE4E1 / 底 #FFD6A5） -->
+        <item name="android:statusBarColor">#FFE4E1</item>
+        <item name="android:navigationBarColor">#FFD6A5</item>
     </style>
     
     <!-- 主题 -->

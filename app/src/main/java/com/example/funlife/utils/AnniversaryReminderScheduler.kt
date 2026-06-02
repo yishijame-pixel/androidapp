@@ -32,8 +32,8 @@ import java.time.ZoneId
 object AnniversaryReminderScheduler {
 
     private const val TAG = "AnniReminderSched"
-    private const val DEFAULT_HOUR = 9        // 09:00 触发
-    private const val DEFAULT_MIN = 0
+    private const val DEFAULT_HOUR = 0        // 00:01 触发（跨日立即提醒，符合用户预期）
+    private const val DEFAULT_MIN = 1
     private const val REQUEST_CODE_BASE = 7300000
 
     /** App 启动时调用：从数据库读取所有纪念日，统一调度
@@ -87,23 +87,40 @@ object AnniversaryReminderScheduler {
                 PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
-            // Android 12+ 需要 SCHEDULE_EXACT_ALARM 权限；用户没授权时降级为非精确
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
+            // 🔥 用 setAlarmClock() — Android 最高优先级闹钟 API
+            // 国产 ROM (MIUI/EMUI/ColorOS) 都强制遵守，应用清后台/Doze 模式都能触发
+            // 用户能在状态栏看到小闹钟图标
+            try {
+                val showIntent = Intent(context, com.example.funlife.MainActivity::class.java)
+                val showPi = PendingIntent.getActivity(
+                    context,
+                    REQUEST_CODE_BASE + anniversary.id + 100000,
+                    showIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or
+                        (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                )
+                val info = AlarmManager.AlarmClockInfo(triggerMillis, showPi)
+                alarmManager.setAlarmClock(info, pi)
+                android.util.Log.d(TAG, "✅ setAlarmClock [${anniversary.name}] @ ${java.util.Date(triggerMillis)}")
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "setAlarmClock 失败，降级用 setExactAndAllowWhileIdle", e)
+                // 降级方案
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP, triggerMillis, pi
+                        )
+                    } else {
+                        alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP, triggerMillis, pi
+                        )
+                    }
+                } else {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP, triggerMillis, pi
                     )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP, triggerMillis, pi
-                    )
                 }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, triggerMillis, pi
-                )
             }
-            android.util.Log.d(TAG, "已调度 [${anniversary.name}] @ ${java.util.Date(triggerMillis)}")
         } catch (e: Exception) {
             android.util.Log.e(TAG, "调度 ${anniversary.name} 失败", e)
         }

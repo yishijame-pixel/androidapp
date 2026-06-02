@@ -1,547 +1,654 @@
-// SettingsScreen.kt - 设置屏幕（美化版）
+// SettingsScreen.kt - 精致紧凑现代设计 v3
 package com.example.funlife.ui.screens
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.viewmodel.SettingsViewModel
-import com.example.funlife.ui.components.PageHeader
-import com.example.funlife.ui.components.PageHeaderGradients
+import kotlinx.coroutines.launch
+
+/* ════════════════════════════════════════════════════════════════════════════
+   设计原则：
+   - 极致紧凑：顶部栏 56dp，分区间距 18dp
+   - 极简色彩：白底 + 7 种语义色图标 + 浅灰描边
+   - 大圆角 22dp，无重阴影，靠描边和留白营造层级
+   - 图标用方形圆角彩色背景容器（不是圆形），更现代
+   ════════════════════════════════════════════════════════════════════════════ */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToHelp: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {}
 ) {
     val preferences by viewModel.preferences.collectAsState()
     val scrollState = rememberScrollState()
-    
-    Scaffold { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // 美化的页面头部
-            PageHeader(
-                title = "设置",
-                emoji = "⚙️",
-                gradientColors = listOf(
-                    Color(0xFF9B59B6),
-                    Color(0xFFBB8FCE),
-                    Color(0xFFD7BDE2)
-                ),
-                subtitle = "个性化你的应用",
-                showBackButton = true,
-                onBackClick = onNavigateBack
-            )
-            
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF7F8FA))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 极简标题栏
+            SettingsTopBar(onNavigateBack = onNavigateBack)
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                // 外观设置
-                SettingsSection(
-                    title = "外观设置",
-                    emoji = "🎨"
-                ) {
-                    SettingsSwitchItem(
-                        icon = Icons.Default.DarkMode,
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 帮助中心横幅
+                HelpBanner(onClick = onNavigateToHelp)
+
+                // 通用偏好
+                SettingsGroup(title = "通用") {
+                    ToggleItem(
+                        icon = Icons.Rounded.DarkMode,
+                        accent = Color(0xFF5C6BC0),
                         title = "深色模式",
-                        description = "启用深色主题",
+                        desc = "切换深色主题",
                         checked = preferences.isDarkMode,
-                        onCheckedChange = { viewModel.updateDarkMode(it) }
+                        onChange = viewModel::updateDarkMode
                     )
-                }
-            
-            // 通知设置
-            SettingsSection(
-                title = "通知设置",
-                emoji = "🔔"
-            ) {
-                SettingsSwitchItem(
-                    icon = Icons.Default.Notifications,
-                    title = "启用通知",
-                    description = "接收纪念日提醒",
-                    checked = preferences.enableNotifications,
-                    onCheckedChange = { viewModel.updateNotifications(it) }
-                )
-                
-                if (preferences.enableNotifications) {
-                    SettingsSliderItem(
-                        icon = Icons.Default.Schedule,
+                    DividerLine()
+                    ToggleItem(
+                        icon = Icons.Rounded.Notifications,
+                        accent = Color(0xFFEC407A),
+                        title = "应用通知",
+                        desc = "纪念日 & 日程提醒",
+                        checked = preferences.enableNotifications,
+                        onChange = viewModel::updateNotifications
+                    )
+                    DividerLine()
+                    NavItem(
+                        icon = Icons.Rounded.Notifications,
+                        accent = Color(0xFFEC407A),
+                        title = "通知中心",
+                        desc = "分类开关 / 静默时段 / 推送时刻",
+                        onClick = onNavigateToNotifications
+                    )
+                    DividerLine()
+                    SliderItem(
+                        icon = Icons.Rounded.Schedule,
+                        accent = Color(0xFFFB8C00),
                         title = "提前提醒",
-                        description = "提前 ${preferences.notificationDaysBefore} 天提醒",
+                        valueText = "${preferences.notificationDaysBefore} 天",
                         value = preferences.notificationDaysBefore.toFloat(),
-                        valueRange = 1f..30f,
-                        onValueChange = { 
+                        range = 1f..30f,
+                        onValueChange = {
                             viewModel.updatePreferences(
                                 preferences.copy(notificationDaysBefore = it.toInt())
                             )
                         }
                     )
                 }
-            }
-            
-            // 游戏设置
-            SettingsSection(
-                title = "游戏设置",
-                emoji = "🎮"
-            ) {
-                SettingsSliderItem(
-                    icon = Icons.Default.Add,
-                    title = "默认加分值",
-                    description = "每次加分 ${preferences.defaultScoreIncrement} 分",
-                    value = preferences.defaultScoreIncrement.toFloat(),
-                    valueRange = 1f..10f,
-                    onValueChange = { viewModel.updateScoreIncrement(it.toInt()) }
-                )
-                
-                SettingsSwitchItem(
-                    icon = Icons.Default.VolumeUp,
-                    title = "音效",
-                    description = "启用音效反馈",
-                    checked = preferences.enableSound,
-                    onCheckedChange = { 
-                        viewModel.updatePreferences(preferences.copy(enableSound = it))
+
+                // 反馈
+                SettingsGroup(title = "反馈") {
+                    ToggleItem(
+                        icon = Icons.Rounded.VolumeUp,
+                        accent = Color(0xFF42A5F5),
+                        title = "音效",
+                        desc = "操作反馈音效",
+                        checked = preferences.enableSound,
+                        onChange = {
+                            viewModel.updatePreferences(preferences.copy(enableSound = it))
+                        }
+                    )
+                    DividerLine()
+                    ToggleItem(
+                        icon = Icons.Rounded.Vibration,
+                        accent = Color(0xFF26A69A),
+                        title = "震动",
+                        desc = "操作触觉反馈",
+                        checked = preferences.enableVibration,
+                        onChange = {
+                            viewModel.updatePreferences(preferences.copy(enableVibration = it))
+                        }
+                    )
+                }
+
+                // 游戏
+                SettingsGroup(title = "游戏") {
+                    SliderItem(
+                        icon = Icons.Rounded.EmojiEvents,
+                        accent = Color(0xFF7C4DFF),
+                        title = "默认加分值",
+                        valueText = "+${preferences.defaultScoreIncrement}",
+                        value = preferences.defaultScoreIncrement.toFloat(),
+                        range = 1f..10f,
+                        onValueChange = viewModel::updateScoreIncrement.let { f ->
+                            { f(it.toInt()) }
+                        }
+                    )
+                }
+
+                // 数据
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                var importResult by remember { mutableStateOf<com.example.funlife.utils.DataBackupManager.ImportResult?>(null) }
+                var busyMsg by remember { mutableStateOf<String?>(null) }
+                val pickImportFile = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    uri ?: return@rememberLauncherForActivityResult
+                    busyMsg = "正在导入…"
+                    scope.launch {
+                        runCatching {
+                            val uid = com.example.funlife.utils.UserSessionManager(ctx).getCurrentUserId()
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                com.example.funlife.utils.DataBackupManager.importFromUri(ctx, uri, uid)
+                            }
+                        }.onSuccess {
+                            busyMsg = null
+                            importResult = it
+                        }.onFailure {
+                            busyMsg = null
+                            android.util.Log.e("SettingsScreen", "导入失败", it)
+                            android.widget.Toast.makeText(
+                                ctx, "导入失败，请检查文件格式",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
                     }
+                }
+                SettingsGroup(title = "数据") {
+                    ActionItem(
+                        icon = Icons.Rounded.Upload,
+                        accent = Color(0xFFFFA726),
+                        title = "导出数据",
+                        desc = "纪念日 / 心情 / 目标 / 习惯 / 倒数日 → JSON",
+                        onClick = {
+                            busyMsg = "正在导出…"
+                            scope.launch {
+                                runCatching {
+                                    val uid = com.example.funlife.utils.UserSessionManager(ctx).getCurrentUserId()
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        com.example.funlife.utils.DataBackupManager.exportToFile(ctx, uid)
+                                    }
+                                }.onSuccess { file ->
+                                    busyMsg = null
+                                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                                        ctx, "${ctx.packageName}.fileprovider", file
+                                    )
+                                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "application/json"
+                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    ctx.startActivity(android.content.Intent.createChooser(send, "保存或分享备份"))
+                                }.onFailure {
+                                    busyMsg = null
+                                    android.util.Log.e("SettingsScreen", "导出失败", it)
+                                    android.widget.Toast.makeText(
+                                        ctx, "导出失败，请重试",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        }
+                    )
+                    DividerLine()
+                    ActionItem(
+                        icon = Icons.Rounded.Download,
+                        accent = Color(0xFF42A5F5),
+                        title = "导入数据",
+                        desc = "从备份 JSON 恢复（追加，不覆盖现有数据）",
+                        onClick = {
+                            runCatching { pickImportFile.launch(arrayOf("application/json", "*/*")) }
+                        }
+                    )
+                    DividerLine()
+                    ActionItem(
+                        icon = Icons.Rounded.BugReport,
+                        accent = Color(0xFFEF5350),
+                        title = "导出崩溃日志",
+                        desc = "用于反馈问题",
+                        onClick = {
+                            val text = com.example.funlife.utils.CrashHandler.exportRecent(ctx)
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "FunLife 崩溃反馈")
+                                putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            }
+                            ctx.startActivity(android.content.Intent.createChooser(send, "分享崩溃日志"))
+                        }
+                    )
+                }
+                busyMsg?.let { msg ->
+                    AlertDialog(
+                        onDismissRequest = {},
+                        confirmButton = {},
+                        title = { Text("请稍候") },
+                        text = { Text(msg) }
+                    )
+                }
+                importResult?.let { r ->
+                    AlertDialog(
+                        onDismissRequest = { importResult = null },
+                        confirmButton = {
+                            TextButton(onClick = { importResult = null }) { Text("好的") }
+                        },
+                        title = { Text("导入完成") },
+                        text = {
+                            Text(
+                                "已恢复：\n" +
+                                "  纪念日 ${r.anniversaries} 条\n" +
+                                "  心情 ${r.moods} 条\n" +
+                                "  目标 ${r.goals} 条\n" +
+                                "  习惯 ${r.habits} 条\n" +
+                                "  倒数日 ${r.countdowns} 条"
+                            )
+                        }
+                    )
+                }
+
+                // 关于
+                SettingsGroup(title = "关于") {
+                    StaticItem(
+                        icon = Icons.Rounded.Info,
+                        accent = Color(0xFF78909C),
+                        title = "版本",
+                        valueText = "v1.0.0"
+                    )
+                    DividerLine()
+                    ActionItem(
+                        icon = Icons.Rounded.MenuBook,
+                        accent = Color(0xFF8E24AA),
+                        title = "使用指南",
+                        desc = "应用功能说明",
+                        onClick = { /* TODO */ }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "FunLife · Made with 💗",
+                    fontSize = 11.sp,
+                    color = Color(0xFFBDBDBD),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium
                 )
-                
-                SettingsSwitchItem(
-                    icon = Icons.Default.Vibration,
-                    title = "震动",
-                    description = "启用震动反馈",
-                    checked = preferences.enableVibration,
-                    onCheckedChange = { 
-                        viewModel.updatePreferences(preferences.copy(enableVibration = it))
-                    }
-                )
-            }
-            
-            // 数据管理
-            SettingsSection(
-                title = "数据管理",
-                emoji = "💾"
-            ) {
-                SettingsSwitchItem(
-                    icon = Icons.Default.Backup,
-                    title = "自动备份",
-                    description = "自动备份应用数据",
-                    checked = preferences.autoBackup,
-                    onCheckedChange = { 
-                        viewModel.updatePreferences(preferences.copy(autoBackup = it))
-                    }
-                )
-                
-                SettingsButtonItem(
-                    icon = Icons.Default.CloudUpload,
-                    title = "导出数据",
-                    description = "导出所有数据到文件",
-                    onClick = { /* TODO: 实现导出功能 */ }
-                )
-                
-                SettingsButtonItem(
-                    icon = Icons.Default.CloudDownload,
-                    title = "导入数据",
-                    description = "从文件导入数据",
-                    onClick = { /* TODO: 实现导入功能 */ }
-                )
-            }
-            
-            // 关于
-            SettingsSection(
-                title = "关于",
-                emoji = "ℹ️"
-            ) {
-                SettingsInfoItem(
-                    icon = Icons.Default.Info,
-                    title = "版本",
-                    value = "1.0.0"
-                )
-                
-                SettingsButtonItem(
-                    icon = Icons.Default.Description,
-                    title = "使用说明",
-                    description = "查看应用使用指南",
-                    onClick = { /* TODO: 显示使用说明 */ }
-                )
-            }
-            
-            // 底部间距
-            Spacer(Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
 
-@Composable
-fun SettingsSection(
-    title: String,
-    emoji: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 标题行
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = emoji,
-                    fontSize = 24.sp
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            
-            // 分隔线
-            Divider(
-                thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-            )
-            
-            content()
-        }
-    }
-}
+/* ──────────────── 顶部极简标题栏 ──────────────── */
 
 @Composable
-fun SettingsSwitchItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val iconScale by animateFloatAsState(
-        targetValue = if (checked) 1.1f else 1f,
-        animationSpec = tween(300)
-    )
-    
-    val iconColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(300)
-    )
-    
+private fun SettingsTopBar(onNavigateBack: () -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+        color = Color(0xFFF7F8FA),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 图标容器
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (checked) {
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        MaterialTheme.colorScheme.secondaryContainer
-                                    )
-                                )
-                            } else {
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.surfaceVariant,
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                )
-                            }
-                        )
-                        .scale(iconScale),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = iconColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+            IconButton(onClick = onNavigateBack) {
+                Icon(
+                    Icons.Rounded.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color(0xFF212121)
                 )
+            }
+            Text(
+                text = "设置",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF212121),
+                modifier = Modifier.padding(start = 4.dp)
             )
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }
 
+/* ──────────────── 帮助中心横幅（小尺寸但精致） ──────────────── */
+
 @Composable
-fun SettingsSliderItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+private fun HelpBanner(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFFFF8FA3),
+                        Color(0xFFEC407A),
+                        Color(0xFF9C27B0)
+                    )
+                )
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 图标容器
+            Text("💡", fontSize = 22.sp)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "帮助中心",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.tertiaryContainer,
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White)
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
                 ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "HOT",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFFEC407A)
                     )
                 }
             }
-            
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                steps = (valueRange.endInclusive - valueRange.start - 1).toInt(),
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                "通知收不到？一键自检 + 修复",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.92f),
+                fontWeight = FontWeight.Medium
             )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = Color.White
+        )
+    }
+}
+
+/* ──────────────── 分组容器（带标题） ──────────────── */
+
+@Composable
+private fun SettingsGroup(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            color = Color(0xFF9E9E9E),
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shape = RoundedCornerShape(22.dp),
+            shadowElevation = 0.dp,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = Color(0xFFEEEEEE)
+            )
+        ) {
+            Column {
+                content()
+            }
         }
     }
 }
 
+/* ──────────────── 分隔线 ──────────────── */
+
 @Composable
-fun SettingsButtonItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun DividerLine() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 64.dp)
+            .height(0.5.dp)
+            .background(Color(0xFFEEEEEE))
+    )
+}
+
+/* ──────────────── 列表项：圆角方形图标容器 ──────────────── */
+
+@Composable
+private fun IconChip(
+    icon: ImageVector,
+    accent: Color,
+    size: androidx.compose.ui.unit.Dp = 36.dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(10.dp))
+            .background(accent.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/* ──────────────── Nav 行（点击进入子页） ──────────────── */
+
+@Composable
+private fun NavItem(
+    icon: ImageVector,
+    accent: Color,
     title: String,
-    description: String,
+    desc: String,
     onClick: () -> Unit
 ) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        ),
-        contentPadding = PaddingValues(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 图标容器
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
-            }
+        IconChip(icon = icon, accent = accent)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+            Text(desc, fontSize = 11.sp, color = Color(0xFF9E9E9E))
         }
+        Text("›", fontSize = 22.sp, color = Color(0xFFBDBDBD), fontWeight = FontWeight.Bold)
     }
 }
 
+/* ──────────────── Toggle ──────────────── */
+
 @Composable
-fun SettingsInfoItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun ToggleItem(
+    icon: ImageVector,
+    accent: Color,
     title: String,
-    value: String
+    desc: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+        IconChip(icon = icon, accent = accent)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+            Text(desc, fontSize = 11.sp, color = Color(0xFF9E9E9E))
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = accent,
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color(0xFFE0E0E0),
+                uncheckedBorderColor = Color.Transparent
+            )
+        )
+    }
+}
+
+/* ──────────────── Slider ──────────────── */
+
+@Composable
+private fun SliderItem(
+    icon: ImageVector,
+    accent: Color,
+    title: String,
+    valueText: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconChip(icon = icon, accent = accent)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+            Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(accent.copy(alpha = 0.12f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                // 图标容器
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF4CAF50),
-                                    Color(0xFF8BC34A)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    valueText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    color = accent
                 )
             }
         }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = range,
+            steps = (range.endInclusive - range.start - 1).toInt().coerceAtLeast(0),
+            colors = SliderDefaults.colors(
+                thumbColor = accent,
+                activeTrackColor = accent,
+                inactiveTrackColor = accent.copy(alpha = 0.15f),
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent
+            ),
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/* ──────────────── Action（点击跳转） ──────────────── */
+
+@Composable
+private fun ActionItem(
+    icon: ImageVector,
+    accent: Color,
+    title: String,
+    desc: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconChip(icon = icon, accent = accent)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+            Text(desc, fontSize = 11.sp, color = Color(0xFF9E9E9E))
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = Color(0xFFBDBDBD)
+        )
+    }
+}
+
+/* ──────────────── Static（只显示信息） ──────────────── */
+
+@Composable
+private fun StaticItem(
+    icon: ImageVector,
+    accent: Color,
+    title: String,
+    valueText: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconChip(icon = icon, accent = accent)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            valueText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF9E9E9E)
+        )
     }
 }

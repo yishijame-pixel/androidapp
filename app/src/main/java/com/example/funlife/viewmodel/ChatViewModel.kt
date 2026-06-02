@@ -4,11 +4,19 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.funlife.FunLifeApplication
+import com.example.funlife.data.model.Account
 import com.example.funlife.data.model.Bill
 import com.example.funlife.data.model.ChatMessage
 import com.example.funlife.data.model.ChatPersona
 import com.example.funlife.data.model.ChatPersonaState
+import com.example.funlife.data.model.Budget
+import com.example.funlife.data.model.RecurringBill
+import com.example.funlife.repository.AccountRepository
+import com.example.funlife.repository.BudgetCalc
+import com.example.funlife.repository.BudgetProgress
+import com.example.funlife.repository.BudgetRepository
 import com.example.funlife.repository.ChatRepository
+import com.example.funlife.repository.RecurringBillRepository
 import com.example.funlife.utils.AiResult
 import com.example.funlife.utils.AiService
 import com.example.funlife.utils.RuleEngine
@@ -21,6 +29,12 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.random.Random
 
+/**
+ * 🆕 v50 记账模式：决定 ChatBillScreen 显示哪些入口。
+ * 与"功能开关"是同一概念 —— 进阶用户可主动开启多预算/多账户。
+ */
+enum class BookkeepingMode { SIMPLE, ADVANCED }
+
 @OptIn(FlowPreview::class)
 class ChatViewModel(application: Application, val userId: Long) : AndroidViewModel(application) {
 
@@ -30,6 +44,12 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         database.chatMessageDao(),
         database.chatPersonaDao()
     )
+    // 🆕 v48 多账户仓库（数据按 userId 严格隔离）
+    private val accountRepository = AccountRepository(database.accountDao())
+    // 🆕 v49 预算仓库
+    private val budgetRepository = BudgetRepository(database.budgetDao(), database.billDao())
+    // 🆕 v50 定期账单仓库
+    private val recurringBillRepository = RecurringBillRepository(database.recurringBillDao(), database.billDao())
     private val ruleEngine = RuleEngine()
     // 🔒 安全修复：把 userId 传给 AiService，让 API Key 按账号加密隔离存储
     private val aiService = AiService(application, userId)
@@ -97,6 +117,11 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
     // 持久化偏好（按用户区分人格选择，避免多账号互相覆盖）
     private val prefs = application.getSharedPreferences("chat_settings", Context.MODE_PRIVATE)
     private val lastPersonaKey = "last_persona_id_$userId"
+    // 🆕 v50 记账模式（按 userId 隔离）
+    //   SIMPLE   = 极简：仅"月度预算 + 人格提醒"，隐藏多预算 / 多账户 / 定期账单管理入口
+    //   ADVANCED = 进阶：完整功能（多预算 / 多账户 / 定期账单 / 系统通知）
+    //   首次进入默认 SIMPLE，避免一上来就被一堆入口吓到
+    private val bookkeepingModeKey = "bookkeeping_mode_$userId"
     // 🔒 安全修复：人格自定义头像按 (userId, personaId) 存储于 SharedPreferences，
     // 不再写入全局 chat_personas 表，避免跨账户互相覆盖头像。
     private fun avatarOverrideKey(personaId: String) = "persona_avatar_${userId}_$personaId"
@@ -123,6 +148,85 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         }
     val bills: Flow<List<Bill>> = repository.getAllBills(userId)
 
+    // 🆕 v48 多账户：列表 + 当前选中账户
+    val accounts: StateFlow<List<Account>> = accountRepository
+        .getActiveAccounts(userId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // 🆕 v48 全部账户（含归档），管理页用
+    val allAccounts: StateFlow<List<Account>> = accountRepository
+        .getAllAccounts(userId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    suspend fun saveAccount(account: Account): Long {
+        return if (account.id == 0L)
+            accountRepository.insert(account.copy(userId = userId, balance = account.initialBalance))
+        else {
+            accountRepository.update(account.copy(userId = userId))
+            account.id
+        }
+    }
+
+    suspend fun deleteAccount(account: Account) {
+        require(account.userId == userId)
+        accountRepository.delete(account)
+        // 当前选中账户被删 → 切回第一个激活账户
+        if (_currentAccountId.value == account.id) {
+            val next = accountRepository.getActiveAccounts(userId).first().firstOrNull()
+            _currentAccountId.value = next?.id
+            if (next != null) prefs.edit().putLong(lastAccountKey, next.id).apply()
+            else prefs.edit().remove(lastAccountKey).apply()
+        }
+    }
+
+    suspend fun setAccountArchived(id: Long, archived: Boolean) {
+        accountRepository.setArchived(userId, id, archived)
+        // 归档了当前账户 → 切到下一个激活
+        if (archived && _currentAccountId.value == id) {
+            val next = accountRepository.getActiveAccounts(userId).first().firstOrNull()
+            _currentAccountId.value = next?.id
+            if (next != null) prefs.edit().putLong(lastAccountKey, next.id).apply()
+        }
+    }
+
+    private val lastAccountKey = "last_account_id_$userId"
+    private val _currentAccountId = MutableStateFlow(prefs.getLong(lastAccountKey, -1L).takeIf { it > 0L })
+    val currentAccountId: StateFlow<Long?> = _currentAccountId.asStateFlow()
+
+    fun selectAccount(accountId: Long) {
+        require(accountId > 0L)
+        _currentAccountId.value = accountId
+        prefs.edit().putLong(lastAccountKey, accountId).apply()
+    }
+
+    // 🆕 v49 预算：列表 + 实时进度（与 bills 联动）
+    val budgets: StateFlow<List<Budget>> = budgetRepository
+        .getActiveBudgets(userId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * 实时预算进度：budgets × bills 联合，纯计算（无 DB 查询）。
+     */
+    val budgetProgresses: StateFlow<List<BudgetProgress>> =
+        combine(budgets, bills) { budgetList, billList ->
+            val now = System.currentTimeMillis()
+            budgetList.map { b -> BudgetCalc.computeFromAll(userId, b, billList, now) }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    suspend fun saveBudget(budget: Budget): Long {
+        return if (budget.id == 0L) budgetRepository.insert(budget.copy(userId = userId))
+        else { budgetRepository.update(budget.copy(userId = userId)); budget.id }
+    }
+
+    suspend fun deleteBudget(budget: Budget) {
+        require(budget.userId == userId)
+        budgetRepository.delete(budget)
+    }
+
+    suspend fun setBudgetActive(id: Long, active: Boolean) {
+        budgetRepository.setActive(userId, id, active)
+    }
+
     private val _currentPersonaId = MutableStateFlow(savedPersonaId)
     val currentPersonaId: StateFlow<String> = _currentPersonaId.asStateFlow()
 
@@ -146,6 +250,61 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
 
     init {
         initializePersonas()
+        initializeAccounts()
+        initializeBudgets()
+        scanRecurringBillsForeground()
+    }
+
+    /**
+     * 🆕 v50：进入聊天记账时前台补单。
+     * Worker 兜底每 6 小时，但用户主动打开时立即同步一次最稳。
+     * 失败静默：不影响 UI 启动。
+     */
+    private fun scanRecurringBillsForeground() {
+        viewModelScope.launch {
+            try {
+                recurringBillRepository.generateDueBills(userId)
+            } catch (e: Exception) {
+                android.util.Log.w("ChatViewModel", "scanRecurringBillsForeground failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 🆕 v49：把旧的 SharedPreferences 月度预算（如果有）迁移成一条 Budget 行。
+     * 仅当 budgets 表里没有 TOTAL/MONTHLY 时插入；否则保持 DB 数据为权威。
+     */
+    private fun initializeBudgets() {
+        viewModelScope.launch {
+            try {
+                val legacyAmount = prefs.getFloat("monthly_budget_$userId", 0f)
+                    .takeIf { it > 0f }
+                    ?: prefs.getFloat("monthly_budget", 0f)
+                if (legacyAmount > 0f) {
+                    budgetRepository.ensureMonthlyTotal(userId, legacyAmount.toDouble())
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "initializeBudgets failed", e)
+            }
+        }
+    }
+
+    /**
+     * 🆕 v48：为当前 userId 幂等插入 6 个默认账户；
+     * 若用户尚未选定当前账户，自动选第一个（按 sortOrder）。
+     */
+    private fun initializeAccounts() {
+        viewModelScope.launch {
+            try {
+                accountRepository.ensureSeeded(userId)
+                if (_currentAccountId.value == null) {
+                    val first = accountRepository.getActiveAccounts(userId).first().firstOrNull()
+                    if (first != null) selectAccount(first.id)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "initializeAccounts failed", e)
+            }
+        }
     }
 
     private fun initializePersonas() {
@@ -257,20 +416,39 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
     fun handleInput(input: String) {
         if (input.isBlank()) return
         viewModelScope.launch {
+            // 1. 本地规则优先（快、离线可用）
             val parsed = parseBillInput(input)
             if (parsed != null) {
-                // 记账消息
                 addBill(parsed.amount, parsed.category, parsed.note, input)
-            } else {
-                // 普通聊天消息
-                sendChatMessage(input)
+                return@launch
             }
+
+            // 2. 🔥 本地未识别 + AI 可用 → 调 AI 兜底判断
+            //    输入很短或纯数字直接跳过 AI 节省 token
+            if (aiService.isAvailable && input.length in 3..40) {
+                _isTyping.value = true
+                val aiParsed = aiService.detectBill(input)
+                _isTyping.value = false
+                if (aiParsed != null) {
+                    addBill(aiParsed.amount, aiParsed.category, aiParsed.note, input)
+                    return@launch
+                }
+            }
+
+            // 3. 普通聊天
+            sendChatMessage(input)
         }
     }
 
     private suspend fun addBill(amount: Double, category: String, note: String, rawInput: String) {
-        // 1. 保存账单
-        val bill = Bill(userId = userId, amount = amount, category = category, note = note)
+        // 1. 保存账单（🆕 v48：绑定当前选中账户，旧账户尚未加载完时为 null 兼容）
+        val bill = Bill(
+            userId = userId,
+            amount = amount,
+            category = category,
+            note = note,
+            accountId = _currentAccountId.value
+        )
         val billId = repository.insertBill(bill)
 
         // 2. 用户消息（右气泡）
@@ -299,8 +477,11 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
 
         _isTyping.value = true
 
-        // 策略：先尝试AI，失败则用本地关键词回复
-        val aiResult = aiService.getChatReply(_currentPersona.value, text)
+        // 策略：先校验日额度（按 VIP 等级），再尝试 AI，失败则用本地关键词回复
+        val aiResult = if (consumeChatAiQuota())
+            aiService.getChatReply(_currentPersona.value, text)
+        else
+            AiResult.Error("今日额度已用完")
         val reply = when (aiResult) {
             is AiResult.Success -> aiResult.reply
             is AiResult.Error -> {
@@ -477,10 +658,11 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         val monthTotal = repository.getTotalAmount(userId, monthStart, System.currentTimeMillis())
         val categoryCount = repository.getCategoryCount(userId, bill.category, monthStart)
 
-        // 策略：先尝试AI，失败则用规则引擎
-        val aiResult = aiService.getReply(
-            _currentPersona.value, bill, monthTotal, categoryCount
-        )
+        // 策略：先校验日额度（按 VIP 等级），再尝试 AI，失败则用规则引擎
+        val aiResult = if (consumeChatAiQuota())
+            aiService.getReply(_currentPersona.value, bill, monthTotal, categoryCount)
+        else
+            AiResult.Error("今日额度已用完")
         var reply = when (aiResult) {
             is AiResult.Success -> aiResult.reply
             is AiResult.Error -> {
@@ -569,6 +751,28 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
     fun setSearchQuery(query: String) { _searchQuery.value = query }
     fun toggleSearch() { _isSearching.value = !_isSearching.value; if (!_isSearching.value) _searchQuery.value = "" }
 
+    // ===== 🆕 v50 记账模式（极简 / 进阶） =====
+    private val _bookkeepingMode = MutableStateFlow(
+        runCatching {
+            BookkeepingMode.valueOf(
+                prefs.getString(bookkeepingModeKey, BookkeepingMode.SIMPLE.name)
+                    ?: BookkeepingMode.SIMPLE.name
+            )
+        }.getOrDefault(BookkeepingMode.SIMPLE)
+    )
+    val bookkeepingMode: StateFlow<BookkeepingMode> = _bookkeepingMode.asStateFlow()
+
+    fun toggleBookkeepingMode() {
+        val next = if (_bookkeepingMode.value == BookkeepingMode.SIMPLE)
+            BookkeepingMode.ADVANCED else BookkeepingMode.SIMPLE
+        _bookkeepingMode.value = next
+        prefs.edit().putString(bookkeepingModeKey, next.name).apply()
+        _toastMessage.value = when (next) {
+            BookkeepingMode.SIMPLE -> "已切换到极简模式（仅月度预算 + 人格提醒）"
+            BookkeepingMode.ADVANCED -> "已切换到进阶模式（多预算 / 多账户 / 定期账单）"
+        }
+    }
+
     // ===== 月度预算 =====
     private val _monthlyBudget = MutableStateFlow(prefs.getFloat("monthly_budget", 0f))
     val monthlyBudget: StateFlow<Float> = _monthlyBudget.asStateFlow()
@@ -576,6 +780,29 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
     fun setMonthlyBudget(budget: Float) {
         _monthlyBudget.value = budget
         prefs.edit().putFloat("monthly_budget", budget).apply()
+        // 🆕 v49 同步：把"月度总预算"写入新 Budget 表（不存在则插入，存在则更新金额）
+        viewModelScope.launch {
+            try {
+                val existing = database.budgetDao().findOne(
+                    userId = userId,
+                    scope = com.example.funlife.data.model.BudgetScope.TOTAL,
+                    period = com.example.funlife.data.model.BudgetPeriod.MONTHLY,
+                    targetKey = null
+                )
+                if (budget > 0f) {
+                    if (existing == null) {
+                        budgetRepository.ensureMonthlyTotal(userId, budget.toDouble())
+                    } else {
+                        budgetRepository.update(existing.copy(amount = budget.toDouble(), isActive = true))
+                    }
+                } else if (existing != null && existing.isActive) {
+                    // 🆕 v50：极简模式取消预算时，把 v49 表那条总预算停用，避免环条还显示
+                    budgetRepository.setActive(userId, existing.id, false)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "sync budget to v49 table failed", e)
+            }
+        }
         // 🔥 设置预算后，让人格立即"主动"问候/提醒一句（重置今日去重，确保被发出）
         viewModelScope.launch {
             clearTodayBudgetDedup()
@@ -648,6 +875,31 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
                     content = line, personaId = pid, type = "text"
                 )
             )
+        }
+
+        // 🆕 v50：本月预算超额（≥100%）→ 走统一通知中心推一条系统通知
+        //   - 渠道 BOOKKEEPING（用户可独立关闭）
+        //   - 24h 去重，避免反复打扰
+        //   - bypassQuietHours：用户主动设置预算/进入聊天才触发，属即时反馈，
+        //     不应被默认静默时段（22:00-08:00）静默拦截
+        //   - 极简 / 进阶模式都生效（这是核心提醒，不属于"进阶"）
+        if (thresholdLevel >= 2) {
+            runCatching {
+                val pct = (ratio * 100).toInt().coerceAtLeast(100)
+                val ok = com.example.funlife.notifications.NotificationCenter.notify(
+                    getApplication(),
+                    com.example.funlife.notifications.NotificationSpec(
+                        channel = com.example.funlife.notifications.FunChannel.BOOKKEEPING,
+                        id = 88610 + userId.toInt(),
+                        title = "本月预算已超额",
+                        body = "已花 ${"%.0f".format(monthTotal)} / ${"%.0f".format(budget.toDouble())}（约 ${pct}%），点击查看记账。",
+                        deepLinkRoute = "chat_bill",
+                        dedupWindowMs = java.util.concurrent.TimeUnit.HOURS.toMillis(24),
+                        bypassQuietHours = true
+                    )
+                )
+                android.util.Log.d("ChatViewModel", "budget overrun notify sent=$ok (ratio=$ratio)")
+            }
         }
     }
 
@@ -846,5 +1098,46 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
 
     fun setAiApiKey(key: String) {
         aiService.setApiKey(key)
+    }
+
+    // ─────────── 🆕 v51 聊天 AI 日额度门禁（按 VIP 等级） ───────────
+    // - 只统计 role='ai' 的回复（账单识别 detectBill 不计入，避免冤枉额度）
+    // - 超额时返回 false：调用方走规则引擎兜底，并发出一次性提示
+    // - 触发频控：同一日内最多提示 1 次升级文案，避免反复打扰
+    private suspend fun consumeChatAiQuota(): Boolean {
+        val vip = runCatching {
+            database.userVipDao().getUserVipSync(userId)?.vipLevel ?: 0
+        }.getOrDefault(0)
+        val limit = com.example.funlife.vip.VipQuota.chatAiDailyLimit(vip)
+        if (limit == com.example.funlife.vip.VipQuota.UNLIMITED) return true
+        val (start, end) = todayRangeMs()
+        val used = runCatching { database.chatMessageDao().countAiBetween(userId, start, end) }
+            .getOrDefault(0)
+        if (used < limit) return true
+        // 超额 → 一日只提示一次
+        val prefs = getApplication<android.app.Application>()
+            .getSharedPreferences("chat_quota_prefs", android.content.Context.MODE_PRIVATE)
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val key = "toast_${userId}_$today"
+        if (!prefs.getBoolean(key, false)) {
+            prefs.edit().putBoolean(key, true).apply()
+            val tease = com.example.funlife.vip.VipQuota.nextTierTeaser(vip)
+            _toastMessage.value = if (tease != null)
+                "今日 AI 对话已用完（$used/$limit）。$tease"
+            else
+                "今日 AI 对话已达上限（$used/$limit），明天再来吧～"
+        }
+        return false
+    }
+
+    private fun todayRangeMs(): Pair<Long, Long> {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val s = cal.timeInMillis
+        cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        return s to cal.timeInMillis
     }
 }

@@ -117,6 +117,43 @@
 - 新建表统一加索引：`@Index("userId")` 等高频过滤字段。
 - 禁止 `fallbackToDestructiveMigration()` 上线。
 
+### 5.1 迁移防御（来自启动闪退教训）
+
+- **`ALTER TABLE ADD COLUMN` 必须先 `PRAGMA table_info(...)` 检查列是否存在** —— SQLite 不支持 `IF NOT EXISTS`，列已存在时 `execSQL` 会抛 `duplicate column name` 直接闪退。模板：
+  ```kotlin
+  val cursor = database.query("PRAGMA table_info(my_table)")
+  var has = false
+  cursor.use {
+      val nameIdx = it.getColumnIndex("name")
+      while (it.moveToNext()) {
+          if (nameIdx >= 0 && it.getString(nameIdx) == "my_column") { has = true; break }
+      }
+  }
+  if (!has) database.execSQL("ALTER TABLE my_table ADD COLUMN my_column TEXT")
+  ```
+  或退而求其次：用 `try { execSQL(...) } catch (_: SQLiteException) {}` 兜底（已在 `MIGRATION_30_31` 用过）。
+
+- **迁移里 `CREATE INDEX` 必须与实体的 `@Entity(indices=[...])` 一一对应** —— 多了少了都会让 Room 启动校验失败抛 `IllegalStateException("Migration didn't properly handle: <table>")`。如要建索引就**必须同时**在实体声明：
+  ```kotlin
+  @Entity(tableName = "shop_items", indices = [
+      Index("type", "rarity"),
+      Index("category")
+  ])
+  ```
+  否则就**不要**在迁移里建索引（已在 `MIGRATION_43_44` 翻车）。
+
+- **重建表迁移**（CREATE temp / INSERT / DROP / RENAME）的临时表 schema 要和实体生成的 schema **完全一致**：列顺序、`NOT NULL`、`DEFAULT` 子句、外键、索引。漏一个就启动崩溃。
+
+- **测试矩阵**：每改实体后必须在真机/模拟器测：
+  1. 全新安装（`onCreate` 路径）
+  2. 老版本升级（`onUpgrade` 跨多个迁移）
+  3. 跨 N 个版本升级（如 v30 直升 v45）
+  
+- **崩溃排查口诀**：
+  - `duplicate column name` → 列已存在，加 PRAGMA 检查
+  - `Migration didn't properly handle` → 看 `Expected:` vs `Found:`，找到差异（多/少索引、列、DEFAULT 子句）
+  - `no such table` → 迁移里漏建表 / 表名拼写错
+
 ---
 
 ## 六、代码评审 Checklist（提交前自查）

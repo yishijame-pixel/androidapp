@@ -6,9 +6,12 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -78,7 +82,8 @@ fun HomeScreen(
             database.userVipDao(),
             database.redeemCodeDao(),
             database.coinDao(),
-            context
+            context,
+            database
         )
     }
     val userVip by vipRepository.getUserVip(userSession?.userId ?: 0L)
@@ -125,22 +130,82 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         isVisible = true
     }
+
+    // 🔒 token 健康度一次性提示：当前 session 有效但本地无 device_token 时，
+    //    提示用户重新登录一次以补领（多见于服务端旧版漏配 IDENTITY_SECRET 的老账号）
+    val tokenHealthy by authViewModel.tokenHealthy.collectAsState()
+    var showTokenReloginDialog by remember(userSession?.userId, tokenHealthy) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(tokenHealthy, userSession?.userId) {
+        val uid = userSession?.userId ?: return@LaunchedEffect
+        if (tokenHealthy) return@LaunchedEffect
+        val prefs = context.getSharedPreferences("token_health", android.content.Context.MODE_PRIVATE)
+        val key = "token_relogin_prompted_$uid"
+        if (!prefs.getBoolean(key, false)) {
+            showTokenReloginDialog = true
+        }
+    }
+    if (showTokenReloginDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                showTokenReloginDialog = false
+                userSession?.userId?.let { uid ->
+                    context.getSharedPreferences("token_health", android.content.Context.MODE_PRIVATE)
+                        .edit().putBoolean("token_relogin_prompted_$uid", true).apply()
+                }
+            },
+            title = { androidx.compose.material3.Text("安全升级") },
+            text = {
+                androidx.compose.material3.Text(
+                    "为提升账号安全，本次需要重新登录一次。\n登录后金币、VIP、习惯打卡等记录都将保留，不会丢失。"
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showTokenReloginDialog = false
+                    userSession?.userId?.let { uid ->
+                        context.getSharedPreferences("token_health", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("token_relogin_prompted_$uid", true).apply()
+                    }
+                    authViewModel.logout()
+                    com.example.funlife.navigation.restartAppForLogout(context)
+                }) { androidx.compose.material3.Text("立即重新登录") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showTokenReloginDialog = false
+                    userSession?.userId?.let { uid ->
+                        context.getSharedPreferences("token_health", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("token_relogin_prompted_$uid", true).apply()
+                    }
+                }) { androidx.compose.material3.Text("稍后") }
+            }
+        )
+    }
     
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFE1BEE7),  // 顶部浅紫色
-                            Color(0xFFF3E5F5),  // 中间更浅的紫色
-                            Color(0xFFFCE4EC),  // 底部粉色
-                            Color(0xFFFFF0F5)   // 最底部浅粉色
-                        )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // 🔥 渐变背景放到外层 Box，避免 LazyColumn contentPadding 在状态栏区造成色阶分界
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFE1BEE7),  // 顶部浅紫色
+                        Color(0xFFF3E5F5),  // 中间更浅的紫色
+                        Color(0xFFFCE4EC),  // 底部粉色
+                        Color(0xFFFFF0F5)   // 最底部浅粉色
                     )
-                ),
-            contentPadding = PaddingValues(bottom = 80.dp)
+                )
+            )
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // 🔥 沉浸式：背景延伸到顶，内容从状态栏下面开始；底部 = App Tab 90dp + 系统导航 + 呼吸 30dp
+            contentPadding = PaddingValues(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                bottom = 90.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 30.dp
+            )
         ) {
         // 置顶纪念日展示区域
         item {
@@ -167,10 +232,12 @@ fun HomeScreen(
                             showFirstEntryEffect = false
                         },
                         onLogout = {
+                            // 🔒 退出登录：先清 session，再完全重启 Activity 清掉所有 ViewModel 状态
                             authViewModel.logout()
-                            navController.navigate(com.example.funlife.navigation.Screen.Welcome.route) {
-                                popUpTo(0) { inclusive = true }
-                            }
+                            com.example.funlife.navigation.restartAppForLogout(context)
+                        },
+                        onOpenInbox = {
+                            navController.navigate(com.example.funlife.navigation.Screen.Inbox.route)
                         }
                     )
                 }
@@ -185,6 +252,7 @@ fun HomeScreen(
             ) {
                 DecorativeWaves(
                     userPreferences = userPreferences,
+                    userId = userSession?.userId ?: 0L,
                     onTextEdit = { newText ->
                         scope.launch {
                             userSession?.userId?.let { userId ->
@@ -655,7 +723,8 @@ fun WelcomeHeader(
     vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL,
     showFirstEntryEffect: Boolean = false,
     onFirstEntryComplete: () -> Unit = {},
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenInbox: () -> Unit = {}
 ) {
     val currentHour = remember { LocalDateTime.now().hour }
     val greeting = when (currentHour) {
@@ -687,21 +756,8 @@ fun WelcomeHeader(
             .fillMaxWidth()
             .height(180.dp)
     ) {
-        // 渐变背景 - 底部透明，与下面内容融合
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFE1BEE7),  // 顶部浅紫色
-                            Color(0xFFF3E5F5),  // 中间更浅
-                            Color(0xFFFCE4EC).copy(alpha = 0.7f),  // 底部开始透明
-                                                              Color.Transparent   // 完全透明，融合到下面
-                        )
-                    )
-                )
-        )
+        // 🔥 透明背景 - 让外层 Box 渐变直接透过，避免状态栏下出现色阶分界线
+        // (原本这里独立渐变会和外层 LazyColumn 的渐变在状态栏底部冲突)
         
         // VIP首次进入光芒特效
         if (showFirstEntryEffect && vipLevel != com.example.funlife.data.model.VipLevel.NORMAL) {
@@ -764,7 +820,19 @@ fun WelcomeHeader(
                     }
                 }
                 
-                // 分享按钮 - 圆形半透明胶囊背景，更精致
+                // 通知铃铛 → 跳转收件箱（响应式未读数：消息变化/标已读后自动更新）
+                val ctxLocal = androidx.compose.ui.platform.LocalContext.current
+                val unread by com.example.funlife.notifications.InboxStore.unreadFlow.collectAsState()
+                val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+                androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+                    val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+                        if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                            com.example.funlife.notifications.InboxStore.refreshUnread(ctxLocal)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(obs)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+                }
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -778,18 +846,29 @@ fun WelcomeHeader(
                             )
                         )
                         .clickable(
-                            onClick = { /* TODO: 分享功能 */ },
+                            onClick = onOpenInbox,
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Share,
-                        contentDescription = "分享",
+                        Icons.Default.Notifications,
+                        contentDescription = "通知",
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
+                    if (unread > 0) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .offset(x = 8.dp, y = (-8).dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF5252))
+                                .border(1.5.dp, Color.White, CircleShape)
+                                .align(Alignment.TopEnd)
+                        )
+                    }
                 }
             }
             
@@ -843,37 +922,21 @@ fun WelcomeHeader(
                 ) {
                     CuteGreetingIcon(hour = currentHour)
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = greeting,
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            shadow = Shadow(
-                                color = Color(0xFF8E24AA).copy(alpha = 0.35f),
-                                offset = Offset(2f, 3f),
-                                blurRadius = 8f
-                            )
-                        ),
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        fontSize = 32.sp,
-                        letterSpacing = 1.sp
-                    )
-                    // 日期胶囊
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.28f))
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = todayLabel,
-                            fontSize = 11.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.5.sp
+                // 🔥 移除日期胶囊（寄语卡片底部已显示日期，避免重复）
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        shadow = Shadow(
+                            color = Color(0xFF8E24AA).copy(alpha = 0.35f),
+                            offset = Offset(2f, 3f),
+                            blurRadius = 8f
                         )
-                    }
-                }
+                    ),
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    letterSpacing = 1.sp
+                )
             }
         }
     }
@@ -882,372 +945,485 @@ fun WelcomeHeader(
 @Composable
 fun DecorativeWaves(
     userPreferences: UserPreferences?,
+    userId: Long = 0L,
     onTextEdit: (String) -> Unit,
     onStyleChange: (String) -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     var showEditDialog by remember { mutableStateOf(false) }
-    
-    // 加载少女心面板图片
-    val panelBitmap = remember {
-        try {
-            context.assets.open("dibu/mb.png").use { inputStream ->
-                android.graphics.BitmapFactory.decodeStream(inputStream)?.let {
-                    it.asImageBitmap()
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("DecorativeWaves", "Failed to load panel image: ${e.message}")
-            null
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🌸 全新设计：今日寄语精致卡片
+    //    - 玻璃拟态粉紫渐变 + 旋转光晕装饰
+    //    - 顶部「今日寄语」徽章 + 编辑按钮
+    //    - 中央显示用户自定义艺术字（沿用 ArtisticText 组件）
+    //    - 底部日期 + 一年进度环 + 浮动星粒子
+    // ═══════════════════════════════════════════════════════════════
+
+    val displayText = userPreferences?.homePanelText ?: ""
+    val textStyle = userPreferences?.homePanelTextStyle ?: "pink"
+    val artisticStyle = when (textStyle) {
+        "purple" -> com.example.funlife.ui.components.ArtisticTextStyle.PURPLE
+        "blue" -> com.example.funlife.ui.components.ArtisticTextStyle.BLUE
+        "gold" -> com.example.funlife.ui.components.ArtisticTextStyle.GOLD
+        "rainbow" -> com.example.funlife.ui.components.ArtisticTextStyle.RAINBOW
+        else -> com.example.funlife.ui.components.ArtisticTextStyle.PINK
+    }
+
+    // 日期信息
+    val today = remember { java.time.LocalDate.now() }
+    val dayOfYear = remember { today.dayOfYear }
+    val totalDaysInYear = remember { if (today.isLeapYear) 366 else 365 }
+    val yearProgress = remember { dayOfYear.toFloat() / totalDaysInYear.toFloat() }
+    val weekdayLabel = remember {
+        when (today.dayOfWeek.value) {
+            1 -> "周一"; 2 -> "周二"; 3 -> "周三"; 4 -> "周四"
+            5 -> "周五"; 6 -> "周六"; else -> "周日"
         }
     }
-    
-    // 使用 BoxWithConstraints 获取屏幕宽度（不含padding）
-    BoxWithConstraints(
+
+    // 🚀 已移除寄语卡片的 6 个并行 infinite 动画（haloRotation / sparkPhase / breath /
+    //    cornerRot / shimmer / petalDrift）。这些原本每帧重绘 drawBehind/Canvas，
+    //    是首页静止时 GPU 主要负载来源。改为静态值，视觉装饰保留，停帧节能。
+    val haloRotation = 0f
+    val sparkPhase = 0.5f
+    val breath = 1f
+    val cornerRot = 0f
+    val shimmer = 0.5f
+    val petalDrift = 0f
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        val screenWidth = maxWidth
-        
-        panelBitmap?.let { bitmap ->
-            // 计算图片高度（基于有padding的宽度）
-            val contentWidth = screenWidth - 40.dp
-            val imageAspectRatio = bitmap.height.toFloat() / bitmap.width.toFloat()
-            val imageHeight = contentWidth * imageAspectRatio
-            
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // 主面板内容区域（有padding）
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // 背景光晕效果
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(imageHeight)
-                                .offset(x = 0.dp, y = 0.dp)
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFFFFB6C1).copy(alpha = 0.15f),
-                                            Color.Transparent
-                                        ),
-                                        center = Offset(0.5f, 0.5f),
-                                        radius = 800f
-                                    )
-                                )
+        // 卡片主体（玻璃拟态：粉→紫→蓝渐变 + 白色高光层）──
+        // ⚠ 不用 heightIn，让 Column wrapContent 决定高度—避免 weight(1f) 折叠为 0
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFFFD6E8),  // 樱粉
+                            Color(0xFFFCC8E2),  // 珊瑚粉
+                            Color(0xFFE0C3FC),  // 薰衣草紫
+                            Color(0xFFC6B4F5),  // 东方紫
+                            Color(0xFFB8E0FF)   // 天空蓝
+                        ),
+                        start = Offset(0f, 0f),
+                        end = Offset(1000f, 1000f)
+                    )
+                )
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.85f),
+                            Color(0xFFFFD6E8).copy(alpha = 0.6f),
+                            Color(0xFFE0C3FC).copy(alpha = 0.6f),
+                            Color.White.copy(alpha = 0.3f)
                         )
-                        
-                        // 图片
-                        androidx.compose.foundation.Image(
-                            bitmap = bitmap,
-                            contentDescription = "少女心面板",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(imageHeight),
-                            contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
-                        )
-                        
-                        // 顶部装饰 - 漂浮的爱心和星星
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(imageHeight)
-                        ) {
-                            // 左上角装饰
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(start = 12.dp, top = 12.dp)
-                            ) {
-                                Text(
-                                    text = "💖",
-                                    fontSize = 20.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.7f
-                                        rotationZ = -15f
-                                    }
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "✨",
-                                    fontSize = 16.sp,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .graphicsLayer {
-                                            alpha = 0.6f
-                                        }
-                                )
-                            }
-                            
-                            // 右上角装饰（编辑按钮旁边）
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(end = 55.dp, top = 12.dp)
-                            ) {
-                                Text(
-                                    text = "🌸",
-                                    fontSize = 18.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.7f
-                                        rotationZ = 15f
-                                    }
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "💫",
-                                    fontSize = 14.sp,
-                                    modifier = Modifier
-                                        .padding(end = 6.dp)
-                                        .graphicsLayer {
-                                            alpha = 0.6f
-                                        }
-                                )
-                            }
-                            
-                            // 左侧中间装饰
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .padding(start = 8.dp)
-                            ) {
-                                Text(
-                                    text = "🌟",
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.5f
-                                    }
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "💕",
-                                    fontSize = 14.sp,
-                                    modifier = Modifier
-                                        .padding(start = 4.dp)
-                                        .graphicsLayer {
-                                            alpha = 0.6f
-                                            rotationZ = -10f
-                                        }
-                                )
-                            }
-                            
-                            // 右侧中间装饰
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 8.dp)
-                            ) {
-                                Text(
-                                    text = "🌺",
-                                    fontSize = 17.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.6f
-                                        rotationZ = 20f
-                                    }
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "✨",
-                                    fontSize = 15.sp,
-                                    modifier = Modifier
-                                        .padding(end = 5.dp)
-                                        .graphicsLayer {
-                                            alpha = 0.5f
-                                        }
-                                )
-                            }
-                            
-                            // 底部左侧装饰
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 15.dp, bottom = 25.dp)
-                            ) {
-                                Text(
-                                    text = "🎀",
-                                    fontSize = 18.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.7f
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "💝",
-                                    fontSize = 15.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.6f
-                                        rotationZ = 10f
-                                    }
-                                )
-                            }
-                            
-                            // 底部右侧装饰
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 15.dp, bottom = 25.dp)
-                            ) {
-                                Text(
-                                    text = "🌷",
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.6f
-                                        rotationZ = -15f
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "⭐",
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.graphicsLayer {
-                                        alpha = 0.7f
-                                    }
-                                )
-                            }
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                )
+        ) {
+            // ── 旋转径向光晕（左上 + 右下）+ 多层光斑 + 边框流光 + 闪光小星 ──
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val w = size.width; val h = size.height
+                // 1) 底层广面光斑（3 个软色圈底色）
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFFFE5F5).copy(alpha = 0.45f), Color.Transparent)
+                    ),
+                    radius = w * 0.4f,
+                    center = Offset(w * 0.15f, h * 0.85f)
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFE6D5FF).copy(alpha = 0.4f), Color.Transparent)
+                    ),
+                    radius = w * 0.35f,
+                    center = Offset(w * 0.9f, h * 0.15f)
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFD8F0FF).copy(alpha = 0.35f), Color.Transparent)
+                    ),
+                    radius = w * 0.28f,
+                    center = Offset(w * 0.5f, h * 0.55f)
+                )
+
+                // 2) 旋转主光晕（左上正 + 右下反）
+                rotate(haloRotation, pivot = Offset(w * 0.2f, h * 0.3f)) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color.White.copy(alpha = 0.55f), Color.Transparent),
+                            center = Offset(w * 0.2f, h * 0.3f),
+                            radius = size.minDimension * 0.55f
+                        ),
+                        radius = size.minDimension * 0.55f,
+                        center = Offset(w * 0.2f, h * 0.3f)
+                    )
+                }
+                rotate(-haloRotation, pivot = Offset(w * 0.85f, h * 0.75f)) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0xFFFFB6E1).copy(alpha = 0.5f), Color.Transparent),
+                            center = Offset(w * 0.85f, h * 0.75f),
+                            radius = size.minDimension * 0.5f
+                        ),
+                        radius = size.minDimension * 0.5f,
+                        center = Offset(w * 0.85f, h * 0.75f)
+                    )
+                }
+
+                // 3) 边框流光圆（沿周滚动的亮点）
+                val perimeter = 2 * (w + h)
+                val shimmerPos = shimmer * perimeter
+                val sx: Float; val sy: Float
+                when {
+                    shimmerPos < w -> { sx = shimmerPos; sy = 0f }
+                    shimmerPos < w + h -> { sx = w; sy = shimmerPos - w }
+                    shimmerPos < 2 * w + h -> { sx = w - (shimmerPos - w - h); sy = h }
+                    else -> { sx = 0f; sy = h - (shimmerPos - 2 * w - h) }
+                }
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.9f), Color.Transparent)
+                    ),
+                    radius = 25f,
+                    center = Offset(sx, sy)
+                )
+
+                // 4) 上升碎花粉（8 颗，水平微摆）
+                val petalSeeds = listOf(0.10f, 0.22f, 0.38f, 0.50f, 0.62f, 0.74f, 0.86f, 0.95f)
+                petalSeeds.forEachIndexed { i, baseX ->
+                    val phase = (petalDrift + i * 0.125f) % 1f
+                    val y = h * (1.05f - phase * 1.15f)
+                    val sway = kotlin.math.sin((phase * 6.28f + i).toDouble()).toFloat() * 14f
+                    val x = w * baseX + sway
+                    val pAlpha = ((1f - phase) * (phase * 4f).coerceAtMost(1f)).coerceIn(0f, 1f) * 0.55f
+                    if (y in -10f..h + 10f) {
+                        val petalColor = when (i % 3) {
+                            0 -> Color(0xFFFF80AB)
+                            1 -> Color(0xFFE040FB)
+                            else -> Color(0xFFFFD54F)
                         }
-                        
-                        // 底部渐变遮罩 - 柔和过渡
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color(0xFFFFF0F5).copy(alpha = 0.3f),
-                                            Color(0xFFFFF0F5).copy(alpha = 0.6f),
-                                            Color(0xFFFFF0F5).copy(alpha = 0.9f)
+                        drawCircle(
+                            color = petalColor.copy(alpha = pAlpha),
+                            radius = 3.5f + (i % 3) * 0.6f,
+                            center = Offset(x, y)
+                        )
+                    }
+                }
+
+                // 5) 浮动闪光小星（8 颗）
+                val sparkPositions = listOf(
+                    Offset(0.15f, 0.25f), Offset(0.85f, 0.20f),
+                    Offset(0.25f, 0.78f), Offset(0.80f, 0.85f),
+                    Offset(0.55f, 0.15f), Offset(0.10f, 0.55f),
+                    Offset(0.92f, 0.50f), Offset(0.45f, 0.92f)
+                )
+                sparkPositions.forEachIndexed { i, p ->
+                    val phase = (sparkPhase + i * 0.13f) % 1f
+                    val alpha = (kotlin.math.sin(phase * kotlin.math.PI).toFloat()).coerceIn(0f, 1f)
+                    drawCircle(
+                        color = Color.White.copy(alpha = alpha * 0.9f),
+                        radius = 2.5f + alpha * 1.5f,
+                        center = Offset(w * p.x, h * p.y)
+                    )
+                    if (alpha > 0.5f) {
+                        val cx = w * p.x; val cy = h * p.y
+                        val len = 4f + alpha * 4f
+                        drawLine(
+                            color = Color.White.copy(alpha = alpha * 0.8f),
+                            start = Offset(cx - len, cy), end = Offset(cx + len, cy),
+                            strokeWidth = 1f
+                        )
+                        drawLine(
+                            color = Color.White.copy(alpha = alpha * 0.8f),
+                            start = Offset(cx, cy - len), end = Offset(cx, cy + len),
+                            strokeWidth = 1f
+                        )
+                    }
+                }
+            }
+
+            // ── 四角 emoji 装饰（左上/右上/左下/右下，反向轻微转动）──
+            Text("💕", fontSize = 16.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = 50.dp)
+                    .graphicsLayer { rotationZ = -cornerRot * 0.3f; alpha = 0.85f })
+            Text("✨", fontSize = 14.sp,
+                modifier = Modifier.align(Alignment.TopEnd).padding(end = 50.dp, top = 14.dp)
+                    .graphicsLayer { rotationZ = cornerRot * 0.4f; alpha = 0.8f })
+            Text("🌸", fontSize = 18.sp,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 70.dp)
+                    .graphicsLayer { rotationZ = cornerRot * 0.3f; alpha = 0.75f })
+            Text("⭐", fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 86.dp, bottom = 14.dp)
+                    .graphicsLayer { rotationZ = -cornerRot * 0.35f; alpha = 0.8f })
+            Text("🌸", fontSize = 12.sp,
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp)
+                    .graphicsLayer { rotationZ = -cornerRot * 0.2f; alpha = 0.7f })
+            Text("💖", fontSize = 12.sp,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
+                    .graphicsLayer { rotationZ = cornerRot * 0.25f; alpha = 0.7f })
+
+            // ─── 内容 Column（不用 fillMaxSize，让 wrapContent 决定实际高度—修复 weight 折叠 bug）───
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 18.dp)
+            ) {
+                // 🚀 移除徽章 badgeBreath / badgeRainbow 动画，改为静态
+                val badgeBreath = 1f
+                val badgeRainbow = 0f
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // ① 今日寄语徽章（彩虹流光描边 + 双花反向旋转 + 微脉冲）
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer { scaleX = badgeBreath; scaleY = badgeBreath }
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.7f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    "🌸", fontSize = 14.sp,
+                                    modifier = Modifier.graphicsLayer { rotationZ = cornerRot * 0.8f }
+                                )
+                                Text(
+                                    "今日寄语",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF8E24AA),
+                                    letterSpacing = 1.sp,
+                                    style = androidx.compose.ui.text.TextStyle(
+                                        shadow = Shadow(
+                                            color = Color(0xFFE040FB).copy(alpha = 0.5f),
+                                            offset = Offset(0f, 0f),
+                                            blurRadius = 6f
                                         )
                                     )
                                 )
-                        )
-                        
-                        // 艺术字文字叠加在图片中间
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(imageHeight)
-                                .padding(horizontal = 40.dp, vertical = 30.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val displayText = userPreferences?.homePanelText ?: "少女心面板"
-                            val textStyle = userPreferences?.homePanelTextStyle ?: "pink"
-                            
-                            val artisticStyle = when(textStyle) {
-                                "purple" -> com.example.funlife.ui.components.ArtisticTextStyle.PURPLE
-                                "blue" -> com.example.funlife.ui.components.ArtisticTextStyle.BLUE
-                                "gold" -> com.example.funlife.ui.components.ArtisticTextStyle.GOLD
-                                "rainbow" -> com.example.funlife.ui.components.ArtisticTextStyle.RAINBOW
-                                else -> com.example.funlife.ui.components.ArtisticTextStyle.PINK
-                            }
-                            
-                            // 默认状态（用户未自定义）→ 显示精致的日期 + 每日金句
-                            // 自定义后 → 显示用户的艺术字
-                            if (displayText.isBlank()) {
-                                DefaultPanelContent(style = artisticStyle)
-                            } else {
-                                com.example.funlife.ui.components.ArtisticText(
-                                    text = displayText,
-                                    style = artisticStyle
+                                Text(
+                                    "🌸", fontSize = 14.sp,
+                                    modifier = Modifier.graphicsLayer { rotationZ = -cornerRot * 0.8f }
                                 )
                             }
                         }
-                        
-                        // 编辑提示图标（右上角）
-                        IconButton(
-                            onClick = { showEditDialog = true },
+                        // ✨ 彩虹描边光晕（matchParentSize 贴在徽章上方，不带负 padding）
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            rotate(badgeRainbow) {
+                                drawRoundRect(
+                                    brush = Brush.sweepGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF80AB), Color(0xFFE040FB),
+                                            Color(0xFF7C4DFF), Color(0xFF40C4FF),
+                                            Color(0xFFFFD54F), Color(0xFFFF80AB)
+                                        )
+                                    ),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                                        size.height / 2f, size.height / 2f
+                                    ),
+                                    style = Stroke(width = 2.5f)
+                                )
+                            }
+                        }
+                    }
+
+                    // ② 编辑按钮（旋转金色光圈 + 呼吸缩放）
+                    Box(
+                        modifier = Modifier.size(36.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.7f),
                             modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                                .size(40.dp)
+                                .size(30.dp)
+                                .graphicsLayer { scaleX = badgeBreath; scaleY = badgeBreath }
+                                .clickable { showEditDialog = true }
                         ) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "编辑",
-                                modifier = Modifier.size(20.dp),
-                                tint = Color.White.copy(alpha = 0.7f)
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "编辑寄语",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color(0xFF8E24AA)
+                                )
+                            }
+                        }
+                        // 外圈虚线光环（matchParentSize，不影响布局）
+                        Canvas(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .graphicsLayer { rotationZ = badgeRainbow }
+                        ) {
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        Color.Transparent, Color(0xFFFFD54F),
+                                        Color.Transparent, Color(0xFFFF80AB),
+                                        Color.Transparent
+                                    )
+                                ),
+                                radius = size.minDimension / 2,
+                                style = Stroke(width = 2f)
                             )
                         }
                     }
                 }
-                
-                // 底部装饰波浪 - 铺满整个屏幕宽度（无padding）
-                Box(
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // ─── ② 中部：艺术字（用户自定义 or 默认金句）+ 两侧装饰花 ───
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .offset(y = (-20).dp)
+                        .heightIn(min = 90.dp)
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 可爱的波浪装饰 - 波浪形状填充
-                    Canvas(
+                    Text(
+                        "🌸",
+                        fontSize = 22.sp,
+                        modifier = Modifier.graphicsLayer {
+                            rotationZ = -cornerRot * 0.5f
+                            alpha = 0.85f
+                        }
+                    )
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
+                            .weight(1f)
+                            .graphicsLayer { scaleX = breath; scaleY = breath },
+                        contentAlignment = Alignment.Center
                     ) {
-                        val waveWidth = size.width
-                        val waveHeight = size.height
-                        val wavePath = androidx.compose.ui.graphics.Path()
-                        
-                        // 从左上角开始绘制波浪曲线
-                        wavePath.moveTo(0f, waveHeight * 0.5f)
-                        
-                        val waveCount = 4
-                        val waveLength = waveWidth / waveCount
-                        
-                        // 绘制波浪顶部曲线
-                        for (i in 0..waveCount) {
-                            val x = i * waveLength
-                            wavePath.cubicTo(
-                                x + waveLength * 0.25f, waveHeight * 0.2f,
-                                x + waveLength * 0.75f, waveHeight * 0.8f,
-                                x + waveLength, waveHeight * 0.5f
+                        if (HomePanelQuotes.shouldUseDailyQuote(displayText)) {
+                            // 每日语录：按 userId + 当天日期挑一句（用户级隔离）
+                            DefaultPanelContent(style = artisticStyle, userId = userId)
+                        } else {
+                            com.example.funlife.ui.components.ArtisticText(
+                                text = displayText,
+                                style = artisticStyle
                             )
                         }
-                        
-                        // 连接到右下角
-                        wavePath.lineTo(waveWidth, waveHeight)
-                        // 连接到左下角
-                        wavePath.lineTo(0f, waveHeight)
-                        // 闭合路径
-                        wavePath.close()
-                        
-                        // 绘制渐变波浪填充
-                        drawPath(
-                            path = wavePath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    androidx.compose.ui.graphics.Color(0xFFFFF0F5).copy(alpha = 0.9f),
-                                    androidx.compose.ui.graphics.Color(0xFFFFF0F5)
-                                )
+                    }
+                    Text(
+                        "🌸",
+                        fontSize = 22.sp,
+                        modifier = Modifier.graphicsLayer {
+                            rotationZ = cornerRot * 0.5f
+                            alpha = 0.85f
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // ─── ③ 底部：日期 + 年度进度环 ───
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 左：日期 + 周几
+                    Column {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                today.monthValue.toString(),
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF6A1B9A)
                             )
+                            Text(
+                                "月",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF6A1B9A).copy(alpha = 0.75f),
+                                modifier = Modifier.padding(start = 1.dp, bottom = 3.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                today.dayOfMonth.toString(),
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF6A1B9A)
+                            )
+                            Text(
+                                "日",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF6A1B9A).copy(alpha = 0.75f),
+                                modifier = Modifier.padding(start = 1.dp, bottom = 3.dp)
+                            )
+                        }
+                        Text(
+                            "${today.year}年 · $weekdayLabel",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8E24AA).copy(alpha = 0.8f),
+                            fontWeight = FontWeight.Medium
                         )
                     }
-                    
-                    // 装饰性小星星
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 30.dp)
-                            .offset(y = 15.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+
+                    // 右：年度进度环
+                    Box(
+                        modifier = Modifier.size(64.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        listOf("✨", "💫", "⭐", "✨").forEach { emoji ->
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val stroke = 5.dp.toPx()
+                            // 底环
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.5f),
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                topLeft = Offset(stroke / 2, stroke / 2),
+                                size = Size(size.width - stroke, size.height - stroke),
+                                style = Stroke(width = stroke, cap = StrokeCap.Round)
+                            )
+                            // 进度弧（粉→紫→金渐变）
+                            drawArc(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF80AB),
+                                        Color(0xFFE040FB),
+                                        Color(0xFFFFD54F),
+                                        Color(0xFFFF80AB)
+                                    )
+                                ),
+                                startAngle = -90f,
+                                sweepAngle = 360f * yearProgress,
+                                useCenter = false,
+                                topLeft = Offset(stroke / 2, stroke / 2),
+                                size = Size(size.width - stroke, size.height - stroke),
+                                style = Stroke(width = stroke, cap = StrokeCap.Round)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = emoji,
+                                "${(yearProgress * 100).toInt()}%",
                                 fontSize = 14.sp,
-                                modifier = Modifier.graphicsLayer {
-                                    alpha = 0.6f
-                                }
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF6A1B9A)
+                            )
+                            Text(
+                                "$dayOfYear/$totalDaysInYear",
+                                fontSize = 7.5.sp,
+                                color = Color(0xFF8E24AA).copy(alpha = 0.75f),
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -1256,123 +1432,340 @@ fun DecorativeWaves(
         }
     }
     
-    // 编辑对话框
+    // 编辑对话框（全新美化版：实时预览 + 卡片色板 + 每日金句快速预览）
     if (showEditDialog) {
-        var editText by remember { mutableStateOf(userPreferences?.homePanelText ?: "少女心面板") }
-        var selectedStyle by remember { mutableStateOf(userPreferences?.homePanelTextStyle ?: "pink") }
-        
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = {
-                Text(
-                    "编辑面板文字",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                // 使用 Column 包裹，设置最大高度
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 500.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedTextField(
-                        value = editText,
-                        onValueChange = { editText = it },
-                        label = { Text("自定义文字") },
-                        singleLine = false,
-                        maxLines = 2,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "建议不超过10个字，最多2行",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-                    
-                    Divider()
-                    
-                    Text(
-                        "选择颜色主题",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    // 颜色主题选择 - 第一行
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ColorStyleButton(
-                            style = "pink",
-                            displayName = "粉色",
-                            color = Color(0xFFFF69B4),
-                            selected = selectedStyle == "pink",
-                            onClick = { selectedStyle = "pink" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        ColorStyleButton(
-                            style = "purple",
-                            displayName = "紫色",
-                            color = Color(0xFF9C27B0),
-                            selected = selectedStyle == "purple",
-                            onClick = { selectedStyle = "purple" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        ColorStyleButton(
-                            style = "blue",
-                            displayName = "蓝色",
-                            color = Color(0xFF2196F3),
-                            selected = selectedStyle == "blue",
-                            onClick = { selectedStyle = "blue" },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    
-                    // 颜色主题选择 - 第二行
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ColorStyleButton(
-                            style = "gold",
-                            displayName = "金色",
-                            color = Color(0xFFFFD700),
-                            selected = selectedStyle == "gold",
-                            onClick = { selectedStyle = "gold" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        ColorStyleButton(
-                            style = "rainbow",
-                            displayName = "彩虹",
-                            color = Color(0xFFFF9800),
-                            selected = selectedStyle == "rainbow",
-                            onClick = { selectedStyle = "rainbow" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        // 占位空间，保持对齐
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onTextEdit(editText)
-                        onStyleChange(selectedStyle)
-                        showEditDialog = false
-                    }
-                ) {
-                    Text("确定")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditDialog = false }) {
-                    Text("取消")
-                }
+        HomePanelEditDialog(
+            initialText = userPreferences?.homePanelText ?: "",
+            initialStyle = userPreferences?.homePanelTextStyle ?: "pink",
+            userId = userId,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { newText, newStyle ->
+                onTextEdit(newText)
+                onStyleChange(newStyle)
+                showEditDialog = false
             }
         )
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// 🎀 全新「今日寄语」编辑对话框
+//   - 顶部预览卡（实时艺术字 + 当前色板）
+//   - 多行输入框（占位提示「留空 = 显示每日精选」）
+//   - "🎲 来一句"按钮：从语录库随机抽，自动填入
+//   - "🧹 清空"按钮：清掉走每日精选
+//   - 5 个色板卡片（圆形渐变球 + 名称 + 选中态描边）
+// ════════════════════════════════════════════════════════════
+@Composable
+private fun HomePanelEditDialog(
+    initialText: String,
+    initialStyle: String,
+    userId: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (text: String, style: String) -> Unit,
+) {
+    // 老用户的 "少女心面板" 等占位符进入弹窗时不预填，保持空状态以鼓励"留空"
+    val sanitizedInitial = remember(initialText) {
+        if (HomePanelQuotes.shouldUseDailyQuote(initialText)) "" else initialText
+    }
+    var text by remember { mutableStateOf(sanitizedInitial) }
+    var styleKey by remember { mutableStateOf(initialStyle) }
+
+    val artisticStyle = remember(styleKey) {
+        when (styleKey) {
+            "purple" -> com.example.funlife.ui.components.ArtisticTextStyle.PURPLE
+            "blue" -> com.example.funlife.ui.components.ArtisticTextStyle.BLUE
+            "gold" -> com.example.funlife.ui.components.ArtisticTextStyle.GOLD
+            "rainbow" -> com.example.funlife.ui.components.ArtisticTextStyle.RAINBOW
+            else -> com.example.funlife.ui.components.ArtisticTextStyle.PINK
+        }
+    }
+    val previewText = if (text.isBlank()) HomePanelQuotes.quoteFor(userId) else text
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFFF5FB),
+                            Color(0xFFFFEEF6),
+                            Color(0xFFF5E6FF),
+                        )
+                    )
+                )
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.9f),
+                            Color(0xFFFFB6D9).copy(alpha = 0.6f),
+                            Color(0xFFD7B6FF).copy(alpha = 0.5f),
+                        )
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 22.dp, vertical = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ── 顶部标题 ──────────────────────────────
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🌸", fontSize = 22.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "编辑今日寄语",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF8E24AA),
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.7f))
+                            .clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "关闭",
+                            tint = Color(0xFF8E24AA),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                // ── 实时预览卡 ────────────────────────────
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 110.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD6E8),
+                                    Color(0xFFE0C3FC),
+                                    Color(0xFFB8E0FF),
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .padding(horizontal = 18.dp, vertical = 18.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            if (text.isBlank()) "👇 实时预览（当前显示每日精选）" else "👇 实时预览",
+                            fontSize = 11.sp,
+                            color = Color(0xFF6A1B9A).copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            com.example.funlife.ui.components.ArtisticText(
+                                text = previewText,
+                                style = artisticStyle
+                            )
+                        }
+                    }
+                }
+
+                // ── 输入框 ────────────────────────────────
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { if (it.length <= 40) text = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("自定义寄语") },
+                    placeholder = { Text("留空 = 每天显示一条精选语录 ✨") },
+                    minLines = 1,
+                    maxLines = 3,
+                    supportingText = {
+                        Text(
+                            "${text.length}/40 · 建议 6~16 字最佳，过长会自动缩小",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8E24AA).copy(alpha = 0.7f)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFFE040FB),
+                        unfocusedBorderColor = Color(0xFFCE93D8).copy(alpha = 0.6f),
+                        cursorColor = Color(0xFFE040FB),
+                        focusedLabelColor = Color(0xFF8E24AA),
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                )
+
+                // ── 快速操作：随机一句 / 清空 ────────────
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            // 随机抽一句填入（不点保存就不写库）
+                            val pool = HomePanelQuotes.QUOTES
+                            if (pool.isNotEmpty()) {
+                                val rnd = (Math.random() * pool.size).toInt().coerceIn(0, pool.size - 1)
+                                text = pool[rnd]
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFFFB6D9))
+                    ) {
+                        Text("🎲 来一句", fontSize = 13.sp, color = Color(0xFFD81B60))
+                    }
+                    OutlinedButton(
+                        onClick = { text = "" },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFD7B6FF))
+                    ) {
+                        Text("🧹 清空·用每日精选", fontSize = 12.sp, color = Color(0xFF6A1B9A))
+                    }
+                }
+
+                // ── 颜色主题（卡片色板）─────────────────
+                Text(
+                    "选择艺术字主题",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF6A1B9A)
+                )
+                val styleOptions = listOf(
+                    StyleOption("pink",    "粉色梦幻", listOf(Color(0xFFFF80AB), Color(0xFFEC407A))),
+                    StyleOption("purple",  "紫色魅惑", listOf(Color(0xFFAB47BC), Color(0xFF6A1B9A))),
+                    StyleOption("blue",    "蓝色海洋", listOf(Color(0xFF42A5F5), Color(0xFF1565C0))),
+                    StyleOption("gold",    "金色辉煌", listOf(Color(0xFFFFEB3B), Color(0xFFF57F17))),
+                    StyleOption("rainbow", "彩虹绚丽", listOf(Color(0xFFFF80AB), Color(0xFF7C4DFF), Color(0xFFFFD54F))),
+                )
+                // 第一行 3 个，第二行 2 个
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    styleOptions.subList(0, 3).forEach { opt ->
+                        StyleSwatchCard(
+                            option = opt,
+                            selected = styleKey == opt.key,
+                            onClick = { styleKey = opt.key },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    styleOptions.subList(3, 5).forEach { opt ->
+                        StyleSwatchCard(
+                            option = opt,
+                            selected = styleKey == opt.key,
+                            onClick = { styleKey = opt.key },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // ── 底部按钮 ──────────────────────────────
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFFCE93D8)),
+                    ) {
+                        Text("取消", color = Color(0xFF8E24AA), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Button(
+                        onClick = { onConfirm(text.trim(), styleKey) },
+                        modifier = Modifier.weight(1.4f),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFE040FB),
+                            contentColor = Color.White,
+                        ),
+                    ) {
+                        Text("✨ 保存", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class StyleOption(val key: String, val displayName: String, val gradient: List<Color>)
+
+@Composable
+private fun StyleSwatchCard(
+    option: StyleOption,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) Color.White.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.55f),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) option.gradient.first() else Color(0xFFE1BEE7).copy(alpha = 0.7f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(brush = Brush.linearGradient(option.gradient))
+            )
+            Text(
+                text = option.displayName,
+                fontSize = 11.sp,
+                color = if (selected) Color(0xFF6A1B9A) else Color(0xFF8E24AA).copy(alpha = 0.7f),
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            )
+        }
     }
 }
 
@@ -1547,6 +1940,9 @@ fun FunctionCardsSection(navController: NavController) {
         FuncItem("心情日记", "📝", listOf(Color(0xFF90CAF9), Color(0xFF64B5F6)), "mood"),
         FuncItem("VIP会员", "👑", listOf(Color(0xFFFFD700), Color(0xFFFF6B9D)), "vip"),
         FuncItem("聊天记账", "💬", listOf(Color(0xFFFF8A80), Color(0xFFFF5252)), "chat_bill"),
+        FuncItem("时光信箱", "✉️", listOf(Color(0xFFB39DDB), Color(0xFF7E57C2)), "letter_mailbox"),
+        FuncItem("阅光书房", "📖", listOf(Color(0xFFFFB74D), Color(0xFFFF8A65)), "reading_room"),
+        FuncItem("日记本", "📔", listOf(Color(0xFF8E6E53), Color(0xFFB23A48)), "diary_book"),
         FuncItem("头像框", "🖼️", listOf(Color(0xFF9C27B0), Color(0xFFE91E63)), "avatar_frame_shop"),
     )
     
@@ -1559,16 +1955,8 @@ fun FunctionCardsSection(navController: NavController) {
             .padding(top = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 标题 - 渐变文字 + 旋转星 + 动画箭头胶囊
+        // 标题 - 渐变文字 + 静态星 + 动画箭头胶囊（🚀 性能：移除星旋转持续帧驱动）
         val titleInfinite = rememberInfiniteTransition(label = "titleAnim")
-        val starRot by titleInfinite.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                animation = androidx.compose.animation.core.tween(4500, easing = androidx.compose.animation.core.LinearEasing)
-            ),
-            label = "starR"
-        )
         val arrowDx by titleInfinite.animateFloat(
             initialValue = 0f,
             targetValue = 6f,
@@ -1585,8 +1973,7 @@ fun FunctionCardsSection(navController: NavController) {
         ) {
             Text(
                 text = "✨",
-                fontSize = 22.sp,
-                modifier = Modifier.graphicsLayer { rotationZ = starRot }
+                fontSize = 22.sp
             )
             Text(
                 text = "功能中心",
@@ -1651,7 +2038,7 @@ fun FunctionCardsSection(navController: NavController) {
                 ) {
                     columnPair.forEach { item ->
                         FunctionCard(
-                            modifier = Modifier.size(width = 100.dp, height = 100.dp),
+                            modifier = Modifier.size(width = 104.dp, height = 112.dp),
                             title = item.title,
                             icon = item.icon,
                             gradient = item.gradient,
@@ -1664,7 +2051,7 @@ fun FunctionCardsSection(navController: NavController) {
                     }
                     // 如果列不足2个，填充空间保持对齐
                     if (columnPair.size < 2) {
-                        Spacer(modifier = Modifier.size(width = 100.dp, height = 100.dp))
+                        Spacer(modifier = Modifier.size(width = 104.dp, height = 112.dp))
                     }
                 }
             }
@@ -1686,17 +2073,8 @@ fun FunctionCard(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     )
     
-    // 图标的呼吸缩放
-    val cardInfinite = rememberInfiniteTransition(label = "cardBreath")
-    val iconBreath by cardInfinite.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(1600, easing = androidx.compose.animation.core.EaseInOut),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "iconB"
-    )
+    // 🚀 已移除图标呼吸动画 — 之前每张卡都有独立的 infiniteTransition
+    // 一个首页 ~10 张卡 = 10 个并行帧驱动，是首页静止时 CPU 占用主要来源
     Card(
         modifier = modifier
             .scale(scale)
@@ -1772,42 +2150,34 @@ fun FunctionCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                    .padding(horizontal = 6.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(2.dp))
-                
                 // 图标 - 加呼吸缩放动画
                 Text(
                     text = icon,
-                    fontSize = 30.sp,
-                    modifier = Modifier
-                        .padding(vertical = 2.dp)
-                        .graphicsLayer {
-                            scaleX = iconBreath
-                            scaleY = iconBreath
-                        }
+                    fontSize = 28.sp
                 )
-                
-                // 标题 - 允许两行显示，减小字体
+
+                // 标题 - 单行优先，超长才两行；字号 12.5 更易读
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall.copy(
                         shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.3f),
-                            offset = Offset(2f, 2f),
-                            blurRadius = 4f)
+                            color = Color.Black.copy(alpha = 0.35f),
+                            offset = Offset(1f, 1.5f),
+                            blurRadius = 3f
+                        )
                     ),
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    maxLines = 2,
-                    lineHeight = 13.sp,
-                    modifier = Modifier
-                        .padding(bottom = 4.dp)
-                        .padding(horizontal = 2.dp)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 14.sp,
+                    modifier = Modifier.padding(horizontal = 2.dp)
                 )
             }
         }
@@ -1867,7 +2237,7 @@ fun RecentAnniversariesSection(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            items(anniversaries) { anniversary ->
+            items(anniversaries, key = { it.id }) { anniversary ->
                 MiniAnniversaryCard(anniversary)
             }
         }
@@ -2198,137 +2568,25 @@ fun MiniGoalCard(countdown: com.example.funlife.data.model.Countdown) {
 // 用户未自定义文字时显示，比重复的"少女心面板"更有意境
 // ════════════════════════════════════════════════════════════
 @Composable
-private fun DefaultPanelContent(style: com.example.funlife.ui.components.ArtisticTextStyle) {
-    // 每日金句库 - 按日期循环
-    val dailyQuotes = remember {
-        listOf(
-            "今天也是元气满满的一天 ✨",
-            "做自己生活的小太阳 ☀️",
-            "愿你被温柔以待 💗",
-            "慢慢来，比较快 🌱",
-            "每天都是新的开始 🌸",
-            "微笑是最好的妆容 😊",
-            "把日子过成诗 📜",
-            "心怀热爱，奔赴山海 🌊",
-            "做一个温柔且有力量的人 💪",
-            "保持热爱，奔赴下一场山海 🏔️",
-            "去做让自己开心的事 🎈",
-            "今日份的小确幸送给你 🍀",
-            "愿所有美好都不期而遇 🌟",
-            "做温柔细腻的自己 🌷",
-            "生活明朗，万物可爱 🦋",
-            "把平凡的日子过成诗 ✍️",
-            "种自己的花，爱自己的宇宙 🌌",
-            "你本来就很可爱 💖",
-            "晚风轻，星河长 🌃",
-            "今天的你也很棒哦 👏",
-            "心有所向，日复一日 🎯",
-            "再小的努力都会被时光看见 ⏳",
-            "愿你成为自己的光 💡",
-            "做温柔的人，过温柔的生活 🌼",
-            "每一天都值得被认真对待 🎀",
-            "保持期待，保持热爱 🔥",
-            "你值得一切美好 🎁",
-            "慢就是快，少就是多 🍃",
-            "心情好，世界都明亮 🌈",
-            "做一个有趣的人 🎪",
-            "认真生活的人最美 💄"
-        )
-    }
-    
-    // 根据日期取金句
-    val calendar = remember { java.util.Calendar.getInstance() }
-    val dayOfYear = calendar.get(java.util.Calendar.DAY_OF_YEAR)
-    val month = calendar.get(java.util.Calendar.MONTH) + 1
-    val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
-    val weekDay = when (calendar.get(java.util.Calendar.DAY_OF_WEEK)) {
-        java.util.Calendar.SUNDAY -> "星期日"
-        java.util.Calendar.MONDAY -> "星期一"
-        java.util.Calendar.TUESDAY -> "星期二"
-        java.util.Calendar.WEDNESDAY -> "星期三"
-        java.util.Calendar.THURSDAY -> "星期四"
-        java.util.Calendar.FRIDAY -> "星期五"
-        else -> "星期六"
-    }
-    val quote = dailyQuotes[dayOfYear % dailyQuotes.size]
-    
-    // 闪烁动画
-    val infinite = rememberInfiniteTransition(label = "panelGlow")
-    val pulse by infinite.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.0f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(1800, easing = androidx.compose.animation.core.EaseInOut),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-    
-    Column(
+private fun DefaultPanelContent(
+    style: com.example.funlife.ui.components.ArtisticTextStyle,
+    userId: Long = 0L
+) {
+    // 🌸 按 userId + 当天日期从语录库选一句（用户级隔离）
+    //   - 不再显示日期（卡片底部已有大日期 + 进度环）
+    //   - 不再有闪烁动画（用户反馈刺眼）
+    //   - 让艺术字独占视觉焦点
+    val today = remember { java.time.LocalDate.now() }
+    val quote = remember(userId, today) { HomePanelQuotes.quoteFor(userId, today) }
+
+    Box(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentAlignment = Alignment.Center
     ) {
-        // 顶部：日期胶囊
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            style.outer.copy(alpha = 0.85f),
-                            style.middle.copy(alpha = 0.85f)
-                        )
-                    )
-                )
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-        ) {
-            Text(
-                text = "$month 月 $day 日 · $weekDay",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                letterSpacing = 1.sp
-            )
-        }
-        
-        // 中部：大字号金句（艺术字）
-        Box(
-            modifier = Modifier.graphicsLayer { alpha = pulse },
-            contentAlignment = Alignment.Center
-        ) {
-            com.example.funlife.ui.components.ArtisticText(
-                text = quote,
-                style = style
-            )
-        }
-        
-        // 底部：小装饰线 + emoji
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(28.dp)
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(style.middle.copy(alpha = 0.7f))
-            )
-            Text(
-                text = "˙ᵕ˙",
-                fontSize = 12.sp,
-                color = style.shadow.copy(alpha = 0.8f),
-                fontWeight = FontWeight.Bold
-            )
-            Box(
-                modifier = Modifier
-                    .width(28.dp)
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(style.middle.copy(alpha = 0.7f))
-            )
-        }
+        com.example.funlife.ui.components.ArtisticText(
+            text = quote,
+            style = style
+        )
     }
 }
 

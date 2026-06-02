@@ -204,7 +204,7 @@ object AnniversaryReminderManager {
                 PendingIntent.FLAG_UPDATE_CURRENT or flagImmutable
             )
 
-            val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("🎀 今日纪念日提醒")
                 .setContentText("✨ 你有 $count 个值得庆祝的日子！点击查看 💗")
@@ -212,18 +212,35 @@ object AnniversaryReminderManager {
                     NotificationCompat.BigTextStyle()
                         .bigText("✨ 你有 $count 个值得庆祝的日子！\n点击查看详情，让美好瞬间不被遗忘 💗")
                 )
-                .setPriority(NotificationCompat.PRIORITY_MAX)  // 弹出 Heads-up
-                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setAutoCancel(false)  // 不自动取消，等用户手动滑掉
+                .setAutoCancel(false)
                 .setContentIntent(openPi)
-                .setDeleteIntent(stopPi)  // 🎯 滑掉时触发，停止铃声/震动
-                .addAction(0, "🔕 停止铃声", stopPi)  // 通知里加个"停止"按钮
+                .setDeleteIntent(stopPi)
+                .addAction(0, "🔕 停止铃声", stopPi)
                 .setColor(0xFFEC407A.toInt())
                 .setColorized(true)
-                .build()
+            // 🔥 全屏意图（仅在用户授权时才挂上，否则会被系统直接丢弃整条通知）
+            val canUseFullScreen = if (Build.VERSION.SDK_INT >= 34) {
+                try { nm.canUseFullScreenIntent() } catch (_: Exception) { false }
+            } else true
+            if (canUseFullScreen) {
+                builder.setFullScreenIntent(openPi, true)
+            }
+            val notif = builder.build()
 
             nm.notify(NOTIFICATION_ID, notif)
+            // 写入应用内收件箱
+            runCatching {
+                com.example.funlife.notifications.InboxStore.add(
+                    context,
+                    com.example.funlife.notifications.FunChannel.ANNIVERSARY,
+                    "🎀 今日纪念日提醒",
+                    "你有 $count 个值得庆祝的日子！点击查看 💗",
+                    "anniversary"
+                )
+            }
         } catch (e: Exception) {
             android.util.Log.e("AnniversaryReminder", "Heads-up 通知失败", e)
         }

@@ -58,7 +58,9 @@ fun ProductSpinWheel(
     isSpinning: Boolean,
     resultPrize: SpinWheelViewModel.ProductPrize?,
     onResultDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 🧪 可选：测试转盘（不扣积分），仅 Debug 显示按钮 */
+    onTestSpin: (() -> Unit)? = null
 ) {
     var isAnimating by remember { mutableStateOf(false) }
     var targetRotation by remember { mutableFloatStateOf(0f) }
@@ -158,185 +160,106 @@ fun ProductSpinWheel(
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // ═══════════════════════════════════════════════════════
-        // 💎 积分信息卡片 - 玻璃拟态风格
+        // 💎 紧凑信息芯片栏 - 单行容纳 积分/消耗/可抽次数（节省 ~100dp 垂直空间）
         // ═══════════════════════════════════════════════════════
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 积分卡片
+            // 积分芯片（红粉渐变）
             Surface(
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = Color.Transparent,
-                shadowElevation = 8.dp
+                shadowElevation = 3.dp
             ) {
-                Box(
+                Row(
                     modifier = Modifier
                         .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFF6B6B).copy(alpha = 0.9f),
-                                    Color(0xFFFF8E8E).copy(alpha = 0.9f)
-                                )
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFFFF6B6B), Color(0xFFFF8E53))
                             )
                         )
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    // 装饰圆
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .align(Alignment.TopEnd)
-                            .offset(x = 10.dp, y = (-10).dp)
-                            .background(Color.White.copy(alpha = 0.1f), CircleShape)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("⭐", fontSize = 20.sp)
-                        }
-                        Column {
-                            Text(
-                                "我的积分",
-                                fontSize = 10.sp,
-                                color = Color.White.copy(alpha = 0.8f),
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                "$shopPoints",
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 消耗卡片
-            Surface(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(18.dp),
-                color = Color.Transparent,
-                shadowElevation = 8.dp
-            ) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF8B5CF6).copy(alpha = 0.9f),
-                                    Color(0xFFA78BFA).copy(alpha = 0.9f)
-                                )
-                            )
-                        )
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .align(Alignment.TopEnd)
-                            .offset(x = 10.dp, y = (-10).dp)
-                            .background(Color.White.copy(alpha = 0.1f), CircleShape)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("🎯", fontSize = 20.sp)
-                        }
-                        Column {
-                            Text(
-                                "每次消耗",
-                                fontSize = 10.sp,
-                                color = Color.White.copy(alpha = 0.8f),
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                "10积分",
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 积分获取提示 - 渐变彩虹条
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFFFFE0B2),
-                            Color(0xFFFFF3E0),
-                            Color(0xFFFFE0B2)
-                        )
-                    ),
-                    RoundedCornerShape(14.dp)
-                )
-                .border(
-                    1.dp,
-                    Color(0xFFFFB74D).copy(alpha = 0.3f),
-                    RoundedCornerShape(14.dp)
-                )
-                .padding(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(
-                            Color(0xFFFF9800).copy(alpha = 0.15f),
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("💡", fontSize = 14.sp)
-                }
-                Text(
-                    "在商城购买商品可获得5积分",
-                    fontSize = 12.sp,
-                    color = Color(0xFF8D6E00),
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.weight(1f))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFFF9800).copy(alpha = 0.15f)
-                ) {
+                    Text("⭐", fontSize = 14.sp)
                     Text(
-                        "可抽${shopPoints / 10}次",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFE65100)
+                        "积分",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "$shopPoints",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // 消耗芯片（紫色渐变）
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Transparent,
+                shadowElevation = 3.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF8B5CF6), Color(0xFFA78BFA))
+                            )
+                        )
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text("🎯", fontSize = 14.sp)
+                    Text(
+                        "10/次",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // 可抽次数芯片（金色）
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Transparent,
+                shadowElevation = 3.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFFFFB300), Color(0xFFFF9800))
+                            )
+                        )
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("🎰", fontSize = 13.sp)
+                    Text(
+                        "${shopPoints / 10}次",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1
                     )
                 }
             }
@@ -731,6 +654,36 @@ fun ProductSpinWheel(
                         if (canSpin) "消耗10积分 · 开始抽奖" else "积分不足",
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 16.sp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // 🧪 测试按钮（仅 Debug 构建 + 调用方传入了 onTestSpin 才显示）
+        if (com.example.funlife.BuildConfig.DEBUG && onTestSpin != null) {
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .padding(horizontal = 16.dp)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF7E57C2).copy(alpha = 0.85f))
+                    .clickable(enabled = !isAnimating) {
+                        if (!isAnimating) onTestSpin.invoke()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("🧪", fontSize = 14.sp)
+                    Text(
+                        "测试转盘（不扣积分）",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
                         color = Color.White
                     )
                 }

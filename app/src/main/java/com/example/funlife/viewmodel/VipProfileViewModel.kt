@@ -65,7 +65,8 @@ class VipProfileViewModel(
                 val stats = profileRepository.getUserStatistics(userId)
                 _userStatistics.value = stats
             } catch (e: Exception) {
-                _message.value = "加载统计信息失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "加载统计信息失败", e)
+                _message.value = "加载统计信息失败，请重试"
             }
         }
     }
@@ -120,7 +121,8 @@ class VipProfileViewModel(
                     _message.value = "头像保存失败，请重试"
                 }
             } catch (e: Exception) {
-                _message.value = "头像更新失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "头像更新失败", e)
+                _message.value = "头像更新失败，请重试"
             }
         }
     }
@@ -134,7 +136,8 @@ class VipProfileViewModel(
                 profileRepository.updateFrameId(userId, frameId)
                 _message.value = "头像框更新成功"
             } catch (e: Exception) {
-                _message.value = "头像框更新失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "头像框更新失败", e)
+                _message.value = "头像框更新失败，请重试"
             }
         }
     }
@@ -148,7 +151,8 @@ class VipProfileViewModel(
                 profileRepository.updateBackgroundId(userId, backgroundId)
                 _message.value = "背景更新成功"
             } catch (e: Exception) {
-                _message.value = "背景更新失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "背景更新失败", e)
+                _message.value = "背景更新失败，请重试"
             }
         }
     }
@@ -164,10 +168,12 @@ class VipProfileViewModel(
                     _message.value = "购买成功！"
                     loadAvailableItems()  // 刷新可用列表
                 } else {
-                    _message.value = result.exceptionOrNull()?.message ?: "购买失败"
+                    android.util.Log.e("VipProfileViewModel", "购买失败", result.exceptionOrNull())
+                    _message.value = "购买失败，请重试"
                 }
             } catch (e: Exception) {
-                _message.value = "购买失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "购买失败", e)
+                _message.value = "购买失败，请重试"
             }
         }
     }
@@ -183,10 +189,12 @@ class VipProfileViewModel(
                     _message.value = "购买成功！"
                     loadAvailableItems()  // 刷新可用列表
                 } else {
-                    _message.value = result.exceptionOrNull()?.message ?: "购买失败"
+                    android.util.Log.e("VipProfileViewModel", "购买失败", result.exceptionOrNull())
+                    _message.value = "购买失败，请重试"
                 }
             } catch (e: Exception) {
-                _message.value = "购买失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "购买失败", e)
+                _message.value = "购买失败，请重试"
             }
         }
     }
@@ -216,7 +224,8 @@ class VipProfileViewModel(
                 _message.value = "默认数据初始化成功"
                 loadAvailableItems()
             } catch (e: Exception) {
-                _message.value = "初始化失败: ${e.message}"
+                android.util.Log.e("VipProfileViewModel", "初始化失败", e)
+                _message.value = "初始化失败，请重试"
             }
         }
     }

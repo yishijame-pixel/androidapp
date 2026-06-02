@@ -7,10 +7,14 @@ import androidx.room.PrimaryKey
  * 分数操作记录
  * 记录每一次加分或减分操作
  */
-@Entity(tableName = "score_operations")
+@Entity(
+    tableName = "score_operations",
+    indices = [androidx.room.Index("userId")]
+)
 data class ScoreOperation(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val userId: Long = 0L,    // 🔒 多账号隔离
     val gameSessionId: Long,  // 游戏会话ID，用于区分不同局游戏
     val playerId: Int,        // 玩家ID（改为Int以匹配Player.id）
     val playerName: String,   // 玩家名字

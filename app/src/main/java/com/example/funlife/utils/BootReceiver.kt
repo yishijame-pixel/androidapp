@@ -23,6 +23,8 @@ class BootReceiver : BroadcastReceiver() {
                     if (userId > 0L) {
                         AnniversaryReminderScheduler.scheduleAllForUser(context, userId)
                     }
+                    // 重新调度企业级通知中心的所有每日推送
+                    com.example.funlife.notifications.NotificationBootstrap.init(context)
                 } catch (e: Exception) {
                     android.util.Log.e("BootReceiver", "重新调度失败", e)
                 }

@@ -267,6 +267,7 @@ fun AnniversaryScreen(
             onClick = onNavigateBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
                 .padding(16.dp)
                 .size(40.dp)
         ) {
@@ -281,6 +282,7 @@ fun AnniversaryScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                .statusBarsPadding()
                 .padding(16.dp)
         ) {
             IconButton(
@@ -823,7 +825,14 @@ fun AddAnniversaryDialog(
                         )
                     )
                     .clickable {
-                        if (name.isNotBlank()) {
+                        if (name.isBlank()) {
+                            // 🔥 修复：名称为空时 Toast 提示，不再静默无反应
+                            android.widget.Toast.makeText(
+                                context,
+                                "请输入纪念日名称",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
                             val dateStr = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
                             onConfirm(
                                 name,
@@ -1274,7 +1283,13 @@ fun EditAnniversaryDialog(
                         )
                     )
                     .clickable {
-                        if (name.isNotBlank()) {
+                        if (name.isBlank()) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "请输入纪念日名称",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
                             val dateStr = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
                             onConfirm(
                                 name,
@@ -2247,37 +2262,56 @@ fun CuteDatePickerDialog(
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // 年份翻页栏
+                            // 🔥 全新年份翻页栏：圆形图标按钮 + 居中年份范围（避免长文字换行）
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 4.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // ‹‹ 上 12 年（圆形粉色按钮 + ChevronLeft 图标）
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
+                                        .size(32.dp)
+                                        .clip(CircleShape)
                                         .background(Color(0xFFFFE0EC))
-                                        .clickable { yearPageStart -= 12 }
-                                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                                        .clickable { yearPageStart -= 12 },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text("‹‹ 上 12 年", fontSize = 12.sp, color = Color(0xFFEC407A), fontWeight = FontWeight.Bold)
+                                    Text("«", fontSize = 16.sp, color = Color(0xFFEC407A), fontWeight = FontWeight.ExtraBold)
                                 }
-                                Text(
-                                    text = "$yearPageStart - ${yearPageStart + 11}",
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFAD1457),
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Spacer(Modifier.width(8.dp))
+                                // 中央年份范围 - 大胶囊
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(50))
-                                        .background(Color(0xFFFFE0EC))
-                                        .clickable { yearPageStart += 12 }
-                                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                                        .background(
+                                            brush = Brush.horizontalGradient(
+                                                colors = listOf(Color(0xFFFF8FA3), Color(0xFFEC407A))
+                                            )
+                                        )
+                                        .padding(horizontal = 20.dp, vertical = 8.dp)
                                 ) {
-                                    Text("下 12 年 ››", fontSize = 12.sp, color = Color(0xFFEC407A), fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = "$yearPageStart - ${yearPageStart + 11}",
+                                        fontSize = 14.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                // 下 12 年 ››
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFFE0EC))
+                                        .clickable { yearPageStart += 12 },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("»", fontSize = 16.sp, color = Color(0xFFEC407A), fontWeight = FontWeight.ExtraBold)
                                 }
                             }
                             // 年份网格
@@ -2520,26 +2554,14 @@ fun CuteDialogHeader(
         ),
         label = "bob"
     )
+    // 🔥 紧凑单行设计：emoji + 标题同一行（不换行）+ 下方小副标
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 10.dp,
-                shape = RoundedCornerShape(
-                    topStart = 24.dp,
-                    topEnd = 24.dp,
-                    bottomStart = 12.dp,
-                    bottomEnd = 12.dp
-                ),
-                ambientColor = Color(0xFFEC407A),
-                spotColor = Color(0xFFEC407A)
-            )
             .clip(
                 RoundedCornerShape(
-                    topStart = 24.dp,
-                    topEnd = 24.dp,
-                    bottomStart = 12.dp,
-                    bottomEnd = 12.dp
+                    topStart = 24.dp, topEnd = 24.dp,
+                    bottomStart = 12.dp, bottomEnd = 12.dp
                 )
             )
             .background(
@@ -2552,97 +2574,88 @@ fun CuteDialogHeader(
                     )
                 )
             )
-            .padding(horizontal = 18.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Canvas 装饰层
+        // 装饰层（爱心 + 闪烁 + 光点 + 底部圆弧）
         Canvas(modifier = Modifier.matchParentSize()) {
-            // 右侧大爱心
             drawCuteHeart(
-                Offset(size.width * 0.85f, size.height * 0.30f),
-                14f * (0.8f + twinkle * 0.3f),
+                Offset(size.width * 0.92f, size.height * 0.30f),
+                10f * (0.8f + twinkle * 0.3f),
                 Color.White.copy(alpha = 0.45f)
             )
             drawCuteHeart(
-                Offset(size.width * 0.93f, size.height * 0.72f),
-                9f,
+                Offset(size.width * 0.82f, size.height * 0.75f),
+                7f,
                 Color.White.copy(alpha = 0.35f)
             )
-            // 左侧装饰
             drawSparkle4(
-                Offset(size.width * 0.06f, size.height * 0.25f),
-                12f * twinkle,
+                Offset(size.width * 0.96f, size.height * 0.70f),
+                8f * twinkle,
                 Color.White.copy(alpha = 0.7f)
             )
-            drawSparkle4(
-                Offset(size.width * 0.03f, size.height * 0.75f),
-                7f * (1.4f - twinkle),
-                Color.White.copy(alpha = 0.55f)
-            )
-            // 顶部小光点
             drawCircle(
-                color = Color.White.copy(alpha = 0.5f),
-                radius = 3f,
-                center = Offset(size.width * 0.45f, size.height * 0.18f)
+                color = Color.White.copy(alpha = 0.45f),
+                radius = 2.5f,
+                center = Offset(size.width * 0.70f, size.height * 0.20f)
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.5f),
+                color = Color.White.copy(alpha = 0.4f),
                 radius = 2f,
-                center = Offset(size.width * 0.75f, size.height * 0.18f)
+                center = Offset(size.width * 0.78f, size.height * 0.50f)
             )
-            // 底部柔光圆弧
             drawArc(
                 color = Color.White.copy(alpha = 0.18f),
                 startAngle = 180f,
                 sweepAngle = 180f,
                 useCenter = false,
-                topLeft = Offset(-size.width * 0.2f, size.height * 0.85f),
+                topLeft = Offset(-size.width * 0.2f, size.height * 0.82f),
                 size = Size(size.width * 1.4f, size.height * 0.5f),
-                style = Stroke(width = 6f)
+                style = Stroke(width = 5f)
             )
         }
+
         Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(end = 56.dp) // 让右侧装饰露出
+            modifier = Modifier.padding(end = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
+            // ① 标题行（emoji + 标题，单行不换行）
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = leadingEmoji,
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     modifier = Modifier.graphicsLayer { translationY = emojiBob }
                 )
                 Text(
                     text = title,
-                    fontSize = 22.sp,
+                    fontSize = 19.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White,
-                    letterSpacing = 1.5.sp,
+                    letterSpacing = 1.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
+                    softWrap = false,
                     style = androidx.compose.ui.text.TextStyle(
                         shadow = Shadow(
                             color = Color(0xFFAD1457),
-                            offset = Offset(0f, 3f),
-                            blurRadius = 8f
+                            offset = Offset(0f, 2f),
+                            blurRadius = 6f
                         )
                     )
                 )
             }
-            // 副标题胶囊
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.28f))
-                    .padding(horizontal = 10.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    text = subtitle,
-                    fontSize = 11.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.8.sp
-                )
-            }
+            // ② 副标（小字号 + 单行省略，不再用胶囊背景节省空间）
+            Text(
+                text = subtitle,
+                fontSize = 10.5.sp,
+                color = Color.White.copy(alpha = 0.92f),
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.4.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
     }
 }

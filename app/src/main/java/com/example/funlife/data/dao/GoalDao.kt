@@ -16,7 +16,7 @@ interface GoalDao {
     fun getCompletedGoals(userId: Long): Flow<List<Goal>>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertGoal(goal: Goal)
+    suspend fun insertGoal(goal: Goal): Long
     
     @Update
     suspend fun updateGoal(goal: Goal)

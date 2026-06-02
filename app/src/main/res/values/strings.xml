@@ -158,4 +158,35 @@
     <string name="riddle_correct_answer">正确答案</string>
     <string name="riddle_next">下一题</string>
     <string name="riddle_continue">继续挑战</string>
+
+    <!-- ═══ 日记本皮肤系统（v56） ═══ -->
+    <string name="diary_book_default_title">岁时录</string>
+    <string name="diary_book_default_subtitle">一  人  一  时  一  册</string>
+    <string name="diary_book_customize_title">刻印魔法书</string>
+    <string name="diary_book_customize_hint">书名与署名将烫金压印在封面、书脊与 3D 魔法书上，仅本账号可见。</string>
+    <string name="diary_book_customize_book_title">书名</string>
+    <string name="diary_book_customize_owner_name">刻印署名</string>
+    <string name="diary_book_customize_owner_placeholder">你的名字</string>
+    <string name="diary_book_customize_preview">预览：%1$s · %2$s</string>
+    <string name="diary_book_customize_save">保存刻印</string>
+    <string name="diary_book_customize_reset">恢复默认</string>
+
+    <string name="skin_hengwu_name">蘅芜旧卷</string>
+    <string name="skin_hengwu_desc">深栗皮革 · 烫金宋体 · 米黄宣纸 · 文人古籍气质</string>
+    <string name="skin_jiyue_name">霁月长明</string>
+    <string name="skin_jiyue_desc">黑曜石封 · 银箔星阵 · 月光纸页 · 深空魔法书风</string>
+    <string name="skin_qingchuan_name">晴川早春</string>
+    <string name="skin_qingchuan_desc">奶油皮革 · 玫瑰金樱 · 雪白纸页 · 文艺淡彩气质</string>
+
+    <string name="skin_chiyan_name">赤焰天书</string>
+    <string name="skin_chiyan_desc">炽红绒布 · 烫金火纹 · 朱砂火印 · 焚天烈焰魔典</string>
+    <string name="skin_qingluan_name">青鸾翠竹</string>
+    <string name="skin_qingluan_desc">翠玉绿封 · 烫银竹纹 · 玉色纸页 · 仙家清雅道经</string>
+    <string name="skin_xinghe_name">星河长卷</string>
+    <string name="skin_xinghe_desc">深海宝蓝 · 星辰银箔 · 银河纸页 · 浩瀚星海航海志</string>
+
+    <string name="skin_picker_title">挑选皮肤</string>
+    <string name="skin_locked_hint">此皮肤暂未解锁</string>
+    <string name="skin_apply">应用</string>
+    <string name="skin_applied">已切换至 %1$s</string>
 </resources>

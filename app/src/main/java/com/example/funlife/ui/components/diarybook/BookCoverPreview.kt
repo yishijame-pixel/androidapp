@@ -21,51 +21,89 @@ import com.example.funlife.domain.skin.BookSkin
 /**
  * 在 [DrawScope] 里画一张迷你封面，使用 [skin] 的调色板 / 材质 / 装饰。
  *
+ * 六本书各有专属正面设计，按皮肤 id 分派；未知皮肤回退到通用法阵封面。
+ *
  * @param title 封面中央的书名（默认"岁时录"，外部可定制）
+ * @param author 封面副标题（默认"一  人  一  册"）
  */
 fun DrawScope.drawMiniCover(
     skin: BookSkin,
-    title: String = "岁时录"
+    title: String = "岁时录",
+    author: String = "一  人  一  册"
+) {
+    // 1. 共同底：渐变 + 材质噪点 + 书脊阴影（所有皮肤一致的基底）
+    drawCoverBase(skin)
+
+    // 2. 专属正面设计（每本书独立布局）
+    when (skin.id.raw) {
+        "builtin::hengwu"    -> drawHengWuFront(skin, title, author)
+        "builtin::jiyue"     -> drawJiYueFront(skin, title, author)
+        "builtin::qingchuan" -> drawQingChuanFront(skin, title, author)
+        "builtin::chiyan"    -> drawChiYanFront(skin, title, author)
+        "builtin::qingluan"  -> drawQingLuanFront(skin, title, author)
+        "builtin::xinghe"    -> drawXingHeFront(skin, title, author)
+        else                 -> drawGenericFront(skin, title, author)
+    }
+
+    // 3. 共同收尾：书角磨损做旧
+    drawCornerWear(size.width, size.height, skin.palette.foil.base)
+}
+
+/** 共同封面基底：渐变 + 皮革纹理 + 体积感 + 书脊阴影。 */
+internal fun DrawScope.drawCoverBase(skin: BookSkin) {
+    val w = size.width
+    val h = size.height
+    val palette = skin.palette
+
+    // 封面主渐变（对角，更有布面纵深）
+    drawRect(
+        brush = Brush.linearGradient(
+            colors = listOf(
+                palette.cover.base.lighten(0.06f),
+                palette.cover.accent,
+                palette.coverShadow.darken(0.08f),
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(w, h),
+        ),
+        topLeft = Offset(0f, 0f),
+        size = Size(w, h),
+    )
+    drawLeatherGrain(skin)
+    drawCoverVolume(skin)
+    // 左侧书脊折痕阴影
+    drawRect(
+        brush = Brush.horizontalGradient(
+            colors = listOf(Color.Black.copy(alpha = 0.48f), Color.Transparent),
+            startX = 0f,
+            endX = w * 0.20f,
+        ),
+        topLeft = Offset(0f, 0f),
+        size = Size(w * 0.20f, h),
+    )
+    // 书脊折线（烫金细线）
+    val foil = palette.foil.base
+    drawLine(
+        color = foil.copy(alpha = 0.35f),
+        start = Offset(w * 0.055f, h * 0.04f),
+        end = Offset(w * 0.055f, h * 0.96f),
+        strokeWidth = (w * 0.002f).coerceAtLeast(0.6f),
+    )
+}
+
+/**
+ * 通用法阵封面（未知皮肤回退 / 旧版设计保留）：金属边框 + 中心法阵 + 凸压标题。
+ */
+private fun DrawScope.drawGenericFront(
+    skin: BookSkin,
+    title: String = "岁时录",
+    author: String = "一  人  一  册"
 ) {
     val w = size.width
     val h = size.height
     val palette = skin.palette
     val materials = skin.materials
     val foil = palette.foil.base
-
-    // 1. 封面渐变
-    drawRect(
-        brush = Brush.linearGradient(
-            colors = listOf(palette.cover.base, palette.cover.accent, palette.coverShadow),
-            start = Offset(0f, 0f),
-            end = Offset(w, h)
-        ),
-        topLeft = Offset(0f, 0f),
-        size = Size(w, h)
-    )
-
-    // 2. 材质噪点
-    val noiseCount = (materials.leatherNoiseCount / 50).coerceAtLeast(40)
-    for (i in 0 until noiseCount) {
-        val sx = ((i * 9301 + 49297) % 233280) / 233280f
-        val sy = ((i * 12289 + 33191) % 233280) / 233280f
-        drawCircle(
-            color = foil.copy(alpha = materials.leatherNoiseAlpha),
-            radius = 0.6f,
-            center = Offset(w * sx, h * sy)
-        )
-    }
-
-    // 3. 左侧书脊阴影
-    drawRect(
-        brush = Brush.horizontalGradient(
-            colors = listOf(Color.Black.copy(alpha = 0.4f), Color.Transparent),
-            startX = 0f,
-            endX = w * 0.18f
-        ),
-        topLeft = Offset(0f, 0f),
-        size = Size(w * 0.18f, h)
-    )
 
     // 4. 烫金边框
     val pad = (w * 0.05f).coerceAtLeast(4f)
@@ -245,13 +283,11 @@ fun DrawScope.drawMiniCover(
         com.example.funlife.domain.skin.OrnamentType.Stars  -> drawStarsOrnaments(skin, w, h)
         else -> { /* None / Rune 走默认 */ }
     }
-
-    // 11. 书角磨损做旧（4 角不规则白色/淡色擦痕，alpha 微弱）
-    drawCornerWear(w, h, foil)
+    // 书角磨损由 drawMiniCover 统一收尾
 }
 
 /** 蘅芜旧卷：四角"如意云纹"——三段连续的卷云曲线（Path 多条曲线模拟）。 */
-private fun DrawScope.drawVineOrnaments(skin: BookSkin, w: Float, h: Float) {
+internal fun DrawScope.drawVineOrnaments(skin: BookSkin, w: Float, h: Float) {
     val foil = skin.palette.foil.base
     val accent = skin.palette.foil.accent
     val pad = w * 0.07f
@@ -264,7 +300,7 @@ private fun DrawScope.drawVineOrnaments(skin: BookSkin, w: Float, h: Float) {
     drawRuyiCloud(Offset(pad, h - pad),           sz, 270, foil, accent, sw)
 }
 
-private fun DrawScope.drawRuyiCloud(
+internal fun DrawScope.drawRuyiCloud(
     center: Offset, size: Float, rotDeg: Int,
     foil: Color, accent: Color, stroke: Float,
 ) {
@@ -298,7 +334,7 @@ private fun DrawScope.drawRuyiCloud(
 }
 
 /** 霁月长明：四角"月相"——左上朔/右上望/左下上弦/右下下弦。 */
-private fun DrawScope.drawMoonOrnaments(skin: BookSkin, w: Float, h: Float) {
+internal fun DrawScope.drawMoonOrnaments(skin: BookSkin, w: Float, h: Float) {
     val foil = skin.palette.foil.base
     val ring = foil.copy(alpha = 0.85f)
     val pad = w * 0.10f
@@ -330,7 +366,7 @@ private fun DrawScope.drawMoonOrnaments(skin: BookSkin, w: Float, h: Float) {
 }
 
 /** 赤焰天书：四角向内的"火舌曲线"（多笔三角焰形）。 */
-private fun DrawScope.drawFlameOrnaments(skin: BookSkin, w: Float, h: Float) {
+internal fun DrawScope.drawFlameOrnaments(skin: BookSkin, w: Float, h: Float) {
     val foil = skin.palette.foil.base
     val pad = w * 0.08f
     val sz = w * 0.10f
@@ -365,7 +401,7 @@ private fun DrawScope.drawFlameTongue(
 }
 
 /** 青鸾翠竹：四角竹枝叶子。 */
-private fun DrawScope.drawBambooOrnaments(skin: BookSkin, w: Float, h: Float) {
+internal fun DrawScope.drawBambooOrnaments(skin: BookSkin, w: Float, h: Float) {
     val foil = skin.palette.foil.base
     val green = skin.palette.cover.accent
     val pad = w * 0.08f
@@ -415,7 +451,7 @@ private fun DrawScope.drawBambooSprig(
 }
 
 /** 星河长卷：四角"星座连线"——3-4 颗星 + 烫银连线。 */
-private fun DrawScope.drawStarsOrnaments(skin: BookSkin, w: Float, h: Float) {
+internal fun DrawScope.drawStarsOrnaments(skin: BookSkin, w: Float, h: Float) {
     val foil = skin.palette.foil.base
     val sw = (w * 0.0035f).coerceAtLeast(0.5f)
     // 4 角各一个迷你"星座"
@@ -447,7 +483,7 @@ private fun DrawScope.drawStarsOrnaments(skin: BookSkin, w: Float, h: Float) {
 }
 
 /** 书角磨损：四个角加不规则的白色/淡色擦痕（alpha 极低，古旧感）。 */
-private fun DrawScope.drawCornerWear(w: Float, h: Float, foil: Color) {
+internal fun DrawScope.drawCornerWear(w: Float, h: Float, foil: Color) {
     val wearColor = Color(0xFFFFFAEC).copy(alpha = 0.18f)
     val corners = listOf(
         Offset(0f, 0f),
@@ -482,7 +518,7 @@ private fun DrawScope.drawCornerWear(w: Float, h: Float, foil: Color) {
 }
 
 /** 晴川早春：在封面四角 + 法阵周围叠加樱花瓣装饰（玫瑰金描边 + 淡粉填充）。 */
-private fun DrawScope.drawSakuraOrnaments(skin: BookSkin, w: Float, h: Float) {
+internal fun DrawScope.drawSakuraOrnaments(skin: BookSkin, w: Float, h: Float) {
     val foil = skin.palette.foil.base
     val foilAccent = skin.palette.foil.accent
     val pink = Color(0xFFFFC7D0)
@@ -527,7 +563,7 @@ private fun DrawScope.drawSakuraOrnaments(skin: BookSkin, w: Float, h: Float) {
 }
 
 /** 静态樱花（5 瓣，烫金描边 + 淡粉填充）。 */
-private fun DrawScope.drawBookSakura(
+internal fun DrawScope.drawBookSakura(
     center: Offset, size: Float, rotDeg: Float,
     light: Color, base: Color, stroke: Color,
 ) {

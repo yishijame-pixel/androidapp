@@ -19,7 +19,10 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
     // 🔥 改用 MutableStateFlow 直接管理数据
     private val _activeGoals = MutableStateFlow<List<Goal>>(emptyList())
     val activeGoals: StateFlow<List<Goal>> = _activeGoals
-    
+
+    private val _completedGoals = MutableStateFlow<List<Goal>>(emptyList())
+    val completedGoals: StateFlow<List<Goal>> = _completedGoals
+
     private val _countdowns = MutableStateFlow<List<Countdown>>(emptyList())
     val countdowns: StateFlow<List<Countdown>> = _countdowns
     
@@ -37,7 +40,21 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
         
         // 🔥 启动时立即加载数据
         loadGoals()
+        loadCompletedGoals()
         loadCountdowns()
+    }
+
+    private fun loadCompletedGoals() {
+        viewModelScope.launch {
+            try {
+                val userId = getCurrentUserId()
+                if (userId == 0L) { _completedGoals.value = emptyList(); return@launch }
+                repository.getCompletedGoals(userId).collect { _completedGoals.value = it }
+            } catch (e: Exception) {
+                android.util.Log.e("GoalViewModel", "加载已完成目标失败", e)
+                _completedGoals.value = emptyList()
+            }
+        }
     }
     
     // 🔥 新增：主动加载目标数据
@@ -90,27 +107,111 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshForNewUser() {
         android.util.Log.d("GoalViewModel", "用户切换，刷新数据")
         loadGoals()
+        loadCompletedGoals()
         loadCountdowns()
     }
     
-    fun addGoal(title: String, category: String, targetDate: String?) {
+    fun addGoal(
+        title: String,
+        category: String,
+        targetDate: String?,
+        description: String = "",
+        progress: Int = 0,
+        icon: String? = null
+    ) {
         viewModelScope.launch {
-            // 🔥 新增：输入验证
             val titleValidation = com.example.funlife.utils.ValidationUtils.validateGoalTitle(title)
             if (titleValidation is com.example.funlife.utils.ValidationResult.Error) {
                 android.util.Log.w("GoalViewModel", "Invalid goal title: ${titleValidation.message}")
                 return@launch
             }
-            
             val userId = getCurrentUserId()
+            if (userId == 0L) return@launch
+            val safeProgress = progress.coerceIn(0, 100)
             val goal = Goal(
                 userId = userId,
-                title = title,
+                title = title.trim(),
+                description = description.trim(),
                 category = category,
                 targetDate = targetDate,
-                createdAt = LocalDateTime.now().toString()
+                progress = safeProgress,
+                isCompleted = safeProgress >= 100,
+                createdAt = LocalDateTime.now().toString(),
+                completedAt = if (safeProgress >= 100) LocalDateTime.now().toString() else null
             )
-            repository.insertGoal(goal)
+            val newId = repository.insertGoal(goal)
+            if (!icon.isNullOrBlank() && newId > 0L) {
+                com.example.funlife.data.GoalIconStore.set(context, userId, newId.toInt(), icon)
+            }
+        }
+    }
+
+    /** 全字段更新一个已有目标（保留 id/userId/createdAt）。 */
+    fun updateGoal(
+        original: Goal,
+        title: String,
+        description: String,
+        category: String,
+        targetDate: String?,
+        progress: Int,
+        icon: String? = null
+    ) {
+        viewModelScope.launch {
+            val titleValidation = com.example.funlife.utils.ValidationUtils.validateGoalTitle(title)
+            if (titleValidation is com.example.funlife.utils.ValidationResult.Error) return@launch
+            val safeProgress = progress.coerceIn(0, 100)
+            val now = LocalDateTime.now().toString()
+            val nowCompleted = safeProgress >= 100
+            val updated = original.copy(
+                title = title.trim(),
+                description = description.trim(),
+                category = category,
+                targetDate = targetDate,
+                progress = safeProgress,
+                isCompleted = nowCompleted,
+                completedAt = when {
+                    nowCompleted && original.completedAt == null -> now
+                    !nowCompleted -> null
+                    else -> original.completedAt
+                }
+            )
+            repository.updateGoal(updated)
+            if (icon != null) {
+                com.example.funlife.data.GoalIconStore.set(context, original.userId, original.id, icon.ifBlank { null })
+            }
+        }
+    }
+
+    /** 快捷调节进度（拖动进度条场景），进度达 100 自动标为已完成。 */
+    fun setGoalProgress(goal: Goal, progress: Int) {
+        viewModelScope.launch {
+            val safe = progress.coerceIn(0, 100)
+            val now = LocalDateTime.now().toString()
+            val nowCompleted = safe >= 100
+            val updated = goal.copy(
+                progress = safe,
+                isCompleted = nowCompleted,
+                completedAt = when {
+                    nowCompleted && goal.completedAt == null -> now
+                    !nowCompleted -> null
+                    else -> goal.completedAt
+                }
+            )
+            repository.updateGoal(updated)
+        }
+    }
+
+    /** 手动切换 完成/未完成。 */
+    fun toggleGoalCompletion(goal: Goal) {
+        viewModelScope.launch {
+            val newCompleted = !goal.isCompleted
+            val now = LocalDateTime.now().toString()
+            val updated = goal.copy(
+                isCompleted = newCompleted,
+                progress = if (newCompleted) 100 else goal.progress.coerceAtMost(99),
+                completedAt = if (newCompleted) now else null
+            )
+            repository.updateGoal(updated)
         }
     }
     
@@ -147,6 +248,31 @@ class GoalViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteCountdown(countdown: Countdown) {
         viewModelScope.launch {
             repository.deleteCountdown(countdown)
+        }
+    }
+
+    /** 更新倒数日（保留 id/userId/createdAt）。 */
+    fun updateCountdown(
+        original: Countdown,
+        title: String,
+        targetDate: String,
+        category: String,
+        icon: String,
+        color: String,
+        note: String
+    ) {
+        viewModelScope.launch {
+            val titleValidation = com.example.funlife.utils.ValidationUtils.validateGoalTitle(title)
+            if (titleValidation is com.example.funlife.utils.ValidationResult.Error) return@launch
+            val updated = original.copy(
+                title = title.trim(),
+                targetDate = targetDate,
+                category = category,
+                icon = icon,
+                color = color,
+                note = note
+            )
+            repository.updateCountdown(updated)
         }
     }
     

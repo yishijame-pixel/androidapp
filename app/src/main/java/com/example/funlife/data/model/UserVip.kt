@@ -16,12 +16,18 @@ data class UserVip(
     val signature: String? = null  // 防篡改签名
 ) {
     fun isVip(): Boolean = vipLevel > 0
-    
-    fun isPermanent(): Boolean = vipLevel == 99 || expireDate == null
-    
+
+    /**
+     * 是否永久 VIP —— 严格按等级判定（vipLevel=3 终身 / 99 旧体系永久），
+     * **不再以 expireDate==null 兜底**，避免月卡(VIP1) 因脏数据/降级回写为 null
+     * 而被误识别为永久。
+     */
+    fun isPermanent(): Boolean = vipLevel == 99 || vipLevel == 3
+
     fun isExpired(): Boolean {
+        if (!isVip()) return false
         if (isPermanent()) return false
-        if (expireDate == null) return true
+        if (expireDate == null) return true   // VIP1/VIP2 必须有有效期，缺失视为已过期
         
         return try {
             val expire = LocalDate.parse(expireDate)

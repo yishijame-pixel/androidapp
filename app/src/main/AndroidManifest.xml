@@ -18,15 +18,24 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 开机后重新调度提醒 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 请求忽略电池优化（让闹钟不被系统延迟/杀） -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- WakeLock：闹钟触发时短暂保持唤醒 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 前台服务（保活悬浮窗等） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 全屏通知意图：闹钟级强制弹出，国产 ROM 也无法压制（Android 14+ 严格审核） -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:name=".FunLifeApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.FunLife"
+        android:usesCleartextTraffic="false"
         tools:targetApi="31">
         <activity
             android:name=".MainActivity"
@@ -48,6 +57,18 @@
         <!-- 用户滑掉通知时停止铃声/震动 -->
         <receiver
             android:name=".utils.StopAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 倒数日到点提醒 -->
+        <receiver
+            android:name=".utils.CountdownReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 企业级通知中心：每日定时摘要（目标/习惯/心情/每周精选） -->
+        <receiver
+            android:name=".notifications.DailyDigestReceiver"
             android:enabled="true"
             android:exported="false" />
         

@@ -38,6 +38,11 @@ class VibrationHelper(private val context: Context) {
         }
     }
     
+    // 自定义时长（侧边面板边缘触发等）
+    fun vibrateShort(durationMs: Long) {
+        runCatching { vibrate(durationMs) }
+    }
+
     // 基础震动
     private fun vibrate(duration: Long) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

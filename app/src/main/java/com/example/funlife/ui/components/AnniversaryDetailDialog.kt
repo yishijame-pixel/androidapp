@@ -132,19 +132,41 @@ fun AnniversaryDetailDialog(
         label = "ringGlow"
     )
     
-    // 浮动粒子数据
+    // 🔥 加倍浮动粒子（从 10 → 20，加入更多 emoji）
     val particles = remember {
-        val symbols = listOf("♥", "♡", "✦", "✧", "·", "✿", "❋", "⋆")
-        List(10) {
+        val symbols = listOf("♥", "♡", "✦", "✧", "·", "✿", "❋", "⋆", "💕", "✨", "🌸", "💫", "🎀", "⭐")
+        List(20) {
             AnnivParticle(
                 symbol = symbols[it % symbols.size],
                 xRatio = Random.nextFloat(),
                 startDelay = Random.nextFloat(),
                 speed = Random.nextFloat() * 1.5f + 0.8f,
-                size = Random.nextInt(10, 26)
+                size = Random.nextInt(10, 28)
             )
         }
     }
+
+    // 🔥 全屏闪烁光斑（24 颗，随机分布 + 错相位呼吸）
+    val twinkleStars = remember {
+        List(24) {
+            Triple(
+                Random.nextFloat(),                       // x
+                Random.nextFloat(),                       // y
+                Random.nextFloat()                        // phase offset
+            )
+        }
+    }
+    val twinklePhase by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
+        label = "twinklePhase"
+    )
+    // 🌈 顶部彩虹光带流动
+    val rainbowFlow by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Restart),
+        label = "rainbowFlow"
+    )
     
     Dialog(
         onDismissRequest = onDismiss,
@@ -155,6 +177,25 @@ fun AnniversaryDetailDialog(
             decorFitsSystemWindows = false
         )
     ) {
+        // 🔥 让 Dialog 窗口真正延伸到状态栏 & 导航栏（透明系统栏 + 关闭 fits）
+        val view = androidx.compose.ui.platform.LocalView.current
+        if (!view.isInEditMode) {
+            androidx.compose.runtime.SideEffect {
+                val dialogWindow = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+                dialogWindow?.let { w ->
+                    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(w, false)
+                    @Suppress("DEPRECATION")
+                    w.statusBarColor = android.graphics.Color.TRANSPARENT
+                    @Suppress("DEPRECATION")
+                    w.navigationBarColor = android.graphics.Color.TRANSPARENT
+                    // 让状态栏文字保持白色（深色背景适配）
+                    androidx.core.view.WindowCompat.getInsetsController(w, view).apply {
+                        isAppearanceLightStatusBars = false
+                        isAppearanceLightNavigationBars = false
+                    }
+                }
+            }
+        }
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = Color.Transparent
@@ -262,7 +303,77 @@ fun AnniversaryDetailDialog(
                         }
                 )
             }
-            
+
+            // 🔥 全屏闪烁星粒（24 颗，错相位呼吸 + 十字光芒）
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                twinkleStars.forEachIndexed { i, (x, y, phase) ->
+                    val p = (twinklePhase + phase) % 1f
+                    val a = (kotlin.math.sin(p * kotlin.math.PI).toFloat()).coerceIn(0f, 1f)
+                    val cx = x * size.width
+                    val cy = y * size.height
+                    val r = 1.5f + a * 1.5f
+                    drawCircle(
+                        color = Color.White.copy(alpha = a * 0.85f),
+                        radius = r,
+                        center = Offset(cx, cy)
+                    )
+                    if (a > 0.55f) {
+                        val len = 4f + a * 5f
+                        drawLine(
+                            color = Color.White.copy(alpha = a * 0.65f),
+                            start = Offset(cx - len, cy), end = Offset(cx + len, cy),
+                            strokeWidth = 1f
+                        )
+                        drawLine(
+                            color = Color.White.copy(alpha = a * 0.65f),
+                            start = Offset(cx, cy - len), end = Offset(cx, cy + len),
+                            strokeWidth = 1f
+                        )
+                    }
+                }
+            }
+
+            // 🌈 顶部彩虹光带（半透流动，覆盖到状态栏区域）
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                drawRect(
+                    brush = Brush.sweepGradient(
+                        colors = listOf(
+                            Color(0xFFFF6B9D).copy(alpha = 0.0f),
+                            Color(0xFFFFD700).copy(alpha = 0.15f),
+                            Color(0xFFE040FB).copy(alpha = 0.18f),
+                            Color(0xFF40C4FF).copy(alpha = 0.12f),
+                            Color(0xFFFF6B9D).copy(alpha = 0.0f)
+                        ),
+                        center = Offset(size.width / 2f, -size.height * 0.5f)
+                    )
+                )
+            }
+
+            // 💖 底部柔和粉色光晕（衬托按钮区）
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .align(Alignment.BottomCenter)
+            ) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFF6B9D).copy(alpha = 0.22f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width / 2f, size.height),
+                        radius = size.width * 0.7f
+                    ),
+                    radius = size.width * 0.7f,
+                    center = Offset(size.width / 2f, size.height)
+                )
+            }
+
             // ═══════════════════════════════════════════════════════
             // 主内容（带入场动画）
             // ═══════════════════════════════════════════════════════
@@ -609,35 +720,51 @@ fun AnniversaryDetailDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Button(
                             onClick = { },
-                            modifier = Modifier.weight(1f).height(52.dp),
-                            shape = RoundedCornerShape(26.dp),
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(25.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.15f)
+                                containerColor = Color.White.copy(alpha = 0.18f)
                             ),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
                             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("添加回忆", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            Icon(Icons.Outlined.PhotoCamera, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                "添加回忆",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
-                        
+
                         Button(
                             onClick = { },
-                            modifier = Modifier.weight(1f).height(52.dp),
-                            shape = RoundedCornerShape(26.dp),
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            shape = RoundedCornerShape(25.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.88f)
+                                containerColor = Color.White.copy(alpha = 0.92f)
                             ),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
                             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                         ) {
-                            Icon(Icons.Default.Share, null, tint = Color(0xFF764ba2), modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("分享纪念", color = Color(0xFF764ba2), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            Icon(Icons.Default.Share, null, tint = Color(0xFF764ba2), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                "分享纪念",
+                                color = Color(0xFF764ba2),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }

@@ -36,8 +36,8 @@ object BuiltInSkins {
             brass         = ColorPair(Color(0xFFB89B5A), Color(0xFFFFE08A)),
             ribbon        = Color(0xFFB23A48),
             ruling        = Color(0xFF8B6F4E),
-            pageEdge      = Color(0xFFD8C28B),
-            pageEdgeDark  = Color(0xFF8B6F4E),
+            pageEdge      = Color(0xFF5A4D35),  // 深度加强
+            pageEdgeDark  = Color(0xFF3A2D1D),
             seal          = Color(0xFFB23A48)
         ),
         typography = SkinTypography(
@@ -86,8 +86,8 @@ object BuiltInSkins {
             brass         = ColorPair(Color(0xFF9DA3B0), Color(0xFFE8ECF5)),
             ribbon        = Color(0xFF6E4FCF),
             ruling        = Color(0xFF3D2C5C),
-            pageEdge      = Color(0xFFCFD3DB),
-            pageEdgeDark  = Color(0xFF3D2C5C),
+            pageEdge      = Color(0xFF4A4A5E),  // 深度加强
+            pageEdgeDark  = Color(0xFF2D2C3C),
             seal          = Color(0xFF6E4FCF)
         ),
         typography = SkinTypography(
@@ -133,10 +133,10 @@ object BuiltInSkins {
             // 玫瑰金 → 古铜玫瑰：跟奶油底对比度足够，文字能看清
             foil          = ColorPair(Color(0xFFB8533F), Color(0xFF8C3220)),
             brass         = ColorPair(Color(0xFFE8A088), Color(0xFFFFFFFF)),
-            ribbon        = Color(0xFFE89BAA),                                 // 樱花粉丝带（略加深）
+            ribbon        = Color(0xFFE89BAA),
             ruling        = Color(0xFFB8533F),
-            pageEdge      = Color(0xFFFFE5D5),
-            pageEdgeDark  = Color(0xFFC48472),
+            pageEdge      = Color(0xFF8A6B55),  // 深度加强
+            pageEdgeDark  = Color(0xFF6A4B35),
             seal          = Color(0xFFB8533F)
         ),
         typography = SkinTypography(
@@ -192,9 +192,9 @@ object BuiltInSkins {
             brass         = ColorPair(Color(0xFFFFB347), Color(0xFFFFE08A)),
             ribbon        = Color(0xFFFFD75A),
             ruling        = Color(0xFF8B2828),
-            pageEdge      = Color(0xFFEDC07A),
-            pageEdgeDark  = Color(0xFFA85B0F),
-            seal          = Color(0xFFFFE08A)                                  // 烫金火印
+            pageEdge      = Color(0xFF7A5A35),  // 深度加强
+            pageEdgeDark  = Color(0xFF5A3A1A),
+            seal          = Color(0xFFFFE08A)
         ),
         typography = SkinTypography(
             titleFontFamily = FontFamily.Serif,
@@ -240,8 +240,8 @@ object BuiltInSkins {
             brass         = ColorPair(Color(0xFFB0BFB8), Color(0xFFFFFFFF)),
             ribbon        = Color(0xFFC9F0DA),
             ruling        = Color(0xFF3A7A5C),
-            pageEdge      = Color(0xFFD8E5D2),
-            pageEdgeDark  = Color(0xFF3A7A5C),
+            pageEdge      = Color(0xFF5A6A55),  // 深度加强
+            pageEdgeDark  = Color(0xFF3A4A3C),
             seal          = Color(0xFFB23A48)
         ),
         typography = SkinTypography(
@@ -288,8 +288,8 @@ object BuiltInSkins {
             brass         = ColorPair(Color(0xFFB6C4DC), Color(0xFFFFFFFF)),
             ribbon        = Color(0xFF6FB3FF),
             ruling        = Color(0xFF1B3D7A),
-            pageEdge      = Color(0xFFD6DEEC),
-            pageEdgeDark  = Color(0xFF1B3D7A),
+            pageEdge      = Color(0xFF5A6A7A),  // 深度加强
+            pageEdgeDark  = Color(0xFF2B3D5A),
             seal          = Color(0xFF6FB3FF)
         ),
         typography = SkinTypography(

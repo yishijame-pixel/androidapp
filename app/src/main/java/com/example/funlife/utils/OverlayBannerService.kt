@@ -72,34 +72,35 @@ class OverlayBannerService : Service() {
 
     private fun buildView(count: Int): View {
         val ctx = this
-        // 渐变粉色背景
-        val bg = GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
+
+        // ─── 多层渐变背景：上层柔光 + 下层主色，营造立体感 ───
+        val mainGradient = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
             intArrayOf(
-                Color.parseColor("#FFCAD4"),
-                Color.parseColor("#FF80AB"),
-                Color.parseColor("#EC407A"),
-                Color.parseColor("#D81B60")
+                Color.parseColor("#FFB6C8"),  // 浅樱粉
+                Color.parseColor("#FF7AB6"),  // 玫瑰粉
+                Color.parseColor("#E91E63"),  // 主粉
+                Color.parseColor("#C2185B")   // 深酒红
             )
         ).apply {
-            cornerRadius = dp(50).toFloat()
+            cornerRadius = dp(28).toFloat()
+            setStroke(dp(2), Color.parseColor("#80FFFFFF"))  // 白色描边
         }
+
         val container = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = bg
-            setPadding(dp(16), dp(12), dp(12), dp(12))
-            elevation = dp(12).toFloat()
-            // 留两侧边距
+            background = mainGradient
+            setPadding(dp(14), dp(14), dp(10), dp(14))
+            elevation = dp(20).toFloat()  // 更深阴影
             val marginLp = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                leftMargin = dp(10); rightMargin = dp(10)
+                leftMargin = dp(12); rightMargin = dp(12)
             }
             layoutParams = marginLp
             gravity = Gravity.CENTER_VERTICAL
             isClickable = true
-            // 点击 → 跳转 App
             setOnClickListener {
                 AnniversaryReminderManager.dismissInAppBanner()
                 AnniversaryReminderManager.stopAlarm(ctx)
@@ -111,63 +112,104 @@ class OverlayBannerService : Service() {
             }
         }
 
-        // 铃铛圆
+        // ─── 铃铛：双层背景（外圈白色光晕 + 内圈半透明） ───
+        val bellWrap = FrameLayout(ctx).apply {
+            val outerLp = LinearLayout.LayoutParams(dp(48), dp(48)).apply { rightMargin = dp(12) }
+            layoutParams = outerLp
+        }
+        val bellOuterRing = View(ctx).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#33FFFFFF"))
+                setStroke(dp(1), Color.parseColor("#66FFFFFF"))
+            }
+            layoutParams = FrameLayout.LayoutParams(dp(48), dp(48))
+        }
         val bell = TextView(ctx).apply {
             text = "🔔"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            val bellBg = GradientDrawable().apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#4DFFFFFF"))
+                colors = intArrayOf(Color.parseColor("#FFFFFFFF"), Color.parseColor("#FFFFE4EC"))
             }
-            background = bellBg
-            val lp = LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(10) }
-            layoutParams = lp
             gravity = Gravity.CENTER
+            val lp = FrameLayout.LayoutParams(dp(38), dp(38)).apply {
+                gravity = Gravity.CENTER
+            }
+            layoutParams = lp
         }
-        container.addView(bell)
+        bellWrap.addView(bellOuterRing)
+        bellWrap.addView(bell)
+        container.addView(bellWrap)
 
+        // ─── 文字列 ───
         val textCol = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
             )
         }
+        // 顶部一行：标题 + NEW 徽章
+        val titleRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val title = TextView(ctx).apply {
-            text = "今日纪念日提醒 🎀"
+            text = "今日纪念日提醒"
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), Color.parseColor("#80AD1457"))
         }
+        val newBadge = TextView(ctx).apply {
+            text = "NEW"
+            setTextColor(Color.parseColor("#E91E63"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(6), dp(2), dp(6), dp(2))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.WHITE)
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { leftMargin = dp(8) }
+            layoutParams = lp
+        }
+        titleRow.addView(title)
+        titleRow.addView(newBadge)
+        textCol.addView(titleRow)
+
+        // 副标题
         val subtitle = TextView(ctx).apply {
-            text = "✨ 你有 $count 个值得庆祝的日子！点击进入 💗"
+            text = "✨ 你有 $count 个值得庆祝的日子，点击查看 💗"
             setTextColor(Color.parseColor("#F0FFFFFF"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(0, dp(2), 0, 0)
         }
-        textCol.addView(title)
         textCol.addView(subtitle)
         container.addView(textCol)
 
-        // 关闭按钮
+        // ─── 关闭按钮（更精致：圆形 + 半透明 + 描边） ───
         val closeBtn = TextView(ctx).apply {
             text = "✕"
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
-            val closeBg = GradientDrawable().apply {
+            background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#4DFFFFFF"))
+                setColor(Color.parseColor("#33000000"))
+                setStroke(dp(1), Color.parseColor("#66FFFFFF"))
             }
-            background = closeBg
             gravity = Gravity.CENTER
-            val lp = LinearLayout.LayoutParams(dp(28), dp(28)).apply { leftMargin = dp(8) }
+            val lp = LinearLayout.LayoutParams(dp(30), dp(30)).apply { leftMargin = dp(6) }
             layoutParams = lp
-            setOnClickListener {
-                stopSelf()
-            }
+            setOnClickListener { stopSelf() }
         }
         container.addView(closeBtn)
 
-        // 用 FrameLayout 包一下让 margin 生效
+        // 外层 FrameLayout 让 margin 生效 + 加顶部高光条
         val outer = FrameLayout(ctx)
         outer.addView(container)
         return outer

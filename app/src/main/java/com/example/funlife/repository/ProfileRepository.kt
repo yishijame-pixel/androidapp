@@ -1,7 +1,9 @@
 // ProfileRepository.kt - 个人主页数据仓库
 package com.example.funlife.repository
 
+import androidx.room.withTransaction
 import com.example.funlife.data.dao.*
+import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -11,7 +13,8 @@ class ProfileRepository(
     private val userAvatarDao: UserAvatarDao,
     private val userDao: UserDao,
     private val coinDao: CoinDao,
-    private val dailyRewardDao: DailyRewardDao
+    private val dailyRewardDao: DailyRewardDao,
+    private val db: AppDatabase? = null
 ) {
     
     // ========== 用户头像信息 ==========
@@ -65,29 +68,20 @@ class ProfileRepository(
     }
     
     suspend fun purchaseFrame(userId: Long, frameId: String, price: Int): Result<Unit> {
+        val database = db ?: return Result.failure(IllegalStateException("DB not injected"))
         return try {
-            // 检查是否已拥有
-            if (userAvatarDao.hasFrame(userId, frameId)) {
-                return Result.failure(Exception("已拥有该头像框"))
+            database.withTransaction {
+                // 已拥有检查（事务内，避免并发双发）
+                if (userAvatarDao.hasFrame(userId, frameId)) {
+                    throw IllegalStateException("已拥有该头像框")
+                }
+                // 原子扣币（同时校验余额）
+                val rowsAffected = coinDao.spendCoinsAtomic(userId, price)
+                if (rowsAffected == 0) {
+                    throw IllegalStateException("金币不足")
+                }
+                userAvatarDao.addOwnedFrame(UserOwnedFrame(userId = userId, frameId = frameId))
             }
-            
-            // 检查金币是否足够
-            val coins = coinDao.getUserCoins(userId).first()
-            if (coins == null || coins.coins < price) {
-                return Result.failure(Exception("金币不足"))
-            }
-            
-            // 扣除金币
-            val rowsAffected = coinDao.spendCoinsAtomic(userId, price)
-            if (rowsAffected == 0) {
-                return Result.failure(Exception("金币扣除失败"))
-            }
-            
-            // 添加到已拥有列表
-            userAvatarDao.addOwnedFrame(
-                UserOwnedFrame(userId = userId, frameId = frameId)
-            )
-            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -105,29 +99,18 @@ class ProfileRepository(
     }
     
     suspend fun purchaseBackground(userId: Long, backgroundId: String, price: Int): Result<Unit> {
+        val database = db ?: return Result.failure(IllegalStateException("DB not injected"))
         return try {
-            // 检查是否已拥有
-            if (userAvatarDao.hasBackground(userId, backgroundId)) {
-                return Result.failure(Exception("已拥有该背景"))
+            database.withTransaction {
+                if (userAvatarDao.hasBackground(userId, backgroundId)) {
+                    throw IllegalStateException("已拥有该背景")
+                }
+                val rowsAffected = coinDao.spendCoinsAtomic(userId, price)
+                if (rowsAffected == 0) {
+                    throw IllegalStateException("金币不足")
+                }
+                userAvatarDao.addOwnedBackground(UserOwnedBackground(userId = userId, backgroundId = backgroundId))
             }
-            
-            // 检查金币是否足够
-            val coins = coinDao.getUserCoins(userId).first()
-            if (coins == null || coins.coins < price) {
-                return Result.failure(Exception("金币不足"))
-            }
-            
-            // 扣除金币
-            val rowsAffected = coinDao.spendCoinsAtomic(userId, price)
-            if (rowsAffected == 0) {
-                return Result.failure(Exception("金币扣除失败"))
-            }
-            
-            // 添加到已拥有列表
-            userAvatarDao.addOwnedBackground(
-                UserOwnedBackground(userId = userId, backgroundId = backgroundId)
-            )
-            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

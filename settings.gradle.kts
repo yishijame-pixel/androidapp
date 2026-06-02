@@ -26,3 +26,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "FunLife"
 include(":app")
+include(":PageFlip")

@@ -33,6 +33,12 @@ import kotlin.math.sin
  *
  * @return Pair(ImageBitmap用于渲染, 头像占比0.0~1.0)
  */
+// 🚀 性能优化：跨 Composition / 跨 Screen 缓存头像框解析结果（PNG 像素扫描很贵）
+// 用 LruCache 限制条目数，避免缓存膨胀导致 OOM
+private val frameAnalysisCache = object : android.util.LruCache<String, Pair<ImageBitmap, Float>>(12) {
+    override fun sizeOf(key: String, value: Pair<ImageBitmap, Float>) = 1
+}
+
 private fun loadAndAnalyzeFrame(
     bitmap: android.graphics.Bitmap
 ): Pair<ImageBitmap, Float> {
@@ -116,19 +122,19 @@ fun AvatarWithFrame(
 ) {
     val context = LocalContext.current
     
-    // 加载头像框图片并自动分析透明区域
+    // 加载头像框图片并自动分析透明区域（🚀 LruCache 跨页面缓存，最多保留 12 个）
     val frameData = remember(frameAssetPath) {
-        if (frameAssetPath != null) {
-            try {
-                context.assets.open(frameAssetPath).use { inputStream ->
-                    val bmp = BitmapFactory.decodeStream(inputStream)
-                    if (bmp != null) loadAndAnalyzeFrame(bmp) else null
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("AvatarWithFrame", "Failed to load frame: ${e.message}")
-                null
+        if (frameAssetPath == null) return@remember null
+        frameAnalysisCache.get(frameAssetPath)?.let { return@remember it }
+        try {
+            context.assets.open(frameAssetPath).use { inputStream ->
+                val bmp = BitmapFactory.decodeStream(inputStream)
+                if (bmp != null) loadAndAnalyzeFrame(bmp).also {
+                    frameAnalysisCache.put(frameAssetPath, it)
+                } else null
             }
-        } else {
+        } catch (e: Exception) {
+            android.util.Log.e("AvatarWithFrame", "Failed to load frame: ${e.message}")
             null
         }
     }

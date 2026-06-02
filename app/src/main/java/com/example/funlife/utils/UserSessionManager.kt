@@ -8,7 +8,9 @@ import androidx.security.crypto.MasterKey
 import com.example.funlife.data.model.UserSession
 
 class UserSessionManager(context: Context) {
-    
+
+    private val appContext = context.applicationContext
+
     // 🔥 修复：使用加密的 SharedPreferences
     private val prefs: SharedPreferences = try {
         val masterKey = MasterKey.Builder(context)
@@ -59,6 +61,11 @@ class UserSessionManager(context: Context) {
         }
         
         android.util.Log.d("UserSessionManager", "会话保存成功，有效期至: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(expiryTime))}")
+
+        // 用户切换 → 刷新通知未读计数（InboxStore 按 userId 隔离）
+        runCatching {
+            com.example.funlife.notifications.InboxStore.refreshUnread(appContext)
+        }
     }
     
     fun getSession(): UserSession? {
@@ -124,5 +131,9 @@ class UserSessionManager(context: Context) {
     
     fun clearSession() {
         prefs.edit().clear().apply()
+        // 退出 → 立即清空全局未读（避免下一个用户看到上一个的红点）
+        runCatching {
+            com.example.funlife.notifications.InboxStore.refreshUnread(appContext)
+        }
     }
 }

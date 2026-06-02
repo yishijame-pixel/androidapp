@@ -2,9 +2,11 @@
 package com.example.funlife.repository
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.example.funlife.data.dao.UserVipDao
 import com.example.funlife.data.dao.RedeemCodeDao
 import com.example.funlife.data.dao.CoinDao
+import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.UserVip
 import com.example.funlife.data.model.RedeemCode
 import com.example.funlife.data.model.UserRedeemHistory
@@ -19,7 +21,8 @@ class VipRepository(
     private val userVipDao: UserVipDao,
     private val redeemCodeDao: RedeemCodeDao,
     private val coinDao: CoinDao,
-    private val context: Context
+    private val context: Context,
+    private val db: AppDatabase? = null
 ) {
     
     private val dailyCoinManager = DailyCoinManager(context)
@@ -40,12 +43,14 @@ class VipRepository(
             val signature = securityValidator.signVipStatus(newVip)
             userVipDao.insertOrUpdate(newVip.copy(signature = signature))
         } else {
-            // 验证现有VIP状态
+            // 🔒 严重漏洞修复：签名校验失败 = 数据被外部篡改，必须降级到非 VIP，
+            //    不能"用当前数据重新生成签名"——那会把伪造的 vipLevel/expireDate 洗白。
             val validation = securityValidator.validateVipStatus(existing)
             if (!validation.isValid) {
-                // 如果签名无效，重新生成
-                val newSignature = securityValidator.signVipStatus(existing)
-                userVipDao.insertOrUpdate(existing.copy(signature = newSignature))
+                android.util.Log.w("VipRepository", "VIP 状态签名异常 → 强制降级: ${validation.getErrorMessage()}")
+                val downgraded = UserVip(userId = userId, vipLevel = 0, expireDate = null)
+                val newSignature = securityValidator.signVipStatus(downgraded)
+                userVipDao.insertOrUpdate(downgraded.copy(signature = newSignature))
             }
         }
     }
@@ -80,20 +85,36 @@ class VipRepository(
             }
             
             val vipLevel = userVip.getCurrentVipLevel()
-            val coins = vipLevel.dailyCoins
-            
-            // 5. 添加金币
-            coinDao.addCoins(userId, coins)
-            
-            // 6. 使用安全管理器记录领取时间（加密存储）
+            // 🔄 领取前主动同步一次云端配置：保证用户领到与后台一致的最新金额。
+            //   受 VipRuntimeConfig 内部 30s 节流，不会变成高频调用。
+            //   网络失败时静默降级用本地缓存，绝不阻塞用户领取。
+            try {
+                com.example.funlife.vip.VipRuntimeConfig.refresh(context, force = false)
+            } catch (e: Exception) {
+                android.util.Log.w("VipRepository", "claim 前刷新配置失败，使用本地缓存: ${e.message}")
+            }
+            // 🔄 运行时配置 > 枚举默认（后台 SKU 配置可动态调整）
+            val coins = com.example.funlife.vip.VipRuntimeConfig.dailyCoinsOf(vipLevel)
+
+            // 🔒 顺序至关重要 —— 防止"领金币后锁没记上导致重复领取":
+            //    5. 先占锁（recordClaim 写加密 SharedPreferences）
+            //    6. 占锁成功后才发金币 + 写日期；任一失败也已占了锁，宁愿漏领不可重复领
             if (!dailyCoinManager.recordClaim(userId)) {
                 return Result.failure(Exception("记录领取时间失败"))
             }
-            
-            // 7. 更新数据库中的领取日期（双重记录）
-            val today = LocalDate.now().toString()
-            userVipDao.updateLastDailyClaimDate(userId, today)
-            
+
+            // 6. 添加金币 + 更新日期 一起放在 Room 事务里
+            val database = db
+            if (database != null) {
+                database.withTransaction {
+                    coinDao.addCoins(userId, coins)
+                    userVipDao.updateLastDailyClaimDate(userId, LocalDate.now().toString())
+                }
+            } else {
+                coinDao.addCoins(userId, coins)
+                userVipDao.updateLastDailyClaimDate(userId, LocalDate.now().toString())
+            }
+
             Result.success(coins)
         } catch (e: Exception) {
             Result.failure(e)
@@ -101,6 +122,15 @@ class VipRepository(
     }
     
     suspend fun redeemCode(userId: Long, code: String): Result<String> {
+        // 🔒 并发防护：整个兑换流程在单写事务内串行执行，避免双读同一未使用记录后双发。
+        val database = db
+        return if (database != null) {
+            try { database.withTransaction { redeemCodeImpl(userId, code) } }
+            catch (e: Exception) { Result.failure(e) }
+        } else redeemCodeImpl(userId, code)
+    }
+
+    private suspend fun redeemCodeImpl(userId: Long, code: String): Result<String> {
         return try {
             android.util.Log.d("VipRepository", "========== 开始兑换码流程 ==========")
             android.util.Log.d("VipRepository", "用户ID: $userId, 兑换码: $code")
@@ -111,11 +141,7 @@ class VipRepository(
                 return Result.failure(Exception("兑换码格式错误"))
             }
             
-            // 2. 先尝试添加测试兑换码（确保数据库有数据）
-            android.util.Log.d("VipRepository", "步骤1: 初始化测试兑换码")
-            addTestRedeemCodes()
-            
-            // 3. 在IO线程生成兑换码哈希（保持军事级加密，避免UI卡顿）
+            // 2. 在IO线程生成兑换码哈希（保持军事级加密，避免UI卡顿）
             android.util.Log.d("VipRepository", "步骤2: 生成兑换码哈希（后台线程）")
             val codeHash = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 SecurityManager.hashRedeemCode(code, context)
@@ -168,13 +194,13 @@ class VipRepository(
                     val vipLevel = redeemCode.value.toIntOrNull() ?: 1
                     android.util.Log.d("VipRepository", "VIP等级: $vipLevel")
                     
-                    // 根据VIP等级设置过期日期
+                    // 根据 VIP 等级设置过期日期（与云端 sku.js 三档严格一致）
                     val expireDate = when (vipLevel) {
-                        1 -> null  // VIP1（普通VIP）：永久
-                        2 -> LocalDate.now().plusDays(365).toString()  // VIP2（年费VIP）：365天
-                        3 -> null  // VIP3（终身VIP）：永久
-                        99 -> null  // PERMANENT（系统保留）：永久
-                        else -> LocalDate.now().plusDays(30).toString()  // 其他：30天
+                        1 -> LocalDate.now().plusDays(30).toString()   // 月卡 30 天
+                        2 -> LocalDate.now().plusDays(365).toString()  // 年卡 365 天
+                        3 -> null   // 终身永久
+                        99 -> null  // PERMANENT（旧体系兼容）永久
+                        else -> LocalDate.now().plusDays(30).toString()
                     }
                     
                     val currentVip = userVipDao.getUserVipSync(userId)
@@ -208,14 +234,14 @@ class VipRepository(
                     val signature = securityValidator.signVipStatus(newVip)
                     userVipDao.insertOrUpdate(newVip.copy(signature = signature))
                     
-                    // 根据VIP等级赠送金币
+                    // 根据 VIP 等级赠送金币（与云端 sku.js bonusCoins 保持一致）
                     val bonusCoins = when (vipLevel) {
-                        1 -> 100   // 普通VIP赠送100金币
-                        2 -> 500   // 年费VIP赠送500金币
-                        3 -> 1000  // 终身VIP赠送1000金币
+                        1 -> 50    // 月卡激活
+                        2 -> 300   // 年卡激活
+                        3, 99 -> 1000  // 终身激活
                         else -> 0
                     }
-                    
+
                     if (bonusCoins > 0) {
                         // 🔥 确保用户有金币记录（使用initializeCoins）
                         coinDao.initializeCoins(userId)
@@ -268,83 +294,11 @@ class VipRepository(
         }
     }
     
-    /**
-     * 添加测试兑换码（仅用于测试）
-     * 使用 REPLACE 策略确保兑换码始终是最新的
-     */
-    private suspend fun addTestRedeemCodes() {
-        try {
-            android.util.Log.d("VipRepository", "开始添加/更新测试兑换码")
-            
-            // 添加测试兑换码（使用 REPLACE 策略，如果已存在则更新）
-            val testCodes = listOf(
-                RedeemCode(
-                    code = "HZ223498",
-                    type = "VIP",
-                    value = "3",  // 终身VIP（VIP3）
-                    maxUses = -1,  // 无限使用
-                    currentUses = 0,
-                    expiryDate = LocalDate.now().plusYears(10).toString(),
-                    isActive = true
-                ),
-                RedeemCode(
-                    code = "VIP2024",
-                    type = "VIP",
-                    value = "1",  // 普通VIP（VIP1）
-                    maxUses = -1,  // 无限使用
-                    currentUses = 0,
-                    expiryDate = LocalDate.now().plusYears(1).toString(),
-                    isActive = true
-                ),
-                RedeemCode(
-                    code = "SUPERVIP",
-                    type = "VIP",
-                    value = "2",  // 年费VIP（VIP2）
-                    maxUses = -1,
-                    currentUses = 0,
-                    expiryDate = LocalDate.now().plusYears(1).toString(),
-                    isActive = true
-                ),
-                RedeemCode(
-                    code = "COINS1000",
-                    type = "COINS",
-                    value = "1000",
-                    maxUses = -1,
-                    currentUses = 0,
-                    expiryDate = LocalDate.now().plusYears(1).toString(),
-                    isActive = true
-                ),
-                RedeemCode(
-                    code = "TESTCODE",
-                    type = "VIP",
-                    value = "1",
-                    maxUses = 100,
-                    currentUses = 0,
-                    expiryDate = LocalDate.now().plusYears(1).toString(),
-                    isActive = true
-                )
-            )
-            
-            testCodes.forEach { code ->
-                redeemCodeDao.insertRedeemCode(code)
-                android.util.Log.d("VipRepository", "✓ 兑换码已添加/更新: ${code.code} (类型: ${code.type}, 值: ${code.value})")
-            }
-            
-            // 验证兑换码是否成功添加
-            val verification = redeemCodeDao.getRedeemCode("HZ223498")
-            if (verification != null) {
-                android.util.Log.d("VipRepository", "✓ 验证成功: HZ223498 已在数据库中 (VIP等级: ${verification.value})")
-            } else {
-                android.util.Log.e("VipRepository", "✗ 验证失败: HZ223498 未找到")
-            }
-            
-            android.util.Log.d("VipRepository", "测试兑换码添加完成，共 ${testCodes.size} 个")
-        } catch (e: Exception) {
-            android.util.Log.e("VipRepository", "添加测试兑换码失败: ${e.message}", e)
-        }
-    }
-    
     suspend fun purchaseVip(userId: Long, vipLevel: Int, days: Int, cost: Int): Result<String> {
+        // 🔒 安全策略：禁止用金币购买 VIP（防止本地刷金币换 VIP）
+        // VIP 必须通过云端发行的卡密激活，由服务端做 HMAC 签名校验。
+        return Result.failure(Exception("VIP 现已统一通过激活码开通，请到\"我的-VIP-激活码\"页面输入卡密"))
+        @Suppress("UNREACHABLE_CODE")
         return try {
             // 检查金币是否足够
             val coins = coinDao.getCoinsAmount(userId) ?: 0

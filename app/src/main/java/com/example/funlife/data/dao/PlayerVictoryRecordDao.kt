@@ -7,33 +7,32 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlayerVictoryRecordDao {
-    @Query("SELECT * FROM player_victory_records ORDER BY victoryCount DESC")
-    fun getAllRecords(): Flow<List<PlayerVictoryRecord>>
-    
-    @Query("SELECT * FROM player_victory_records WHERE playerName = :playerName LIMIT 1")
-    suspend fun getRecordByName(playerName: String): PlayerVictoryRecord?
-    
+    @Query("SELECT * FROM player_victory_records WHERE userId = :userId ORDER BY victoryCount DESC")
+    fun getAllRecords(userId: Long): Flow<List<PlayerVictoryRecord>>
+
+    @Query("SELECT * FROM player_victory_records WHERE userId = :userId AND playerName = :playerName LIMIT 1")
+    suspend fun getRecordByName(userId: Long, playerName: String): PlayerVictoryRecord?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: PlayerVictoryRecord)
-    
+
     @Update
     suspend fun update(record: PlayerVictoryRecord)
-    
-    @Query("DELETE FROM player_victory_records")
-    suspend fun deleteAll()
-    
+
+    @Query("DELETE FROM player_victory_records WHERE userId = :userId")
+    suspend fun deleteAll(userId: Long)
+
     @Transaction
-    suspend fun recordVictory(playerName: String, avatar: String) {
-        val existing = getRecordByName(playerName)
+    suspend fun recordVictory(userId: Long, playerName: String, avatar: String) {
+        val existing = getRecordByName(userId, playerName)
         if (existing != null) {
-            // 更新现有记录
             update(existing.copy(
                 victoryCount = existing.victoryCount + 1,
                 lastVictoryTime = System.currentTimeMillis()
             ))
         } else {
-            // 创建新记录
             insert(PlayerVictoryRecord(
+                userId = userId,
                 playerName = playerName,
                 avatar = avatar,
                 victoryCount = 1,

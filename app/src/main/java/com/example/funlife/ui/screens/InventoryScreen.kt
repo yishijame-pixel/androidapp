@@ -201,183 +201,105 @@ fun InventoryTopBar(
     isVip: Boolean, // 🔥 新增VIP状态
     onNavigateBack: () -> Unit
 ) {
-    Column(
+    // 🔥 紧凑单行设计：返回 + 标题（含副标） + 容量进度+VIP芯片
+    val isUnlimited = inventoryCapacity == Int.MAX_VALUE
+    val progress = if (isUnlimited) 1f else (totalQuantity.toFloat() / inventoryCapacity.toFloat()).coerceIn(0f, 1f)
+    val nearFull = !isUnlimited && progress >= 0.9f
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth()
+        // 返回按钮
+        IconButton(
+            onClick = onNavigateBack,
+            modifier = Modifier.size(40.dp)
         ) {
-            // 返回按钮 - 无背景色
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(40.dp)
-            ) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "返回",
-                    tint = Color(0xFF5D4037),
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            
-            // 标题
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("🎒", fontSize = 24.sp)
-                    Text(
-                        "我的背包",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF5D4037)
-                    )
-                }
-                
-                Text(
-                    "$itemCount 种物品 · $totalQuantity 个",
-                    fontSize = 12.sp,
-                    color = Color(0xFF8D6E63)
-                )
-            }
+            Icon(
+                Icons.Default.ArrowBack,
+                contentDescription = "返回",
+                tint = Color(0xFF5D4037),
+                modifier = Modifier.size(26.dp)
+            )
         }
-        
-        // 🔥 容量显示条
-        Spacer(modifier = Modifier.height(12.dp))
-        
+
+        // 标题 + 副标
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "容量:",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF5D4037)
-                    )
-                    // 🔥 终身VIP显示"无限"
-                    if (inventoryCapacity == Int.MAX_VALUE) {
-                        Text(
-                            "$totalQuantity / ∞",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFFD700)
-                        )
-                    } else {
-                        Text(
-                            "$totalQuantity / $inventoryCapacity",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (totalQuantity >= inventoryCapacity * 0.9) {
-                                Color(0xFFE53935) // 接近满时显示红色
-                            } else {
-                                Color(0xFF4CAF50)
-                            }
-                        )
-                    }
-                }
-                
-                // VIP标识
-                if (isVip) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFFFD700).copy(alpha = 0.2f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("👑", fontSize = 14.sp)
-                            Text(
-                                "VIP",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFFF9800)
-                            )
-                        }
-                    }
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Gray.copy(alpha = 0.2f)
-                    ) {
-                        Text(
-                            "普通",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+                Text("🎒", fontSize = 20.sp)
+                Text(
+                    "我的背包",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF5D4037),
+                    maxLines = 1
+                )
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // 容量进度条 - 终身VIP不显示进度条
-            if (inventoryCapacity != Int.MAX_VALUE) {
-                val progress = totalQuantity.toFloat() / inventoryCapacity.toFloat()
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFFE0E0E0))
-                ) {
+            Text(
+                "$itemCount 种 · $totalQuantity 个",
+                fontSize = 11.sp,
+                color = Color(0xFF8D6E63),
+                maxLines = 1
+            )
+        }
+
+        // 容量芯片（含 VIP 标识）
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = if (isUnlimited) Color(0xFFFFF8E1)
+                    else if (nearFull) Color(0xFFFFEBEE)
+                    else Color(0xFFE8F5E9)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (isVip) Text("👑", fontSize = 13.sp)
+                Text(
+                    if (isUnlimited) "$totalQuantity/∞" else "$totalQuantity/$inventoryCapacity",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = when {
+                        isUnlimited -> Color(0xFFFFB300)
+                        nearFull -> Color(0xFFE53935)
+                        else -> Color(0xFF388E3C)
+                    }
+                )
+                if (!isUnlimited) {
+                    // 迷你进度条
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress.coerceIn(0f, 1f))
-                            .fillMaxHeight()
-                            .background(
-                                brush = Brush.horizontalGradient(
-                                    colors = if (progress >= 0.9f) {
-                                        listOf(Color(0xFFE53935), Color(0xFFFF5252))
-                                    } else {
-                                        listOf(Color(0xFF4CAF50), Color(0xFF66BB6A))
-                                    }
-                                ),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                    )
+                            .width(40.dp)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xFFE0E0E0))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .fillMaxHeight()
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = if (nearFull)
+                                            listOf(Color(0xFFE53935), Color(0xFFFF5252))
+                                        else
+                                            listOf(Color(0xFF4CAF50), Color(0xFF66BB6A))
+                                    )
+                                )
+                        )
+                    }
                 }
-                
-                // 容量提示
-                if (progress >= 0.9f) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        if (isVip) "背包快满了！" else "背包快满了！开通VIP可扩容",
-                        fontSize = 11.sp,
-                        color = Color(0xFFE53935),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            } else {
-                // 终身VIP显示特殊提示
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "✨ 终身VIP · 无限容量",
-                    fontSize = 11.sp,
-                    color = Color(0xFFFFD700),
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
     }
@@ -405,10 +327,10 @@ fun ItemTypeFilter(
     
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.height(130.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.height(104.dp)
     ) {
         items(types.size) { index ->
             val typeInfo = types[index]
@@ -422,23 +344,22 @@ fun ItemTypeFilter(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(44.dp)
                     .clickable { onTypeSelected(typeInfo.type) },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 color = if (isSelected) Color(0xFFFF9800) else Color.White.copy(alpha = 0.9f),
                 tonalElevation = if (isSelected) 4.dp else 0.dp
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .padding(horizontal = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        typeInfo.emoji, 
-                        fontSize = 22.sp,
-                        modifier = Modifier.padding(bottom = 2.dp)
+                        typeInfo.emoji,
+                        fontSize = 16.sp
                     )
                     Text(
                         typeInfo.label,
@@ -447,13 +368,15 @@ fun ItemTypeFilter(
                         color = if (isSelected) Color.White else Color(0xFF5D4037),
                         maxLines = 1
                     )
-                    Text(
-                        "($count)",
-                        fontSize = 10.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) Color.White.copy(alpha = 0.9f) else Color(0xFF8D6E63),
-                        maxLines = 1
-                    )
+                    if (count > 0) {
+                        Text(
+                            count.toString(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White.copy(alpha = 0.95f) else Color(0xFFFF9800),
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -516,13 +439,7 @@ fun InventoryItemCard(
                     val context = LocalContext.current
                     val panelName = item.itemId.removePrefix("panel_")
                     val panelBitmap = remember(item.itemId) {
-                        try {
-                            context.assets.open("login/$panelName.png").use { inputStream ->
-                                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                            }
-                        } catch (e: Exception) {
-                            null
-                        }
+                        com.example.funlife.utils.ImageCache.loadImage(context, "login/$panelName.png", sampleSize = 2)
                     }
                     
                     if (panelBitmap != null) {
@@ -546,13 +463,7 @@ fun InventoryItemCard(
                     val context = LocalContext.current
                     val buttonName = item.itemId.removePrefix("button_")
                     val buttonBitmap = remember(item.itemId) {
-                        try {
-                            context.assets.open("login/$buttonName.png").use { inputStream ->
-                                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                            }
-                        } catch (e: Exception) {
-                            null
-                        }
+                        com.example.funlife.utils.ImageCache.loadImage(context, "login/$buttonName.png", sampleSize = 2)
                     }
                     
                     if (buttonBitmap != null) {
@@ -576,14 +487,7 @@ fun InventoryItemCard(
                     // 🔥 显示纪念日相框图片
                     val context = LocalContext.current
                     val frameBitmap = remember(item.itemId) {
-                        try {
-                            context.assets.open("login/${item.itemId}.png").use { inputStream ->
-                                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("InventoryItemCard", "Failed to load jinian frame: ${e.message}")
-                            null
-                        }
+                        com.example.funlife.utils.ImageCache.loadImage(context, "login/${item.itemId}.png", sampleSize = 2)
                     }
                     
                     if (frameBitmap != null) {
@@ -779,13 +683,7 @@ fun ItemDetailDialog(
                         item.itemId.startsWith("panel_js_") -> {
                             val panelName = item.itemId.removePrefix("panel_")
                             val panelBitmap = remember(item.itemId) {
-                                try {
-                                    context.assets.open("login/$panelName.png").use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
+                                com.example.funlife.utils.ImageCache.loadImage(context, "login/$panelName.png", sampleSize = 2)
                             }
                             
                             if (panelBitmap != null) {
@@ -804,13 +702,7 @@ fun ItemDetailDialog(
                         item.itemId.startsWith("button_pf_") -> {
                             val buttonName = item.itemId.removePrefix("button_")
                             val buttonBitmap = remember(item.itemId) {
-                                try {
-                                    context.assets.open("login/$buttonName.png").use { inputStream ->
-                                        android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
+                                com.example.funlife.utils.ImageCache.loadImage(context, "login/$buttonName.png", sampleSize = 2)
                             }
                             
                             if (buttonBitmap != null) {

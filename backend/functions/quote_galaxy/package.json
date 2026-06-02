@@ -1,0 +1,9 @@
+{
+  "name": "quote_galaxy",
+  "version": "1.0.0",
+  "description": "v53 阅光书房 · 匿名摘抄星河",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "latest"
+  }
+}

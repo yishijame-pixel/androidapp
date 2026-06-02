@@ -27,6 +27,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.funlife.ui.utils.ResponsiveDialogBox
+import com.example.funlife.ui.utils.Spacing
+import com.example.funlife.ui.utils.Radius
+import com.example.funlife.ui.utils.TextSize
+import com.example.funlife.ui.utils.IconSize
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 
@@ -149,75 +156,69 @@ fun AvatarUploadDialog(
         // 这里需要实现bitmap到Uri的转换
     }
     
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+    // 🔥 关键：usePlatformDefaultWidth=false 取消系统强制窄宽，配合 ResponsiveDialogBox 自适应限宽
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        ResponsiveDialogBox {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.xxl),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
-                Text(
-                    "选择头像",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2C3E50)
-                )
-                
-                Divider(color = Color(0xFFF0F0F0))
-                
-                // 从相册选择
-                AvatarUploadOption(
-                    icon = Icons.Default.PhotoLibrary,
-                    title = "从相册选择",
-                    subtitle = "选择已有照片",
-                    color = Color(0xFF4CAF50),
-                    onClick = {
-                        galleryLauncher.launch("image/*")
-                    }
-                )
-                
-                // 拍照
-                AvatarUploadOption(
-                    icon = Icons.Default.CameraAlt,
-                    title = "拍照",
-                    subtitle = "使用相机拍摄",
-                    color = Color(0xFF2196F3),
-                    onClick = {
-                        cameraLauncher.launch(null)
-                    }
-                )
-                
-                // 使用默认头像
-                AvatarUploadOption(
-                    icon = Icons.Default.Person,
-                    title = "使用默认头像",
-                    subtitle = "恢复默认样式",
-                    color = Color(0xFF9E9E9E),
-                    onClick = {
-                        // 传递null表示使用默认头像
-                        onDismiss()
-                    }
-                )
-                
-                Spacer(Modifier.height(8.dp))
-                
-                // 取消按钮
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier.padding(
+                        horizontal = Spacing.lg,
+                        vertical = Spacing.lg
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
                     Text(
-                        "取消",
-                        color = Color(0xFF95A5A6),
-                        fontSize = 16.sp
+                        "选择头像",
+                        fontSize = TextSize.headline,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2C3E50)
                     )
+
+                    Divider(color = Color(0xFFF0F0F0))
+
+                    AvatarUploadOption(
+                        icon = Icons.Default.PhotoLibrary,
+                        title = "从相册选择",
+                        subtitle = "选择已有照片",
+                        color = Color(0xFF4CAF50),
+                        onClick = { galleryLauncher.launch("image/*") }
+                    )
+
+                    AvatarUploadOption(
+                        icon = Icons.Default.CameraAlt,
+                        title = "拍照",
+                        subtitle = "使用相机拍摄",
+                        color = Color(0xFF2196F3),
+                        onClick = { cameraLauncher.launch(null) }
+                    )
+
+                    AvatarUploadOption(
+                        icon = Icons.Default.Person,
+                        title = "使用默认头像",
+                        subtitle = "恢复默认样式",
+                        color = Color(0xFF9E9E9E),
+                        onClick = { onDismiss() }
+                    )
+
+                    Spacer(Modifier.height(Spacing.xs))
+
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "取消",
+                            color = Color(0xFF95A5A6),
+                            fontSize = TextSize.md
+                        )
+                    }
                 }
             }
         }
@@ -238,49 +239,53 @@ fun AvatarUploadOption(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(Radius.lg))
             .clickable(onClick = onClick)
-            .background(color.copy(alpha = 0.1f))
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .background(color.copy(alpha = 0.10f))
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm + 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm + 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
-                .background(color.copy(alpha = 0.2f), CircleShape),
+                .size(44.dp)
+                .background(color.copy(alpha = 0.22f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 icon,
                 contentDescription = null,
                 tint = color,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(IconSize.lg)
             )
         }
-        
+
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 title,
-                fontSize = 16.sp,
+                fontSize = TextSize.md,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF2C3E50)
+                color = Color(0xFF2C3E50),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 subtitle,
-                fontSize = 13.sp,
-                color = Color(0xFF95A5A6)
+                fontSize = TextSize.sm,
+                color = Color(0xFF95A5A6),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        
+
         Icon(
             Icons.Default.ChevronRight,
             contentDescription = null,
             tint = Color(0xFFBDC3C7),
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(IconSize.md)
         )
     }
 }

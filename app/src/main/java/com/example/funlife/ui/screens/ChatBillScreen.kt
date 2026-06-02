@@ -55,6 +55,8 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.example.funlife.data.model.ChatMessage
 import com.example.funlife.data.model.ChatPersona
+import com.example.funlife.ui.components.AccountSwitcher
+import com.example.funlife.ui.components.BudgetRingStrip
 import com.example.funlife.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -110,6 +112,8 @@ fun ChatBillScreen(
     viewModel: ChatViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToBillDetail: () -> Unit = {},
+    onNavigateToBudgetManager: () -> Unit = {},
+    onNavigateToAccountManager: () -> Unit = {},
     avatarUri: String? = null
 ) {
     val messages by viewModel.messages.collectAsState(initial = emptyList())
@@ -131,13 +135,17 @@ fun ChatBillScreen(
     val isSearching by viewModel.isSearching.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState(initial = emptyList())
-    // 预算
-    var showBudgetDialog by remember { mutableStateOf(false) }
+    // 预算（已迁移到独立页面，仅保留人格超预告警用的老字段）
     val monthlyBudget by viewModel.monthlyBudget.collectAsState()
+    // 分享今日账单卡（数据隔离：用 viewModel.userId）
+    var showShareCardDialog by remember { mutableStateOf(false) }
+    val allBills by viewModel.bills.collectAsState(initial = emptyList())
     // 导出
     val context = LocalContext.current
     // AI设置
     var showAiDialog by remember { mutableStateOf(false) }
+    // 🆕 v50：极简模式快速设置月度预算
+    var showBudgetDialog by remember { mutableStateOf(false) }
     val isAiAvailable by remember { derivedStateOf { viewModel.isAiAvailable } }
     // Toast 消息监听
     val toastMessage by viewModel.toastMessage.collectAsState()
@@ -171,6 +179,10 @@ fun ChatBillScreen(
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // 🆕 v50 记账模式（极简 / 进阶）
+            val bookkeepingMode by viewModel.bookkeepingMode.collectAsState()
+            val isAdvanced = bookkeepingMode == com.example.funlife.viewmodel.BookkeepingMode.ADVANCED
+
             // ===== 自定义顶部栏 =====
             ChatTopBar(
                 persona = currentPersona,
@@ -184,7 +196,13 @@ fun ChatBillScreen(
                     avatarPickTargetId = currentPersonaId; showAvatarPicker = true
                 },
                 onSearch = { viewModel.toggleSearch() },
-                onBudget = { showBudgetDialog = true },
+                isAdvanced = isAdvanced,
+                onToggleMode = { viewModel.toggleBookkeepingMode() },
+                currentMonthlyBudget = monthlyBudget,
+                onSetMonthlyBudget = { showBudgetDialog = true },
+                onBudget = onNavigateToBudgetManager,
+                onAccountManager = onNavigateToAccountManager,
+                onShareCard = { showShareCardDialog = true },
                 onExport = {
                     scope.launch {
                         val csv = viewModel.exportBillsCsv()
@@ -321,6 +339,28 @@ fun ChatBillScreen(
                 QuickTips(themeColor = themeColor, onTap = { viewModel.handleInput(it) })
             }
 
+            // ===== 🆕 v49 预算进度环条（仅进阶模式显示） =====
+            if (isAdvanced) {
+                val budgetProgresses by viewModel.budgetProgresses.collectAsState()
+                BudgetRingStrip(
+                    progresses = budgetProgresses,
+                    onClickItem = { onNavigateToBudgetManager() },
+                    onAddBudget = { onNavigateToBudgetManager() }
+                )
+
+                // ===== 🆕 v48 多账户切换条（仅进阶模式显示） =====
+                val accounts by viewModel.accounts.collectAsState()
+                val currentAccountId by viewModel.currentAccountId.collectAsState()
+                if (accounts.isNotEmpty()) {
+                    AccountSwitcher(
+                        accounts = accounts,
+                        currentAccountId = currentAccountId,
+                        themeColor = themeColor,
+                        onSelect = { viewModel.selectAccount(it) }
+                    )
+                }
+            }
+
             // ===== 底部输入栏 =====
             BillInputBar(themeColor = themeColor, onSubmit = { viewModel.handleInput(it) })
         }
@@ -442,6 +482,76 @@ fun ChatBillScreen(
         )
     }
 
+    // 🆕 v50：月度预算设置弹窗（极简模式核心入口）
+    if (showBudgetDialog) {
+        var budgetText by remember(monthlyBudget) {
+            mutableStateOf(if (monthlyBudget > 0f) monthlyBudget.toInt().toString() else "")
+        }
+        AlertDialog(
+            onDismissRequest = { showBudgetDialog = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Savings, null, tint = Color(0xFFFFA726), modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("月度预算", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        "设置后，超出 50% / 80% / 100% 时人格会主动提醒；超额还会推一条系统通知（24h 一次）。",
+                        fontSize = 12.sp, color = Color(0xFF888888), lineHeight = 18.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = budgetText,
+                        onValueChange = { v -> budgetText = v.filter { it.isDigit() }.take(8) },
+                        singleLine = true,
+                        label = { Text("金额（元）") },
+                        leadingIcon = { Text("¥", fontSize = 16.sp, color = Color(0xFFFFA726), fontWeight = FontWeight.Bold) },
+                        keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    if (monthlyBudget > 0f) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "当前预算：¥${monthlyBudget.toInt()}",
+                            fontSize = 12.sp, color = Color(0xFFAAAAAA)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val v = budgetText.toFloatOrNull() ?: 0f
+                        viewModel.setMonthlyBudget(v)
+                        showBudgetDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA726)),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("保存", color = Color.White) }
+            },
+            dismissButton = {
+                if (monthlyBudget > 0f) {
+                    TextButton(
+                        onClick = {
+                            viewModel.setMonthlyBudget(0f)
+                            showBudgetDialog = false
+                        }
+                    ) { Text("取消预算", color = Color(0xFFFF5252)) }
+                } else {
+                    TextButton(onClick = { showBudgetDialog = false }) {
+                        Text("关闭", color = Color(0xFF999999))
+                    }
+                }
+            }
+        )
+    }
+
     // AI设置弹窗
     if (showAiDialog) {
         var apiKeyText by remember { mutableStateOf(viewModel.getAiApiKey()) }
@@ -478,14 +588,14 @@ fun ChatBillScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (isAiAvailable) "✅ AI 已连接 (DeepSeek)" else "⚠️ 未配置 API Key",
+                            if (isAiAvailable) "✅ 已连接 灵犀 AI" else "⚠️ 未配置 API Key",
                             fontSize = 13.sp,
                             color = if (isAiAvailable) Color(0xFF2E7D32) else Color(0xFFE65100)
                         )
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "输入 DeepSeek API Key 启用 AI 智能回复\n获取地址: platform.deepseek.com",
+                        "输入 API Key 启用灵犀 AI 智能回复。\n不填则使用本地规则引擎。",
                         fontSize = 12.sp, color = Color(0xFF999999), lineHeight = 18.sp
                     )
                     Spacer(Modifier.height(10.dp))
@@ -521,53 +631,13 @@ fun ChatBillScreen(
         )
     }
 
-    // 月度预算设置弹窗
-    if (showBudgetDialog) {
-        var budgetText by remember { mutableStateOf(if (monthlyBudget > 0) monthlyBudget.toInt().toString() else "") }
-        AlertDialog(
-            onDismissRequest = { showBudgetDialog = false },
-            containerColor = Color.White,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("💰", fontSize = 20.sp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("月度预算", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-            },
-            text = {
-                Column {
-                    Text("设置每月预算金额，超支时人格会自动提醒", fontSize = 13.sp, color = Color(0xFF999999))
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = budgetText,
-                        onValueChange = { budgetText = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("预算金额（元）") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = themeColor)
-                    )
-                    if (monthlyBudget > 0) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("当前预算：¥${monthlyBudget.toInt()}", fontSize = 12.sp, color = themeColor)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amount = budgetText.toFloatOrNull() ?: 0f
-                        viewModel.setMonthlyBudget(amount)
-                        showBudgetDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = themeColor),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("确定") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBudgetDialog = false }) { Text("取消", color = Color(0xFF999999)) }
-            }
+    // 🔒 分享今日账单卡（数据按 viewModel.userId 严格隔离）
+    if (showShareCardDialog) {
+        BillShareDialog(
+            currentUserId = viewModel.userId,
+            nickname = currentPersona.name.ifBlank { "我" },
+            allBills = allBills,
+            onDismiss = { showShareCardDialog = false }
         )
     }
 }
@@ -707,7 +777,13 @@ private fun ChatTopBar(
     onToggleFont: () -> Unit = {},
     onAvatarUpload: () -> Unit = {},
     onSearch: () -> Unit = {},
+    isAdvanced: Boolean = true,
+    onToggleMode: () -> Unit = {},
+    currentMonthlyBudget: Float = 0f,
+    onSetMonthlyBudget: () -> Unit = {},
     onBudget: () -> Unit = {},
+    onAccountManager: () -> Unit = {},
+    onShareCard: () -> Unit = {},
     onExport: () -> Unit = {},
     onAiSettings: () -> Unit = {},
     isAiAvailable: Boolean = false
@@ -722,41 +798,49 @@ private fun ChatTopBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(elevation = 6.dp, spotColor = themeColor.copy(alpha = 0.5f))
             .background(
                 Brush.horizontalGradient(
-                    colors = listOf(themeColor, themeColorLight, themeColor.copy(alpha = 0.8f))
+                    colors = listOf(themeColor, themeColorLight, themeColor.copy(alpha = 0.85f))
                 )
             )
             .statusBarsPadding()
-            .padding(horizontal = 6.dp, vertical = 10.dp)
     ) {
-        // 返回按钮
-        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-            Icon(Icons.Rounded.ArrowBack, "返回", tint = Color.White, modifier = Modifier.size(24.dp))
-        }
-
-        // 中间信息
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 人格头像 + 光晕（点击可上传）
+            // 返回按钮
+            IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Rounded.ArrowBack, "返回", tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+
+            // 头像（点击可换）
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.clickable { onAvatarUpload() }
+                modifier = Modifier
+                    .padding(start = 2.dp, end = 10.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onAvatarUpload() }
             ) {
+                // 呼吸光晕
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .graphicsLayer { alpha = glowAlpha * 0.3f }
+                        .size(46.dp)
+                        .graphicsLayer { alpha = glowAlpha * 0.35f }
                         .background(Color.White, CircleShape)
                 )
                 Box(
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.25f))
-                        .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                        .background(Color.White.copy(alpha = 0.22f))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.6f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (persona.customAvatarUri != null) {
@@ -767,49 +851,74 @@ private fun ChatTopBar(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Text(persona.avatar, fontSize = 22.sp)
+                        Text(persona.avatar, fontSize = 20.sp)
                     }
                 }
-                // 小相机图标提示可更换
+                // 在线绿点 + 相机角标
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .size(16.dp)
+                        .size(13.dp)
                         .clip(CircleShape)
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Rounded.CameraAlt, "更换头像",
-                        tint = themeColor,
-                        modifier = Modifier.size(10.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF4CAF50))
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                persona.name,
-                fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                getPersonaSubtitle(persona.id),
-                fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f)
-            )
-        }
 
-        // 右侧按钮组
-        Row(modifier = Modifier.align(Alignment.CenterEnd)) {
-            var showMenu by remember { mutableStateOf(false) }
-            IconButton(onClick = onSearch) {
-                Icon(Icons.Rounded.Search, "搜索", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(20.dp))
+            // 名字 + 副标题（占据剩余空间）
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        persona.name,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (isAiAvailable) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.25f))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text("AI", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+                Text(
+                    getPersonaSubtitle(persona.id),
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 1.dp)
+                )
             }
-            IconButton(onClick = onBillDetail) {
-                Icon(Icons.Rounded.Receipt, "账单", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(20.dp))
+
+            // 右侧按钮组
+            var showMenu by remember { mutableStateOf(false) }
+            IconButton(onClick = onSearch, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Search, "搜索", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onBillDetail, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Receipt, "账单", tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Rounded.MoreVert, "更多", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(20.dp))
+                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Rounded.MoreVert, "更多", tint = Color.White, modifier = Modifier.size(20.dp))
                 }
                 DropdownMenu(
                     expanded = showMenu,
@@ -831,13 +940,62 @@ private fun ChatTopBar(
                         }},
                         onClick = { showMenu = false; onAiSettings() }
                     )
+                    // 🆕 v50：月度预算（核心入口，两种模式都显示）
                     DropdownMenuItem(
                         text = { Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.AccountBalanceWallet, null, modifier = Modifier.size(18.dp), tint = Color(0xFFFF9800))
+                            Icon(Icons.Rounded.Savings, null, modifier = Modifier.size(18.dp), tint = Color(0xFFFFA726))
                             Spacer(Modifier.width(8.dp))
-                            Text("月度预算", fontSize = 14.sp)
+                            Text(
+                                if (currentMonthlyBudget > 0f)
+                                    "月度预算（${currentMonthlyBudget.toInt()}元）"
+                                else "设置月度预算",
+                                fontSize = 14.sp
+                            )
                         }},
-                        onClick = { showMenu = false; onBudget() }
+                        onClick = { showMenu = false; onSetMonthlyBudget() }
+                    )
+                    // 🆕 v50：仅进阶模式显示"账户管理 / 预算管理"
+                    if (isAdvanced) {
+                        DropdownMenuItem(
+                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.AccountBalance, null, modifier = Modifier.size(18.dp), tint = Color(0xFF00BCD4))
+                                Spacer(Modifier.width(8.dp))
+                                Text("账户管理", fontSize = 14.sp)
+                            }},
+                            onClick = { showMenu = false; onAccountManager() }
+                        )
+                        DropdownMenuItem(
+                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.AccountBalanceWallet, null, modifier = Modifier.size(18.dp), tint = Color(0xFFFF9800))
+                                Spacer(Modifier.width(8.dp))
+                                Text("预算管理", fontSize = 14.sp)
+                            }},
+                            onClick = { showMenu = false; onBudget() }
+                        )
+                    }
+                    // 🆕 v50：模式切换入口（极简 ⇄ 进阶）
+                    DropdownMenuItem(
+                        text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                if (isAdvanced) Icons.Rounded.Tune else Icons.Rounded.AutoAwesome,
+                                null, modifier = Modifier.size(18.dp),
+                                tint = if (isAdvanced) Color(0xFF7E57C2) else Color(0xFF4CAF50)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (isAdvanced) "切换至极简模式" else "切换至进阶模式",
+                                fontSize = 14.sp
+                            )
+                        }},
+                        onClick = { showMenu = false; onToggleMode() }
+                    )
+                    DropdownMenuItem(
+                        text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Share, null, modifier = Modifier.size(18.dp), tint = Color(0xFFFF6B9D))
+                            Spacer(Modifier.width(8.dp))
+                            Text("分享今日卡片", fontSize = 14.sp)
+                        }},
+                        onClick = { showMenu = false; onShareCard() }
                     )
                     DropdownMenuItem(
                         text = { Row(verticalAlignment = Alignment.CenterVertically) {
@@ -884,24 +1042,30 @@ private fun PersonaSelector(
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(top = 10.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp)
+        contentPadding = PaddingValues(horizontal = 14.dp)
     ) {
         items(personas) { persona ->
             val isSelected = persona.id == currentId
-            val (pColor, _) = getPersonaTheme(persona.id)
+            val (pColor, pColorLight) = getPersonaTheme(persona.id)
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
+                    .then(
+                        if (isSelected)
+                            Modifier.shadow(elevation = 4.dp, shape = RoundedCornerShape(18.dp), spotColor = pColor)
+                        else Modifier
+                    )
+                    .clip(RoundedCornerShape(18.dp))
                     .background(
-                        if (isSelected) pColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.6f)
+                        if (isSelected) Brush.horizontalGradient(listOf(pColor, pColorLight))
+                        else Brush.horizontalGradient(listOf(Color.White, Color.White))
                     )
                     .border(
-                        width = if (isSelected) 1.5.dp else 0.dp,
-                        color = if (isSelected) pColor.copy(alpha = 0.4f) else Color.Transparent,
-                        shape = RoundedCornerShape(14.dp)
+                        width = 1.dp,
+                        color = if (isSelected) Color.Transparent else Color(0xFFEFE7F0),
+                        shape = RoundedCornerShape(18.dp)
                     )
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -911,18 +1075,29 @@ private fun PersonaSelector(
                             onAvatarPicked(persona.id, "")
                         }
                     )
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .padding(start = 6.dp, end = 14.dp, top = 5.dp, bottom = 5.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    PersonaAvatarSmall(persona, 22.dp)
+                    // 头像外圈
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) Color.White.copy(alpha = 0.3f) else pColor.copy(alpha = 0.10f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        PersonaAvatarSmall(persona, 22.dp)
+                    }
                     Text(
                         persona.name,
                         fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) pColor else Color(0xFF999999)
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else Color(0xFF666666)
                     )
                 }
             }
@@ -997,9 +1172,15 @@ private fun ChatBubble(
         if (!isUser) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
+                    .shadow(2.dp, CircleShape, spotColor = msgThemeColor.copy(alpha = 0.3f))
                     .clip(CircleShape)
-                    .background(msgThemeColor.copy(alpha = 0.1f)),
+                    .background(
+                        Brush.linearGradient(
+                            listOf(msgThemeColor.copy(alpha = 0.18f), msgThemeColor.copy(alpha = 0.08f))
+                        )
+                    )
+                    .border(1.dp, msgThemeColor.copy(alpha = 0.25f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (msgPersona.customAvatarUri != null) {
@@ -1016,25 +1197,43 @@ private fun ChatBubble(
             Spacer(Modifier.width(8.dp))
         }
 
-        // 气泡 + 时间
+        // 气泡 + 时间（用 fraction 占据约 75% 屏宽，避免在大屏只占一半显得局促）
         Column(
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
-            modifier = Modifier.widthIn(max = 270.dp)
+            modifier = Modifier.fillMaxWidth(0.78f)
         ) {
+            // AI 名字小标签（仅多人格切换场景下展示）
+            if (!isUser && msgPersona.id != currentPersona.id) {
+                Text(
+                    msgPersona.name,
+                    fontSize = 10.sp, color = msgThemeColor.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                )
+            }
             Box(
                 modifier = Modifier
+                    .shadow(
+                        elevation = if (isUser) 3.dp else 2.dp,
+                        shape = RoundedCornerShape(
+                            topStart = 18.dp, topEnd = 18.dp,
+                            bottomStart = if (isUser) 18.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 18.dp
+                        ),
+                        spotColor = if (isUser) themeColor.copy(alpha = 0.4f) else Color(0x33000000)
+                    )
                     .clip(
                         RoundedCornerShape(
-                            topStart = 16.dp, topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp
+                            topStart = 18.dp, topEnd = 18.dp,
+                            bottomStart = if (isUser) 18.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 18.dp
                         )
                     )
                     .background(
                         if (isUser) Brush.linearGradient(
-                            listOf(themeColor, themeColor.copy(alpha = 0.85f))
+                            listOf(bubbleColor, bubbleColor.copy(alpha = 0.82f))
                         ) else Brush.linearGradient(
-                            listOf(Color.White, Color.White)
+                            listOf(Color.White, Color(0xFFFAFBFC))
                         )
                     )
                     .combinedClickable(
@@ -1069,9 +1268,15 @@ private fun ChatBubble(
             Spacer(Modifier.width(8.dp))
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
+                    .shadow(2.dp, CircleShape, spotColor = themeColor.copy(alpha = 0.3f))
                     .clip(CircleShape)
-                    .background(themeColor.copy(alpha = 0.12f)),
+                    .background(
+                        Brush.linearGradient(
+                            listOf(themeColor.copy(alpha = 0.22f), themeColor.copy(alpha = 0.10f))
+                        )
+                    )
+                    .border(1.dp, themeColor.copy(alpha = 0.3f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (userAvatarUri != null) {
@@ -1204,24 +1409,48 @@ private fun TypingIndicator(persona: ChatPersona, themeColor: Color) {
 // ═══════════════════════════════════════════════
 @Composable
 private fun QuickTips(themeColor: Color, onTap: (String) -> Unit) {
-    val tips = listOf("午饭25", "打车15", "奶茶12", "买衣服200")
+    val tips = listOf("🍱 午饭25" to "午饭25", "🚕 打车15" to "打车15", "🧋 奶茶12" to "奶茶12", "👗 买衣服200" to "买衣服200")
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
-        Text("💡", fontSize = 13.sp, modifier = Modifier.align(Alignment.CenterVertically))
-        tips.forEach { tip ->
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(themeColor.copy(alpha = 0.06f))
-                    .clickable { onTap(tip) }
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-            ) {
-                Text(tip, fontSize = 12.sp, color = themeColor.copy(alpha = 0.7f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("💡", fontSize = 13.sp)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "试试这样说",
+                fontSize = 11.sp,
+                color = Color(0xFF999999),
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(tips) { (label, value) ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    themeColor.copy(alpha = 0.10f),
+                                    themeColor.copy(alpha = 0.05f)
+                                )
+                            )
+                        )
+                        .border(1.dp, themeColor.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
+                        .clickable { onTap(value) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        label,
+                        fontSize = 12.sp,
+                        color = themeColor.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -1234,78 +1463,151 @@ private fun QuickTips(themeColor: Color, onTap: (String) -> Unit) {
 private fun BillInputBar(themeColor: Color, onSubmit: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val canSend = text.isNotBlank()
 
-    Row(
+    // 发送按钮的呼吸缩放（仅在有内容时）
+    val sendScale by animateFloatAsState(
+        targetValue = if (canSend) 1f else 0.92f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "sendScale"
+    )
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
+            .shadow(elevation = 8.dp, spotColor = Color.Black.copy(alpha = 0.4f))
             .background(Color.White)
-            .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        // 输入框
+        // 顶部细分割线
         Box(
             modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFFF2F2F7))
-                .padding(horizontal = 16.dp, vertical = 11.dp)
-        ) {
-            BasicTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = TextStyle(fontSize = 15.sp, color = Color(0xFF333333)),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = {
-                    if (text.isNotBlank()) {
-                        onSubmit(text.trim())
-                        text = ""
-                        focusManager.clearFocus()
-                    }
-                }),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (text.isEmpty()) {
-                            Text(
-                                "输入 \"午饭35\" 记账，或随便聊聊～",
-                                fontSize = 14.sp, color = Color(0xFFBBBBBB)
-                            )
-                        }
-                        innerTextField()
-                    }
-                }
-            )
-        }
-
-        Spacer(Modifier.width(8.dp))
-
-        // 发送按钮
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
+                .fillMaxWidth()
+                .height(1.dp)
                 .background(
-                    if (text.isNotBlank()) themeColor else Color(0xFFDDDDDD)
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color(0xFFE5E5EA),
+                            Color.Transparent
+                        )
+                    )
                 )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    if (text.isNotBlank()) {
-                        onSubmit(text.trim())
-                        text = ""
-                        focusManager.clearFocus()
-                    }
-                },
-            contentAlignment = Alignment.Center
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Rounded.Send, "发送",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
+            // 左侧装饰图标（💰记账提示）
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(themeColor.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("💰", fontSize = 18.sp)
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // 输入框 - 固定单行高度，placeholder 强制单行省略
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFFF7F7FB), Color(0xFFF1F1F6))
+                        )
+                    )
+                    .border(
+                        1.dp,
+                        if (canSend) themeColor.copy(alpha = 0.35f) else Color(0xFFE8E8EE),
+                        RoundedCornerShape(22.dp)
+                    )
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = TextStyle(fontSize = 15.sp, color = Color(0xFF222222)),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(themeColor),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = {
+                        if (text.isNotBlank()) {
+                            onSubmit(text.trim())
+                            text = ""
+                            focusManager.clearFocus()
+                        }
+                    }),
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (text.isEmpty()) {
+                                Text(
+                                    "记账或聊天…",
+                                    fontSize = 14.sp,
+                                    color = Color(0xFFB0B0B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // 发送按钮 - 渐变 + 缩放动画 + 飞机图标
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .graphicsLayer { scaleX = sendScale; scaleY = sendScale }
+                    .then(
+                        if (canSend)
+                            Modifier.shadow(8.dp, CircleShape, spotColor = themeColor.copy(alpha = 0.7f))
+                        else Modifier
+                    )
+                    .clip(CircleShape)
+                    .background(
+                        if (canSend)
+                            Brush.linearGradient(
+                                listOf(themeColor, themeColor.copy(alpha = 0.75f))
+                            )
+                        else
+                            Brush.linearGradient(
+                                listOf(Color(0xFFE4E4E8), Color(0xFFD8D8DC))
+                            )
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        if (canSend) {
+                            onSubmit(text.trim())
+                            text = ""
+                            focusManager.clearFocus()
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Rounded.Send, "发送",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer { rotationZ = -28f }
+                )
+            }
         }
     }
 }

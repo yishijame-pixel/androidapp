@@ -93,12 +93,25 @@ fun LoginScreen(
         when (authState) {
             is AuthState.Success -> {
                 isLoading = false
+                // ✅ 登录成功提示
+                android.widget.Toast.makeText(
+                    context,
+                    "登录成功 🎉 欢迎回来！",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
                 onLoginSuccess()
                 viewModel.resetAuthState()
             }
             is AuthState.Error -> {
                 isLoading = false
                 errorMessage = (authState as AuthState.Error).message
+                showError = true
+                errorShakeKey++
+                viewModel.resetAuthState()
+            }
+            is AuthState.Banned -> {
+                isLoading = false
+                errorMessage = "🚫 账号已被封禁\n${(authState as AuthState.Banned).reason}"
                 showError = true
                 errorShakeKey++
                 viewModel.resetAuthState()
@@ -118,7 +131,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
     ) {
-        // 背景图片 - 高质量显示
+        // 背景图片（不参与 imePadding，键盘弹起时背景仍铺满）
         backgroundBitmap?.let { bitmap ->
             Image(
                 bitmap = bitmap,
@@ -128,19 +141,25 @@ fun LoginScreen(
                 filterQuality = androidx.compose.ui.graphics.FilterQuality.High
             )
         }
-        
-        // 内容区域 - 使用BoxWithConstraints获取屏幕高度
+
+        // 内容区域 — imePadding 让容器随键盘自动收缩；
+        // verticalScroll 让用户在小屏 / 键盘弹起时能滚动到输入框
         BoxWithConstraints(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
         ) {
             val screenHeight = maxHeight
-            
-            // 登录表单 - 定位在白色区域中心
+
+            // 登录表单 — 用可滚动 Column + padding-top 替代 offset，
+            // 这样键盘弹起后整体上移、且能滚动
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 40.dp)
-                    .offset(y = screenHeight * 0.54f), // 稍微往上调整
+                    .padding(top = screenHeight * 0.54f),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 AnimatedVisibility(

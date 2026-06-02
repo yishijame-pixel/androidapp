@@ -151,7 +151,7 @@ fun RegisterScreen(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // 背景图片 - 高质量显示
+        // 背景图片（不参与 imePadding，键盘弹起时背景仍铺满）
         backgroundBitmap?.let { bitmap ->
             Image(
                 bitmap = bitmap,
@@ -161,10 +161,13 @@ fun RegisterScreen(
                 filterQuality = androidx.compose.ui.graphics.FilterQuality.High
             )
         }
-        
-        // 内容区域 - 使用BoxWithConstraints获取屏幕高度
+
+        // 内容区域 — imePadding 让滚动容器在键盘弹出时自动收缩，
+        // 配合 verticalScroll，输入框始终可见
         BoxWithConstraints(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
         ) {
             val screenHeight = maxHeight
             

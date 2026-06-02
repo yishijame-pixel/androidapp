@@ -38,6 +38,13 @@ class PetViewModel(
         PetMissionHelper.increment(appContext, userId, type)
         refreshMissions()
     }
+
+    // 🔒 防刷金币：仅当每日任务进度还没满时，互动小奖励才发放（满了仍可继续互动）
+    //    互动后再 increment，所以这里要在 increment 之前判断当前进度
+    private fun shouldAwardInteractionCoin(type: PetMissionHelper.MissionType): Boolean {
+        val now = PetMissionHelper.getMissions(appContext, userId).firstOrNull { it.type == type }
+        return (now?.progress ?: 0) < type.target
+    }
     
     /** 领取任务奖励 */
     fun claimMission(type: PetMissionHelper.MissionType) {
@@ -133,10 +140,11 @@ class PetViewModel(
             petRepository.addExperience(currentPet.id, 5)
             petRepository.addIntimacy(currentPet.id, 2)
             
-            // 奖励 + 任务
-            coinRepository.addCoins(userId, 1)
+            // 奖励 + 任务（仅在今日任务 target 内发金币）
+            val award = shouldAwardInteractionCoin(PetMissionHelper.MissionType.FEED)
+            if (award) coinRepository.addCoins(userId, 1)
             trackMission(PetMissionHelper.MissionType.FEED)
-            _toast.value = "${item.name} 好好吃 ＋1 💰"
+            _toast.value = if (award) "${item.name} 好好吃 ＋1 💰" else "${item.name} 好好吃"
             
             kotlinx.coroutines.delay(2000)
             _animationState.value = AnimationState.Idle
@@ -152,9 +160,10 @@ class PetViewModel(
             petRepository.addExperience(currentPet.id, 5)
             petRepository.addIntimacy(currentPet.id, 3)
             
-            coinRepository.addCoins(userId, 2)
+            val award = shouldAwardInteractionCoin(PetMissionHelper.MissionType.CLEAN)
+            if (award) coinRepository.addCoins(userId, 2)
             trackMission(PetMissionHelper.MissionType.CLEAN)
-            _toast.value = "清爽满满！＋2 💰"
+            _toast.value = if (award) "清爽满满！＋2 💰" else "清爽满满！"
             
             kotlinx.coroutines.delay(2500)
             _animationState.value = AnimationState.Idle
@@ -170,9 +179,10 @@ class PetViewModel(
             petRepository.addExperience(currentPet.id, 10)
             petRepository.addIntimacy(currentPet.id, 5)
             
-            coinRepository.addCoins(userId, 3)
+            val award = shouldAwardInteractionCoin(PetMissionHelper.MissionType.PLAY)
+            if (award) coinRepository.addCoins(userId, 3)
             trackMission(PetMissionHelper.MissionType.PLAY)
-            _toast.value = "玩得开心！＋3 💰"
+            _toast.value = if (award) "玩得开心！＋3 💰" else "玩得开心！"
             
             kotlinx.coroutines.delay(3000)
             _animationState.value = AnimationState.Idle

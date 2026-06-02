@@ -1,0 +1,9 @@
+{
+  "name": "postcard_drift",
+  "version": "1.0.0",
+  "description": "v53 阅光书房 · 明信片漂流",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "latest"
+  }
+}

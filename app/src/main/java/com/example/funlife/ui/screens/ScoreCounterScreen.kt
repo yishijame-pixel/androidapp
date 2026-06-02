@@ -1320,6 +1320,7 @@ fun PlayingScreen(
             onClick = onNavigateBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
                 .padding(start = 12.dp, top = 12.dp)
                 .size(40.dp)
         ) {
@@ -2639,12 +2640,13 @@ fun OperationDetailsDialog(
             
             // 🔥 使用协程一次性查询，不使用collect
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                // 查询所有会话的操作（包括历史会话）
-                val ops = dao.getAllOperations()
+                // 🔒 仅查当前用户的操作（多账号隔离）
+                val uid = com.example.funlife.utils.UserSessionManager(context).getCurrentUserId().takeIf { it > 0 } ?: 0L
+                val ops = dao.getAllOperations(uid)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     allOperations = ops
                     isLoading = false
-                    android.util.Log.d("OperationDetailsDialog", "Loaded ${ops.size} operations from database")
+                    android.util.Log.d("OperationDetailsDialog", "Loaded ${ops.size} operations for user=$uid")
                 }
             }
         } catch (e: Exception) {
@@ -3001,7 +3003,8 @@ fun OperationDetailsDialog(
                                     val db = com.example.funlife.data.database.AppDatabase.getDatabase(context)
                                     val dao = db.scoreOperationDao()
                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                        val ops = dao.getAllOperations()
+                                        val uid = com.example.funlife.utils.UserSessionManager(context).getCurrentUserId().takeIf { it > 0 } ?: 0L
+                                        val ops = dao.getAllOperations(uid)
                                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                             allOperations = ops
                                             isLoading = false

@@ -26,12 +26,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,10 +59,43 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var soundManager: SoundEffectManager
-    
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // 通知在 App 已存活时被点击，仍要投递 deepLink
+        intent.getStringExtra(
+            com.example.funlife.notifications.NotificationCenter.EXTRA_DEEP_LINK
+        )?.let { com.example.funlife.notifications.DeepLinkBus.publish(it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
+        // 通知冷启动 App：把 deepLink 暂存到 Bus，待 NavHost ready 后消费
+        intent?.getStringExtra(
+            com.example.funlife.notifications.NotificationCenter.EXTRA_DEEP_LINK
+        )?.let { com.example.funlife.notifications.DeepLinkBus.publish(it) }
+
+        // 🔥 启用 edge-to-edge：让背景延伸到状态栏与导航栏后面（沉浸式）
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        // 状态栏 / 导航栏图标色按内容亮暗自动反色
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true   // 浅色背景下用深色图标
+            isAppearanceLightNavigationBars = true
+        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        // 🎨 系统导航栏透明，App nav 直接延伸到屏幕底部覆盖手势区，
+        //    系统 3 键/手势条浮于波浪之上
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        // 🔥 关掉系统对导航栏的"对比度蒙层"（默认 Q+ 会在透明 nav 下加半透明黑），
+        //    这样手势区/3 键背后才能真正透出波浪图，不再有灰色阴影
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+
         // 初始化音效管理器
         soundManager = SoundEffectManager.getInstance(this)
         
@@ -89,6 +125,76 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // 🔋 引导用户允许"忽略电池优化"（系统级弹框，用户点"允许"即可）
+        // 这是让闹钟在 App 被杀后仍能触发的关键权限
+        if (!com.example.funlife.utils.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
+            val prefs = getSharedPreferences("app_perm_prefs", MODE_PRIVATE)
+            if (!prefs.getBoolean("battery_opt_asked", false)) {
+                prefs.edit().putBoolean("battery_opt_asked", true).apply()
+                // 延迟 1 秒弹出，避免与悬浮窗对话框冲突
+                window.decorView.postDelayed({
+                    try {
+                        com.example.funlife.utils.BatteryOptimizationHelper
+                            .requestIgnoreBatteryOptimizations(this)
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "请求忽略电池优化失败", e)
+                    }
+                }, 1500)
+            }
+        }
+
+        // 📢 引导用户允许"全屏通知"权限（Android 14+ 必需，不然通知不会强制弹出）
+        if (android.os.Build.VERSION.SDK_INT >= 34) {  // Android 14+
+            try {
+                val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+                if (!nm.canUseFullScreenIntent()) {
+                    val prefs = getSharedPreferences("app_perm_prefs", MODE_PRIVATE)
+                    if (!prefs.getBoolean("fullscreen_intent_asked", false)) {
+                        prefs.edit().putBoolean("fullscreen_intent_asked", true).apply()
+                        window.decorView.postDelayed({
+                            try {
+                                val intent = android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT
+                                ).apply {
+                                    data = android.net.Uri.parse("package:$packageName")
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(intent)
+                            } catch (e: Exception) {
+                                android.util.Log.e("MainActivity", "请求全屏通知权限失败", e)
+                            }
+                        }, 4500)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "检查全屏通知权限失败", e)
+            }
+        }
+
+        // ⏰ 引导用户允许"精确闹钟"权限（Android 12+ 必需）
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val am = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
+            if (!am.canScheduleExactAlarms()) {
+                val prefs = getSharedPreferences("app_perm_prefs", MODE_PRIVATE)
+                if (!prefs.getBoolean("exact_alarm_asked", false)) {
+                    prefs.edit().putBoolean("exact_alarm_asked", true).apply()
+                    window.decorView.postDelayed({
+                        try {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
+                            ).apply {
+                                data = android.net.Uri.parse("package:$packageName")
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            android.util.Log.e("MainActivity", "请求精确闹钟权限失败", e)
+                        }
+                    }, 3000)
+                }
+            }
+        }
         
         // 🔥 初始化应用数据（头像框等）
         initializeAppData()
@@ -108,20 +214,104 @@ class MainActivity : ComponentActivity() {
                 android.util.Log.e("MainActivity", "调度纪念日提醒失败", e)
             }
         }
+
+        // ⚡ 启动微优化：以下都是非阻塞用户首帧的初始化，统一延后到首帧后执行
+        // 避免给 onCreate 加同步开销，让 setContent 尽快完成。
+        window.decorView.post {
+            // 🔔 WorkManager 周期任务（每 6 小时后台检查纪念日）
+            try {
+                com.example.funlife.utils.AnniversaryReminderWorker.schedulePeriodic(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "注册 Worker 失败", e)
+            }
+            // 🔔 通知中心：创建渠道 + 调度每日推送
+            try {
+                com.example.funlife.notifications.NotificationBootstrap.init(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "通知中心初始化失败", e)
+            }
+            // 🌅 每日首次打开 App 推送今日摘要
+            try {
+                com.example.funlife.notifications.OpenAppNotifier.trigger(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "OpenAppNotifier 失败", e)
+            }
+            // 🌱 拉活通知 + 后台 Worker
+            try {
+                com.example.funlife.notifications.EngagementNotifier.triggerAsync(this)
+                com.example.funlife.notifications.EngagementWorker.schedulePeriodic(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "EngagementNotifier 失败", e)
+            }
+
+            // 🛡️ VIP 凭证每 7 天联网复验（破解防御核心）
+            try {
+                com.example.funlife.vip.VipReverifyWorker.schedulePeriodic(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "VipReverifyWorker 注册失败", e)
+            }
+
+            // � 定期账单后台扫描（每 6 小时）→ 房租 / 订阅自动入账
+            try {
+                com.example.funlife.utils.RecurringBillWorker.schedulePeriodic(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "RecurringBillWorker 注册失败", e)
+            }
+
+            // ✉️ 时光信箱投递 Worker（每 1 小时扫描 due letters → LLM 生成回信 / 推送已到的回信）
+            try {
+                com.example.funlife.utils.LetterDeliveryWorker.schedulePeriodic(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "LetterDeliveryWorker 注册失败", e)
+            }
+
+            // 🌅 v53 阅光书房 · 晨光信使（每天 7:30 ± 5 分钟推一张晨光卡）
+            try {
+                com.example.funlife.utils.MorningHeraldWorker.schedulePeriodic(this)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "MorningHeraldWorker 注册失败", e)
+            }
+
+            // �🛡️ VIP 凭证启动验签：本地凭证被改 / 设备指纹变 / 凭证过期 → 自动降级
+            // 同时每 7 天联网复验一次（凭证续期）
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val sm = com.example.funlife.utils.UserSessionManager(this@MainActivity)
+                    val uid = sm.getCurrentUserId()
+                    if (uid > 0L) {
+                        val mgr = com.example.funlife.vip.VipManager(this@MainActivity)
+                        val r = mgr.validateOnStartup(uid)
+                        android.util.Log.d("MainActivity", "VIP 凭证验签: $r")
+                        // 如果凭证 EXPIRED（自身 1 年到期），尝试联网续期
+                        if (r == com.example.funlife.vip.VipCertificateValidator.Result.EXPIRED) {
+                            mgr.reverify(uid)
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "VIP 启动验签失败", e)
+                }
+            }
+        }
         
         // 切换到正常主题
         setTheme(R.style.Theme_FunLife)
         
         setContent {
             FunLifeTheme {
-                var showSplash by remember { mutableStateOf(true) }
-                
-                if (showSplash) {
-                    com.example.funlife.ui.screens.SplashScreen(
-                        onTimeout = { showSplash = false }
-                    )
-                } else {
-                    MainScreen(soundManager = soundManager)
+                // 🔥 全局响应式适配器：所有页面/动画自动按屏幕尺寸缩放
+                val screenAdapter = com.example.funlife.ui.utils.rememberScreenAdapter()
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.example.funlife.ui.utils.LocalScreenAdapter provides screenAdapter
+                ) {
+                    var showSplash by remember { mutableStateOf(true) }
+
+                    if (showSplash) {
+                        com.example.funlife.ui.screens.SplashScreen(
+                            onTimeout = { showSplash = false }
+                        )
+                    } else {
+                        MainScreen(soundManager = soundManager)
+                    }
                 }
             }
         }
@@ -160,6 +350,29 @@ fun MainScreen(soundManager: SoundEffectManager) {
     
     // 创建 AuthViewModel
     val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+
+    // ─── Deep Link：通知点击 → 自动跳到对应页面 ───
+    // 仅在已登录（非欢迎/登录/注册）状态消费，避免打断认证流程
+    val pendingDeepLink by com.example.funlife.notifications.DeepLinkBus.pending.collectAsState()
+    LaunchedEffect(pendingDeepLink, currentDestination?.route) {
+        val target = pendingDeepLink ?: return@LaunchedEffect
+        val current = currentDestination?.route ?: return@LaunchedEffect
+        val authPages = setOf(
+            Screen.Welcome.route, Screen.Login.route, Screen.Register.route
+        )
+        if (current in authPages) return@LaunchedEffect
+        if (current == target) {
+            com.example.funlife.notifications.DeepLinkBus.consume()
+            return@LaunchedEffect
+        }
+        try {
+            navController.navigate(target) { launchSingleTop = true }
+            com.example.funlife.notifications.DeepLinkBus.consume()
+        } catch (_: Throwable) {
+            // 路由不合法直接清空，避免反复尝试
+            com.example.funlife.notifications.DeepLinkBus.consume()
+        }
+    }
     
     // 底部导航项 - 使用自定义图标
     val bottomNavItems = listOf(
@@ -189,6 +402,38 @@ fun MainScreen(soundManager: SoundEffectManager) {
         )
     )
     
+    // 🪟 侧边面板状态（左缘右滑唤出）
+    val sidePanelState = com.example.funlife.ui.components.rememberSidePanelState()
+    // 仅首页启用左侧滑抽屉（其他页面避免与内容滑动手势冲突）
+    val sidePanelEnabled = currentDestination?.route == Screen.Home.route
+    androidx.compose.runtime.LaunchedEffect(sidePanelEnabled) {
+        sidePanelState.enabled = sidePanelEnabled
+        if (!sidePanelEnabled && sidePanelState.isVisible) sidePanelState.close()
+    }
+
+    // ⬇ 顶部下拉抽屉状态（屏顶下滑唤出 · 多模式可切换）
+    // 仅在「首页 + 侧滑抽屉未打开」时启用，避免与右滑/其他页面冲突
+    val topDrawerState = com.example.funlife.ui.components.topdrawer.rememberTopDrawerState()
+    val isHomeRoute = currentDestination?.route == Screen.Home.route
+    val topDrawerEnabled = sidePanelEnabled && isHomeRoute && !sidePanelState.isVisible
+    androidx.compose.runtime.LaunchedEffect(topDrawerEnabled) {
+        topDrawerState.enabled = topDrawerEnabled
+        if (!topDrawerEnabled && topDrawerState.isVisible) topDrawerState.close()
+    }
+    val topDrawerCtx = androidx.compose.ui.platform.LocalContext.current
+    val currentUserIdForTopDrawer = remember {
+        com.example.funlife.utils.UserSessionManager(topDrawerCtx).getCurrentUserId()
+    }
+
+    // ─── 返回键拦截：抽屉打开时优先关闭，而非退出 App ───
+    val backScope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.activity.compose.BackHandler(enabled = topDrawerState.isVisible) {
+        backScope.launch { topDrawerState.close() }
+    }
+    androidx.activity.compose.BackHandler(enabled = sidePanelState.isVisible && !topDrawerState.isVisible) {
+        backScope.launch { sidePanelState.close() }
+    }
+
     // 判断是否显示底部导航栏（登录/注册/欢迎页/宠物页/游戏计分页/商城页/背包页/转盘页/纪念日页/目标页/VIP页/头像框商城不显示）
     val showBottomBar = currentDestination?.route !in listOf(
         Screen.Welcome.route,
@@ -205,12 +450,49 @@ fun MainScreen(soundManager: SoundEffectManager) {
         Screen.AvatarFrameShop.route,
         Screen.ChatBill.route,
         Screen.BillDetail.route,
+        Screen.BudgetManager.route,
+        Screen.AccountManager.route,
+        Screen.Settings.route,
+        Screen.Help.route,
+        Screen.Notifications.route,
+        Screen.Inbox.route,
+        // 🆕 v51 时光信箱 4 个路由全部隐藏底栏（沉浸式信纸阅读体验）
+        Screen.LetterMailbox.route,
+        Screen.LetterCompose.route,
+        Screen.LetterDetail.route,
+        Screen.LetterRecipients.route,
+        // 🆕 v52 人生书架沉浸式书页体验
+        Screen.Bookshelf.route,
+        // 🆕 v53 阅光书房 · 子页全部走沉浸式
+        Screen.ReadingRoom.route,
+        Screen.BookDetail.route,
+        Screen.BookChat.route,
+        Screen.QuoteGalaxy.route,
+        Screen.ReaderDna.route,
+        Screen.PostcardDrift.route,
+        // 🆕 v55 古籍日记本（中心页 + 全屏翻页都沉浸）
+        Screen.DiaryBook.route,
+        Screen.DiaryBookFull.route,
+        Screen.DiaryBookFull.route + "?openEditor={openEditor}",
         "riddle_game",
         "dice_game"
     )
     
+    com.example.funlife.ui.components.topdrawer.TopDrawerHost(
+        state = topDrawerState,
+        userId = currentUserIdForTopDrawer
+    ) {
+    com.example.funlife.ui.components.SidePanelDrawer(
+        state = sidePanelState,
+        onNavigate = { route ->
+            // 容错：未知路由忽略
+            try { navController.navigate(route) } catch (_: Throwable) {}
+        }
+    ) {
     Scaffold(
         containerColor = Color.Transparent,
+        // 🔥 不让 Scaffold 自动消费 systemBars，让背景能延伸到状态栏 / 导航栏
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             // VipProfile页面不显示TopBar
             val showTopBar = false  // 不显示TopBar
@@ -348,11 +630,23 @@ fun MainScreen(soundManager: SoundEffectManager) {
                     .background(MaterialTheme.colorScheme.background)
                     .padding(innerPadding)
             ) {
-                NavGraph(
-                    navController = navController,
-                    modifier = Modifier.fillMaxSize(),
-                    authViewModel = authViewModel
-                )
+                // 🪟 包裹式手势检测器：父级在 Final pass 监听右滑，
+                //    子元素（LazyColumn、滚动卡片）在 Main pass 优先消费事件
+                if (sidePanelEnabled) {
+                    com.example.funlife.ui.components.SidePanelEdgeDetector(state = sidePanelState) {
+                        NavGraph(
+                            navController = navController,
+                            modifier = Modifier.fillMaxSize(),
+                            authViewModel = authViewModel
+                        )
+                    }
+                } else {
+                    NavGraph(
+                        navController = navController,
+                        modifier = Modifier.fillMaxSize(),
+                        authViewModel = authViewModel
+                    )
+                }
             }
             
             // 🎀 全局纪念日提醒悬浮条 - 覆盖在所有页面顶部
@@ -369,27 +663,30 @@ fun MainScreen(soundManager: SoundEffectManager) {
                     }
                 )
             }
-            
-            // 底部导航栏 - 覆盖在内容上方
+
+            // 底部导航栏 - 波浪延伸到屏幕真正底部，覆盖系统手势/3键区
             if (showBottomBar) {
+                val sysNavBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(90.dp)
+                        .height(90.dp + sysNavBottom)
                 ) {
-                    // 背景图片
+                    // 波浪背景图——填满整个 Box（含手势区），系统 3 键会浮在其上
                     Image(
                         painter = painterResource(id = R.drawable.nav_bg),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.FillBounds
                     )
-                    
-                    // 导航项
+
+                    // 导航项 - 仅占顶部 90dp 安全区，不伸入手势区
                     Row(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .height(90.dp)
+                            .align(Alignment.TopCenter)
                             .padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -398,7 +695,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
                             val selected = currentDestination?.hierarchy?.any {
                                 it.route == item.screen.route
                             } == true
-                            
+
                             BottomNavItem(
                                 item = item,
                                 selected = selected,
@@ -408,11 +705,8 @@ fun MainScreen(soundManager: SoundEffectManager) {
                                     if (currentDestination?.route == item.screen.route) {
                                         return@BottomNavItem
                                     }
-                                    
                                     navController.navigate(item.screen.route) {
-                                        popUpTo(Screen.Home.route) {
-                                            inclusive = false
-                                        }
+                                        popUpTo(Screen.Home.route) { inclusive = false }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
@@ -424,6 +718,8 @@ fun MainScreen(soundManager: SoundEffectManager) {
             }
         }
     }
+    } // SidePanelDrawer 闭合
+    } // TopDrawerHost 闭合
 }
 
 @Composable

@@ -56,7 +56,8 @@ fun ProfileScreen(
     authViewModel: AuthViewModel,
     onLogout: () -> Unit,
     onNavigateToInventory: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToInbox: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val application = context.applicationContext as com.example.funlife.FunLifeApplication
@@ -73,7 +74,8 @@ fun ProfileScreen(
                         application.database.userAvatarDao(),
                         application.database.userDao(),
                         application.database.coinDao(),
-                        application.database.dailyRewardDao()
+                        application.database.dailyRewardDao(),
+                        application.database
                     ),
                     userId = currentSession?.userId ?: 0L,
                     context = context
@@ -90,7 +92,8 @@ fun ProfileScreen(
             application.database.userVipDao(),
             application.database.redeemCodeDao(),
             application.database.coinDao(),
-            context
+            context,
+            application.database
         )
     }
     val userVip by vipRepository.getUserVip(currentSession?.userId ?: 0L)
@@ -291,7 +294,18 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                        // 通知按钮
+                        // 通知铃铛 → 收件箱（响应式未读数）
+                        val unread by com.example.funlife.notifications.InboxStore.unreadFlow.collectAsState()
+                        val lifecycleOwnerProfile = androidx.compose.ui.platform.LocalLifecycleOwner.current
+                        androidx.compose.runtime.DisposableEffect(lifecycleOwnerProfile) {
+                            val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+                                if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                    com.example.funlife.notifications.InboxStore.refreshUnread(context)
+                                }
+                            }
+                            lifecycleOwnerProfile.lifecycle.addObserver(obs)
+                            onDispose { lifecycleOwnerProfile.lifecycle.removeObserver(obs) }
+                        }
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
@@ -299,7 +313,7 @@ fun ProfileScreen(
                                     Color.White.copy(alpha = 0.18f),
                                     RoundedCornerShape(11.dp)
                                 )
-                                .clickable { /* TODO: 通知 */ },
+                                .clickable { onNavigateToInbox() },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -308,13 +322,14 @@ fun ProfileScreen(
                                 tint = Color.White,
                                 modifier = Modifier.size(15.dp)
                             )
-                            // 红点提示
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .offset(x = 6.dp, y = (-6).dp)
-                                    .background(Color(0xFFFDE68A), CircleShape)
-                            )
+                            if (unread > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .offset(x = 6.dp, y = (-6).dp)
+                                        .background(Color(0xFFFDE68A), CircleShape)
+                                )
+                            }
                         }
                     }
                 }
@@ -375,9 +390,13 @@ fun ProfileScreen(
                         // ═══════════════════════════════════════════════════════
                         // 🎨 使用商城购买的头像框（完全替代橙色边框）
                         // ═══════════════════════════════════════════════════════
+                        val avatarInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                         Box(
                             modifier = Modifier
-                                .clickable { showAvatarUploadDialog = true },
+                                .clickable(
+                                    interactionSource = avatarInteractionSource,
+                                    indication = null  // 🔥 禁用点击涟漪阴影
+                                ) { showAvatarUploadDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
                             com.example.funlife.ui.components.AvatarWithFrame(
@@ -775,7 +794,8 @@ fun ProfileScreen(
                 }
             }
             
-            Spacer(Modifier.height(100.dp))  // 底部导航栏空间
+            // 底部导航栏空间（90dp Tab + 系统导航 + 30dp 呼吸）
+            Spacer(Modifier.height(90.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 30.dp))
         }
     }
     

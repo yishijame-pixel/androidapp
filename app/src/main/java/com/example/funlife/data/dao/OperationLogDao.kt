@@ -8,20 +8,18 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface OperationLogDao {
     
-    @Query("SELECT * FROM operation_logs ORDER BY timestamp DESC LIMIT :limit")
-    fun getRecentLogs(limit: Int = 100): Flow<List<OperationLog>>
-    
-    @Query("SELECT * FROM operation_logs WHERE operation = :operation ORDER BY timestamp DESC LIMIT :limit")
-    fun getLogsByOperation(operation: String, limit: Int = 100): Flow<List<OperationLog>>
-    
+    // 🔒 多用户隔离：仅暴露按 userId 过滤的查询，删除跨用户死方法防止未来误用
     @Query("SELECT * FROM operation_logs WHERE userId = :userId ORDER BY timestamp DESC LIMIT :limit")
     fun getLogsByUser(userId: Long, limit: Int = 100): Flow<List<OperationLog>>
-    
-    @Query("SELECT * FROM operation_logs WHERE timestamp >= :startTime AND timestamp <= :endTime ORDER BY timestamp DESC")
-    fun getLogsByDateRange(startTime: Long, endTime: Long): Flow<List<OperationLog>>
-    
-    @Query("SELECT * FROM operation_logs WHERE result = :result ORDER BY timestamp DESC LIMIT :limit")
-    fun getLogsByResult(result: String, limit: Int = 100): Flow<List<OperationLog>>
+
+    @Query("SELECT * FROM operation_logs WHERE userId = :userId AND operation = :operation ORDER BY timestamp DESC LIMIT :limit")
+    fun getLogsByUserAndOperation(userId: Long, operation: String, limit: Int = 100): Flow<List<OperationLog>>
+
+    @Query("SELECT * FROM operation_logs WHERE userId = :userId AND result = :result ORDER BY timestamp DESC LIMIT :limit")
+    fun getLogsByUserAndResult(userId: Long, result: String, limit: Int = 100): Flow<List<OperationLog>>
+
+    @Query("SELECT * FROM operation_logs WHERE userId = :userId AND timestamp >= :startTime AND timestamp <= :endTime ORDER BY timestamp DESC")
+    fun getLogsByUserAndDateRange(userId: Long, startTime: Long, endTime: Long): Flow<List<OperationLog>>
     
     @Insert
     suspend fun insert(log: OperationLog)

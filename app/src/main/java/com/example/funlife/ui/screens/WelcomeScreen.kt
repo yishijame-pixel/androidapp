@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,22 @@ fun WelcomeScreen(
     onNavigateToHome: () -> Unit
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val authState by viewModel.authState.collectAsState()
+    val context = LocalContext.current
+
+    // 🔒 启动时检查已登录用户是否被封禁（异步，被封会清 session 触发跳登录页）
+    LaunchedEffect(Unit) { viewModel.verifyCurrentSessionNotBanned() }
+
+    LaunchedEffect(authState) {
+        if (authState is com.example.funlife.viewmodel.AuthState.Banned) {
+            android.widget.Toast.makeText(
+                context,
+                "🚫 账号已被封禁\n${(authState as com.example.funlife.viewmodel.AuthState.Banned).reason}",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            viewModel.resetAuthState()
+        }
+    }
     
     // 设置状态栏颜色为透明，图标为深色
     val systemUiController = androidx.compose.ui.platform.LocalView.current

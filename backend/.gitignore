@@ -1,0 +1,6 @@
+node_modules/
+.env
+.env.local
+*.log
+codes_export_*.csv
+secrets.json

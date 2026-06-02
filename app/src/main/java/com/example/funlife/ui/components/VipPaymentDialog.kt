@@ -278,7 +278,8 @@ private fun PaymentQRCodePage(
                             }
                         }
                     } catch (e: Exception) {
-                        Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                        android.util.Log.e("VipPaymentDialog", "保存二维码失败", e)
+                        Toast.makeText(context, "保存失败，请重试", Toast.LENGTH_SHORT).show()
                     }
                 }
             },

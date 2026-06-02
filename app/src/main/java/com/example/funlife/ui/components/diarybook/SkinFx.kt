@@ -597,7 +597,7 @@ private fun DrawScope.drawSakuraPetal(center: Offset, size: Float, light: Color,
         size * 0.10f, center)
 }
 
-/* ── 4. 赤焰天书：火焰 ────────────────────────────────────────────────── */
+/* ── 4. 赤焰天书：火焰（深邃剧场增强版）──────────────────────────────── */
 
 private fun DrawScope.drawFire(t: Float) {
     val w = size.width
@@ -605,126 +605,172 @@ private fun DrawScope.drawFire(t: Float) {
     val cx = w / 2f
     val baseY = h * 0.94f
 
-    val white = Color(0xFFFFFCE5)
-    val core  = Color(0xFFFFE08A)
+    // 火焰色阶（由冷到热）：暗红 → 橙 → 金 → 白热
+    val white = Color(0xFFFFF6D8)
+    val core  = Color(0xFFFFD46A)
     val mid   = Color(0xFFFF7A1A)
-    val deep  = Color(0xFFB02020)
+    val deep  = Color(0xFFC22A12)
     val ember = Color(0xFFFFC04D)
+    val smoke = Color(0xFF1A0A06)
 
-    // ── 1. 底部"远景火海"：横贯整个画布的连续暗红渐变带 ──
-    //    深色 → 透明，让画布底边自然消融，不再是直角切口
+    // ── 0. 整屏受火映照的暖光氛围（中下部偏暖，顶部偏暗）──
+    //    在深色剧场背景上加一层巨大的暖色径向，营造"被火照亮的空间"
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                mid.copy(alpha = 0.22f),
+                deep.copy(alpha = 0.10f),
+                Color.Transparent,
+            ),
+            center = Offset(cx, h * 0.80f),
+            radius = w * 0.95f,
+        ),
+        radius = w * 0.95f,
+        center = Offset(cx, h * 0.80f),
+        blendMode = BlendMode.Plus,
+    )
+
+    // ── 1. 上升热浪柱：从火海中心向上的暖光锥（书被火舌托起的感觉）──
+    val columnPulse = 0.85f + 0.15f * sin((t * 1.3f).toDouble()).toFloat()
+    drawOvalGlow(Offset(cx, h * 0.62f), w * 0.34f * columnPulse, h * 0.34f,
+        deep.copy(alpha = 0.28f), blur = 90f)
+    drawOvalGlow(Offset(cx, h * 0.70f), w * 0.22f * columnPulse, h * 0.26f,
+        mid.copy(alpha = 0.30f), blur = 60f)
+
+    // ── 2. 底部"远景火海"：横贯整个画布的连续暖红渐变带 ──
     drawRect(
         brush = Brush.verticalGradient(
             colors = listOf(
                 Color.Transparent,
-                deep.copy(alpha = 0.30f),
-                mid .copy(alpha = 0.55f),
-                deep.copy(alpha = 0.30f),       // 最底部反而压暗（远处"地平线"消失感）
+                deep.copy(alpha = 0.35f),
+                mid .copy(alpha = 0.60f),
+                core.copy(alpha = 0.30f),
             ),
-            startY = h * 0.74f,
+            startY = h * 0.72f,
             endY   = h,
         ),
-        topLeft = Offset(0f, h * 0.74f),
-        size = androidx.compose.ui.geometry.Size(w, h * 0.26f),
+        topLeft = Offset(0f, h * 0.72f),
+        size = androidx.compose.ui.geometry.Size(w, h * 0.28f),
         blendMode = BlendMode.Plus,
     )
 
-    // ── 2. 单一巨大椭圆基底（覆盖整个底部 30%，blur 极大让边界完全融化）──
-    drawOvalGlow(Offset(cx, baseY + 6f),  w * 0.95f, h * 0.16f,
-        deep.copy(alpha = 0.55f), blur = 110f)
-    drawOvalGlow(Offset(cx, baseY - 2f),  w * 0.78f, h * 0.13f,
-        mid .copy(alpha = 0.65f), blur = 70f)
-    drawOvalGlow(Offset(cx, baseY - 6f),  w * 0.55f, h * 0.10f,
-        mid .copy(alpha = 0.55f), blur = 45f)
+    // ── 3. 单一巨大椭圆基底（覆盖整个底部，blur 极大让边界完全融化）──
+    drawOvalGlow(Offset(cx, baseY + 6f),  w * 0.98f, h * 0.17f,
+        deep.copy(alpha = 0.58f), blur = 120f)
+    drawOvalGlow(Offset(cx, baseY - 2f),  w * 0.80f, h * 0.14f,
+        mid .copy(alpha = 0.70f), blur = 75f)
+    drawOvalGlow(Offset(cx, baseY - 6f),  w * 0.56f, h * 0.11f,
+        core.copy(alpha = 0.60f), blur = 48f)
+    // 白热熔核（最亮的一抹）
+    drawOvalGlow(Offset(cx, baseY - 4f),  w * 0.28f, h * 0.05f,
+        white.copy(alpha = 0.50f), blur = 30f)
 
-    // ── 3. 22 颗随机位置 / 大小的"火苗根"小光斑（替代等距灯泡）──
-    //    位置/大小都随机，每颗独立微弱呼吸，组成自然不规则的火势
-    val rootN = 22
+    // ── 4. 26 颗随机位置 / 大小的"火苗根"小光斑 ──
+    val rootN = 26
     for (k in 0 until rootN) {
         val s1 = rand(k, 70)
         val s2 = rand(k, 71)
         val s3 = rand(k, 72)
-        val pulse = 0.85f + 0.15f * sin((t * (1.5f + s2 * 2f) + s3 * 6.28f).toDouble()).toFloat()
-        // 起点横向：均匀分布到整个画布宽度
-        val xK = (s1 - 0.5f) * w * 0.92f + cx
-        // 纵向：在底部火带的不同高度（让"火苗根"参差）
-        val yK = baseY - h * (0.01f + s2 * 0.10f)
-        // 大小：边缘略小，但变化随机
+        val pulse = 0.80f + 0.20f * sin((t * (1.6f + s2 * 2.2f) + s3 * 6.28f).toDouble()).toFloat()
+        val xK = (s1 - 0.5f) * w * 0.94f + cx
+        val yK = baseY - h * (0.01f + s2 * 0.11f)
         val xRel = (xK - cx) / w
-        val edgeFactor = (1f - kotlin.math.abs(xRel) * 1.3f).coerceIn(0.45f, 1f)
-        val sz = (0.7f + s3 * 0.7f) * edgeFactor                          // 0.31..1.4
-        drawOvalGlow(Offset(xK, yK + 6f),  w * 0.10f * sz * pulse, h * 0.08f * sz,
-            mid .copy(alpha = 0.65f), blur = 28f)
-        drawOvalGlow(Offset(xK, yK),       w * 0.06f * sz * pulse, h * 0.05f * sz,
-            core.copy(alpha = 0.75f), blur = 14f)
-        // 核心白热（只在更大的火苗根上）
-        if (sz > 0.75f) {
-            drawOvalGlow(Offset(xK, yK - 3f), w * 0.025f * sz * pulse, h * 0.022f * sz,
-                white.copy(alpha = 0.55f * (sz - 0.75f) / 0.65f), blur = 7f)
+        val edgeFactor = (1f - kotlin.math.abs(xRel) * 1.25f).coerceIn(0.45f, 1f)
+        val sz = (0.7f + s3 * 0.75f) * edgeFactor
+        drawOvalGlow(Offset(xK, yK + 6f),  w * 0.10f * sz * pulse, h * 0.085f * sz,
+            mid .copy(alpha = 0.68f), blur = 28f)
+        drawOvalGlow(Offset(xK, yK),       w * 0.06f * sz * pulse, h * 0.055f * sz,
+            core.copy(alpha = 0.78f), blur = 14f)
+        if (sz > 0.72f) {
+            drawOvalGlow(Offset(xK, yK - 3f), w * 0.025f * sz * pulse, h * 0.024f * sz,
+                white.copy(alpha = 0.60f * (sz - 0.72f) / 0.68f), blur = 7f)
         }
     }
 
-    // ── 3. 200 颗细小粒子均匀分布到整个画布宽度，组成翻滚的火海 ──
-    val n = 200
+    // ── 5. 240 颗细小粒子组成翻滚的火海（更密、更高、白热核心更显）──
+    val n = 240
     for (i in 0 until n) {
         val seed  = rand(i, 41)
         val seed2 = rand(i, 42)
         val seed3 = rand(i, 43)
-        val cycle = 0.8f + seed * 1.6f
+        val cycle = 0.75f + seed * 1.7f
         val phase = ((t + seed2 * 7f) % cycle) / cycle
         val life  = 1f - phase
 
-        // 均匀分布到整个画布宽度（去掉立方衰减）
         val xBase = (seed - 0.5f) * w * 0.95f
         val centerness = 1f - kotlin.math.abs(xBase) / (w * 0.5f + 0.001f)
 
-        // 多频复合湍流
+        // 多频复合湍流（火舌左右摇曳）
         val turb1 = sin((t * 2.3f + i * 0.71f).toDouble()).toFloat()
         val turb2 = sin((t * 5.7f + i * 1.31f + seed3 * 6.28f).toDouble()).toFloat()
         val turb3 = sin((t * 9.1f + i * 0.43f).toDouble()).toFloat()
-        val xTurb = (turb1 * 14f + turb2 * 8f + turb3 * 5f) * phase
+        val xTurb = (turb1 * 15f + turb2 * 9f + turb3 * 5f) * phase
         val xN = cx + xBase * (0.7f + life * 0.3f) + xTurb
 
-        // 上升高度：中心烧得高，边缘略矮
-        val rise = phase * h * 0.65f * (0.7f + centerness * 0.6f) * (0.85f + seed3 * 0.3f)
+        // 上升高度：中心烧得更高
+        val rise = phase * h * 0.72f * (0.7f + centerness * 0.65f) * (0.85f + seed3 * 0.3f)
         val yN = baseY - rise + turb2 * 3f
 
         val baseW = (5f + seed * 12f) * (0.7f + centerness * 0.5f)
-        val sizeFactor = (1f - phase * 0.30f)
+        val sizeFactor = (1f - phase * 0.32f)
         val ovalW = baseW * sizeFactor
-        val ovalH = ovalW * (1.4f + seed * 1.0f)
+        val ovalH = ovalW * (1.5f + seed * 1.1f)
         val a = life * (0.55f + centerness * 0.35f)
         if (a < 0.05f) continue
 
-        drawOvalGlow(Offset(xN, yN), ovalW * 2.0f, ovalH * 1.4f,
+        drawOvalGlow(Offset(xN, yN), ovalW * 2.1f, ovalH * 1.45f,
             deep.copy(alpha = a * 0.45f), blur = 16f)
         drawOvalGlow(Offset(xN, yN), ovalW * 1.2f, ovalH * 1.05f,
-            mid .copy(alpha = a * 0.75f), blur = 9f)
+            mid .copy(alpha = a * 0.78f), blur = 9f)
         drawOvalGlow(Offset(xN, yN), ovalW * 0.65f, ovalH * 0.65f,
             core.copy(alpha = a * 0.95f), blur = 4.5f)
-        if (life > 0.7f) {
-            val k = (life - 0.7f) / 0.3f
-            drawOvalGlow(Offset(xN, yN), ovalW * 0.32f, ovalH * 0.42f,
-                white.copy(alpha = k * 0.85f), blur = 2.5f)
+        if (life > 0.68f) {
+            val k = (life - 0.68f) / 0.32f
+            drawOvalGlow(Offset(xN, yN), ovalW * 0.34f, ovalH * 0.44f,
+                white.copy(alpha = k * 0.9f), blur = 2.5f)
         }
     }
 
-    // ── 4. 火星：50 颗扇形 160° 散开 + 起点分散 ──
-    val sparkN = 50
+    // ── 6. 火星：70 颗扇形 170° 散开，带拖尾 + 抛物线下落 ──
+    val sparkN = 70
     for (i in 0 until sparkN) {
         val seed  = rand(i, 51)
         val seed2 = rand(i, 52)
-        val cycle = 0.4f + seed * 0.7f
-        val phase = ((t * 1.7f + seed2 * 11f) % cycle) / cycle
+        val cycle = 0.5f + seed * 0.9f
+        val phase = ((t * 1.6f + seed2 * 11f) % cycle) / cycle
         val life  = 1f - phase
-        val ang   = (-90f + (seed - 0.5f) * 160f) * (PI / 180f).toFloat()
-        val srcX  = cx + (seed2 - 0.5f) * w * 0.7f                        // 起点也分散
-        val dist  = phase * h * (0.85f + seed * 0.5f)
-        val turb  = sin((t * 8f + i * 1.7f).toDouble()).toFloat() * 8f
-        val px = srcX + cos(ang.toDouble()).toFloat() * dist + turb
-        val py = baseY + sin(ang.toDouble()).toFloat() * dist
-        glowCircle(Offset(px, py), 1.4f + seed * 1.5f, ember.copy(alpha = life * 0.95f), blur = 0f)
-        glowCircle(Offset(px, py), 5f + seed * 4f,     mid  .copy(alpha = life * 0.55f), blur = 5f)
+        val ang   = (-90f + (seed - 0.5f) * 170f) * (PI / 180f).toFloat()
+        val srcX  = cx + (seed2 - 0.5f) * w * 0.75f
+        val speed = h * (0.85f + seed * 0.6f)
+        // 抛物线：水平匀速 + 竖直先升后被"重力"拉回
+        val px = srcX + cos(ang.toDouble()).toFloat() * speed * phase + sin((t * 7f + i).toDouble()).toFloat() * 8f
+        val gravity = phase * phase * h * 0.25f
+        val py = baseY + sin(ang.toDouble()).toFloat() * speed * phase + gravity
+        val sparkR = 1.2f + seed * 1.8f
+        // 火星本体（白热→金）+ 外晕
+        glowCircle(Offset(px, py), sparkR, white.copy(alpha = life * 0.95f), blur = 0f)
+        glowCircle(Offset(px, py), sparkR * 2.2f, ember.copy(alpha = life * 0.7f), blur = 3f)
+        glowCircle(Offset(px, py), sparkR * 5f, mid.copy(alpha = life * 0.40f), blur = 6f)
+    }
+
+    // ── 7. 飘散的灰烬/余烟：18 颗暗色微粒缓慢上飘横越整屏（增加纵深与高级感）──
+    val ashN = 18
+    for (i in 0 until ashN) {
+        val s1 = rand(i, 81)
+        val s2 = rand(i, 82)
+        val cyc = 4f + s1 * 4f
+        val ph = ((t + s2 * cyc) % cyc) / cyc
+        val px = ((s1 + sin((t * 0.4f + i).toDouble()).toFloat() * 0.08f) % 1f) * w
+        val py = baseY - ph * h * 1.0f
+        // 中段最浓，两头淡
+        val a = (1f - kotlin.math.abs(ph - 0.5f) * 2f).coerceIn(0f, 1f) * 0.35f
+        if (a < 0.02f) continue
+        // 灰烬偶尔泛红（还在阴燃）
+        val glow = (sin((t * 3f + i * 1.7f).toDouble()).toFloat() * 0.5f + 0.5f)
+        drawCircle(smoke.copy(alpha = a), 1.5f + s2 * 2f, Offset(px, py))
+        if (glow > 0.7f) {
+            glowCircle(Offset(px, py), 1.2f + s2, ember.copy(alpha = a * glow), blur = 2f)
+        }
     }
 }
 

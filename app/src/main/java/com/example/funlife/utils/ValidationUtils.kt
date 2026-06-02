@@ -8,19 +8,35 @@ sealed class ValidationResult {
 
 object ValidationUtils {
     
-    // 用户名验证
+    // 用户名验证（企业级宽松规则）
+    // 允许：中文、英文字母、数字、下划线、连字符、点
+    // 限制：长度 2~20；首尾不能是 . - _；不能连续两个特殊字符；首字符不能是纯数字
     fun validateUsername(username: String): ValidationResult {
-        // 先去除首尾空格
-        val trimmedUsername = username.trim()
-        
-        return when {
-            trimmedUsername.isBlank() -> ValidationResult.Error("用户名不能为空")
-            trimmedUsername.length < 3 -> ValidationResult.Error("用户名至少3个字符")
-            trimmedUsername.length > 20 -> ValidationResult.Error("用户名最多20个字符")
-            !trimmedUsername.matches(Regex("^[a-zA-Z0-9_]+$")) -> 
-                ValidationResult.Error("用户名只能包含字母、数字和下划线")
-            else -> ValidationResult.Success
+        val u = username.trim()
+        if (u.isBlank()) return ValidationResult.Error("用户名不能为空")
+        if (u.length < 2) return ValidationResult.Error("用户名至少 2 个字符")
+        if (u.length > 20) return ValidationResult.Error("用户名最多 20 个字符")
+        // 逐字符判断，跨平台稳定（Android 正则不支持 (?U) 内联标志）
+        // 允许：Unicode 字母（含中日韩） / Unicode 数字 / _ - .
+        for (ch in u) {
+            val ok = ch.isLetter() || ch.isDigit() || ch == '_' || ch == '-' || ch == '.'
+            if (!ok) return ValidationResult.Error("用户名只能包含中英文、数字、_ - .")
         }
+        if (u[0].isDigit()) return ValidationResult.Error("用户名不能以数字开头")
+        val first = u.first(); val last = u.last()
+        if (first == '.' || first == '-' || first == '_' || last == '.' || last == '-' || last == '_') {
+            return ValidationResult.Error("用户名首尾不能为 . - _")
+        }
+        // 检查连续的特殊字符（.. -- __ -. ._ 等）
+        for (i in 0 until u.length - 1) {
+            val a = u[i]; val b = u[i + 1]
+            val aSpecial = (a == '.' || a == '-' || a == '_')
+            val bSpecial = (b == '.' || b == '-' || b == '_')
+            if (aSpecial && bSpecial) {
+                return ValidationResult.Error("不能包含连续的 . - _")
+            }
+        }
+        return ValidationResult.Success
     }
     
     // 密码验证

@@ -36,8 +36,8 @@ data class UserPreferences(
     val advancedModeOptions: String = "",              // 进阶模式的选项（JSON格式，8个）
     val luckyModeOptions: String = "",                 // 幸运模式的选项（JSON格式，8个）
     
-    // 🔥 新增：首页少女心面板自定义文字
-    val homePanelText: String = "少女心面板",           // 首页面板中间的自定义文字
+    // 🔥 首页今日寄语自定义文字（空 = 显示每日语录，按用户ID + 日期挑一句）
+    val homePanelText: String = "",                     // 用户自定义寄语（留空显示每日精选）
     val homePanelTextStyle: String = "pink",            // 艺术字颜色主题：pink, purple, blue, gold, rainbow
     
     // 🔥 新增：转盘结算面板皮肤

@@ -236,6 +236,7 @@ fun PetTopBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(top = 16.dp, start = 16.dp, end = 16.dp)
     ) {
         // 左上角返回按钮
@@ -1241,6 +1242,7 @@ fun AdoptPetScreen(
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .statusBarsPadding()
                 .padding(16.dp)
                 .size(40.dp)
         ) {
@@ -1682,13 +1684,7 @@ fun PetShopItemCard(
 ) {
     val context = LocalContext.current
     val itemImage = remember(item.imagePath) {
-        try {
-            context.assets.open(item.imagePath).use { inputStream ->
-                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-            }
-        } catch (e: Exception) {
-            null
-        }
+        com.example.funlife.utils.ImageCache.loadImage(context, item.imagePath, sampleSize = 2)
     }
     
     Card(
@@ -1795,6 +1791,7 @@ fun PetTopBarPro(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween

@@ -243,7 +243,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
                 android.util.Log.e("AnniversaryViewModel", "❌ 添加纪念日失败", e)
                 android.util.Log.e("AnniversaryViewModel", "错误详情: ${e.message}")
                 android.util.Log.e("AnniversaryViewModel", "错误堆栈: ${e.stackTraceToString()}")
-                onError("添加失败: ${e.message}")
+                onError("添加失败，请稍后重试")
             }
         }
     }
@@ -254,7 +254,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
             // 删除关联的图片
             if (anniversary.imageUri != null) {
                 android.util.Log.d("AnniversaryViewModel", "删除纪念日图片: ${anniversary.imageUri}")
-                com.example.funlife.utils.ImageHelper.deleteImage(anniversary.imageUri)
+                com.example.funlife.utils.ImageHelper.deleteImage(context, anniversary.imageUri)
             }
             repository.delete(anniversary)
             // � 取消已调度的提醒闹钟
@@ -315,7 +315,7 @@ class AnniversaryViewModel(application: Application) : AndroidViewModel(applicat
             // 如果旧图片存在且与新图片不同，删除旧图片
             if (anniversary.imageUri != null && anniversary.imageUri != savedImageUri) {
                 android.util.Log.d("AnniversaryViewModel", "删除旧图片: ${anniversary.imageUri}")
-                com.example.funlife.utils.ImageHelper.deleteImage(anniversary.imageUri)
+                com.example.funlife.utils.ImageHelper.deleteImage(context, anniversary.imageUri)
             }
             
             // 确保 userId 不变，保持数据隔离

@@ -49,6 +49,12 @@ class CoinSecurityManager(private val context: Context) {
         // 异常检测阈值
         private const val SUSPICIOUS_AMOUNT_THRESHOLD = 10000  // 单次超过10000金币视为可疑
         private const val SUSPICIOUS_FREQUENCY_THRESHOLD = 50  // 每分钟超过50次操作视为可疑
+
+        // 🔒 积分阈值（比金币严）
+        //   商店单次购买送 5 分、转盘最高 10 分，100 已是极高阈值
+        private const val SUSPICIOUS_POINT_AMOUNT_THRESHOLD = 100
+        //   一分钟内积分变动超 30 次视为异常
+        private const val SUSPICIOUS_POINT_FREQUENCY_THRESHOLD = 30
     }
     
     /**
@@ -66,9 +72,13 @@ class CoinSecurityManager(private val context: Context) {
             if (amount <= 0) {
                 errors.add("金额必须大于0")
             }
-            
-            if (amount > SUSPICIOUS_AMOUNT_THRESHOLD) {
-                errors.add("单次操作金额过大（可疑）")
+
+            // 金币 vs 积分使用不同阈值
+            val isPoint = operationType == CoinOperationType.POINT_EARN ||
+                          operationType == CoinOperationType.POINT_SPEND
+            val amtThreshold = if (isPoint) SUSPICIOUS_POINT_AMOUNT_THRESHOLD else SUSPICIOUS_AMOUNT_THRESHOLD
+            if (amount > amtThreshold) {
+                errors.add(if (isPoint) "单次积分变动过大（可疑）" else "单次操作金额过大（可疑）")
             }
             
             // 2. 频率检测
@@ -135,6 +145,10 @@ class CoinSecurityManager(private val context: Context) {
                     }
                     CoinOperationType.SPEND -> {
                         putInt(KEY_TOTAL_SPENT + userId, totalSpent + amount)
+                    }
+                    CoinOperationType.POINT_EARN,
+                    CoinOperationType.POINT_SPEND -> {
+                        // 积分变动只记录频率/余额，不计入金币累计统计
                     }
                 }
                 
@@ -250,8 +264,10 @@ class CoinSecurityManager(private val context: Context) {
  * 金币操作类型
  */
 enum class CoinOperationType {
-    EARN,   // 获得金币
-    SPEND   // 消费金币
+    EARN,         // 获得金币
+    SPEND,        // 消费金币
+    POINT_EARN,   // 获得商城积分
+    POINT_SPEND   // 消费商城积分
 }
 
 /**

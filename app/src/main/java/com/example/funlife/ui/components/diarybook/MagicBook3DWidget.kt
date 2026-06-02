@@ -44,6 +44,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.funlife.domain.skin.BookSkin
+import com.example.funlife.data.DiaryBookCustomizationStore
+import com.example.funlife.ui.components.diarybook.skin.rememberBookCustomization
+import com.example.funlife.R
+import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import com.google.android.filament.Engine
 import com.google.android.filament.MaterialInstance
 import com.google.android.filament.Texture
@@ -97,12 +103,20 @@ fun MagicBook3DWidget(
         }
     }
 
-    // ── 6 张纹理位图（按 skin 缓存）────────────────────
-    val texWPx = with(density) { widthDp.toPx().toInt() }
-    val texHPx = with(density) { heightDp.toPx().toInt() }
-    val texTPx = with(density) { (widthDp * depthNorm).toPx().toInt() }
-    val faceBitmaps = remember(skin, texWPx, texHPx, texTPx) {
-        buildFaceBitmaps(skin, texWPx, texHPx, texTPx)
+    val customization = rememberBookCustomization()
+    val defaultTitle = stringResource(R.string.diary_book_default_title)
+    val defaultSubtitle = stringResource(R.string.diary_book_default_subtitle)
+    val coverTitle = DiaryBookCustomizationStore.resolveTitle(customization, defaultTitle)
+    val coverOwnerLine = DiaryBookCustomizationStore.resolveOwnerLine(customization, defaultSubtitle)
+    val ownerNameRaw = customization.ownerName
+
+    // ── 6 张纹理位图（按 skin + 定制文案缓存；封面超采样 1.4×）─────
+    val texScale = 1.4f
+    val texWPx = with(density) { (widthDp * texScale).toPx().toInt() }
+    val texHPx = with(density) { (heightDp * texScale).toPx().toInt() }
+    val texTPx = with(density) { (widthDp * depthNorm * texScale).toPx().toInt() }
+    val faceBitmaps = remember(skin, texWPx, texHPx, texTPx, coverTitle, coverOwnerLine, ownerNameRaw) {
+        buildFaceBitmaps(skin, texWPx, texHPx, texTPx, coverTitle, coverOwnerLine, ownerNameRaw)
     }
 
     // ── 6 张 Texture（跟随 bitmap 重建，旧的需手动 destroy）─────
@@ -300,11 +314,29 @@ fun MagicBook3DWidget(
         }
     }
 
-    // ── 切皮交叉过渡：skin.id 变化时整 widget alpha 0.2→1，避免瞬切 ──
+    // ── 切皮交叉过渡：skin.id 变化时 alpha 0.25→1 + 轻微缩放弹入 ──
     val skinFade = remember { androidx.compose.animation.core.Animatable(1f) }
+    val skinScale = remember { androidx.compose.animation.core.Animatable(1f) }
     LaunchedEffect(skin.id.raw) {
-        skinFade.snapTo(0.25f)
-        skinFade.animateTo(1f, animationSpec = tween(450, easing = LinearEasing))
+        skinFade.snapTo(0.22f)
+        skinScale.snapTo(0.93f)
+        kotlinx.coroutines.coroutineScope {
+            launch {
+                skinFade.animateTo(
+                    1f,
+                    animationSpec = tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                )
+            }
+            launch {
+                skinScale.animateTo(
+                    1f,
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = 0.72f,
+                        stiffness = 380f,
+                    ),
+                )
+            }
+        }
     }
 
     // ── 呼吸 / 浮动 / 微旋转动画 ───────────────────────
@@ -323,7 +355,6 @@ fun MagicBook3DWidget(
     val idleRotY = if (isDragging) 0f else (-3f + breath * 6f)
     val idleRotX = if (isDragging) 0f else (-1.5f + breath * 3f)
     val floatYpx = -6f + breath * 12f                              // 上下浮动 ±6px
-    val auraAlpha = 0.30f + breath * 0.25f                          // 光晕呼吸
 
     LaunchedEffect(dragY, dragX, idleRotY, idleRotX, openProgress, coverPeek.value) {
         // 翻开过程：在用户视角基础上额外增加 Y 旋转 -90°
@@ -343,44 +374,22 @@ fun MagicBook3DWidget(
 
     val nodes = rememberNodes { add(cubeRoot) }
 
-    val foilColor = skin.palette.foil.base
+    val stage = bookStageThemeFor(skin.id.raw)
 
     Box(
         modifier = modifier
             .defaultMinSize(minWidth = widthDp + 200.dp, minHeight = heightDp + 240.dp)
             .graphicsLayer {
                 alpha = skinFade.value * (1f - openProgress * 0.85f)
+                scaleX = skinScale.value
+                scaleY = skinScale.value
             },
         contentAlignment = Alignment.Center
     ) {
-        // ── 背景径向光晕（魔法氛围）─────────────────────
-        Canvas(
-            modifier = Modifier
-                .size(maxOf(widthDp, heightDp) + 100.dp)
-                .graphicsLayer {
-                    alpha = auraAlpha
-                    translationY = floatYpx * 0.4f
-                }
-        ) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        foilColor.copy(alpha = 0.55f),
-                        foilColor.copy(alpha = 0.18f),
-                        Color.Transparent
-                    )
-                ),
-                radius = size.minDimension * 0.46f,
-                center = Offset(size.width / 2f, size.height / 2f)
-            )
-        }
+        // ── 书后不再画任何圆形气场/光晕（用户明确不要书背后的光盘）。
+        //    氛围光交给背景渐变 + 顶部聚光 + 皮肤粒子特效(SkinFx)，不在书正后方堆叠径向光。──
 
-        // ── 地面投影：按皮肤换色（火光下不该是黑阴影）────
-        val (shadowColor, shadowAlpha) = when (skin.id.raw) {
-            "builtin::chiyan" -> Color(0xFFFF3010) to 0.55f      // 火光橙红反照
-            "builtin::jiyue"  -> Color(0xFF7B5BFF) to 0.45f      // 雷电紫色反照
-            else              -> Color.Black to 0.65f
-        }
+        // ── 地面投影：用剧场气场色反照（火光下不该是黑阴影）────
         Canvas(
             modifier = Modifier
                 .size(width = widthDp * 0.9f, height = 22.dp)
@@ -389,13 +398,13 @@ fun MagicBook3DWidget(
                     val t = (floatYpx / 12f).coerceIn(-1f, 1f)
                     scaleX = 1f - t * 0.12f
                     scaleY = (1f - t * 0.12f) * 0.7f
-                    alpha = 0.55f - t * 0.18f
+                    alpha = stage.groundAlpha - t * 0.18f
                 }
         ) {
             drawOval(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        shadowColor.copy(alpha = shadowAlpha),
+                        stage.ground.copy(alpha = stage.groundAlpha),
                         Color.Transparent
                     )
                 ),
@@ -428,106 +437,9 @@ fun MagicBook3DWidget(
             )
         }
 
-        // ── 角度敏感 sheen：金属光泽斜向掠过书面（仅书面对用户时显著） ──
-        Canvas(
-            modifier = Modifier
-                .size(widthDp, heightDp)
-                .graphicsLayer { translationY = floatYpx }
-        ) {
-            // 书面与相机的法线点积近似（dragY 是 Y 轴旋转，越接近 0 越正面）
-            val cosFront = kotlin.math.cos(dragY * Math.PI.toFloat() / 180f)
-            val frontness = (cosFront - 0.30f).coerceAtLeast(0f) / 0.70f   // 0..1
-            if (frontness > 0.05f) {
-                val cw = size.width
-                val ch = size.height
-                // 光带 X 位置：dragY 在 [-90, 0] 时从右滑到左（封面正面 = 中央）
-                // dragY = -22 (默认) → bandX 约 0.45 cw
-                val norm = ((dragY + 90f) / 90f).coerceIn(0f, 1f)            // 0=背面 1=正面
-                val bandCx = cw * (0.20f + norm * 0.60f)
-                val bandW = cw * 0.20f
-                val intensity = frontness * 0.55f
-                // 用斜向 LinearGradient 模拟"光带"（左下→右上 30°）
-                drawRect(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.0f),
-                            Color.White.copy(alpha = intensity * 0.85f),
-                            Color.White.copy(alpha = 0.0f),
-                            Color.Transparent,
-                        ),
-                        start = Offset(bandCx - bandW, ch),
-                        end = Offset(bandCx + bandW, 0f),
-                    ),
-                    topLeft = Offset(0f, 0f),
-                    size = androidx.compose.ui.geometry.Size(cw, ch),
-                    blendMode = androidx.compose.ui.graphics.BlendMode.Plus,
-                )
-            }
-        }
+        // ── 角度敏感 sheen 已移除（用户不需要） ──
 
-        // ── 书签丝带：从书顶冒出垂下的彩带，跟随 breath 摆动 ──
-        Canvas(
-            modifier = Modifier
-                .size(widthDp + 80.dp, heightDp + 80.dp)
-                .graphicsLayer { translationY = floatYpx }
-        ) {
-            val cw = size.width
-            val ch = size.height
-            // 书顶中央往下偏右一点冒出（模拟书页夹丝带）
-            val anchorX = cw * 0.62f
-            val anchorY = ch * 0.18f
-            val ribbonW = cw * 0.045f
-            val ribbonLen = ch * 0.42f
-            val sway = sin((breath * 2f * Math.PI).toFloat()) * cw * 0.012f
-            // 用 4 段折线 + 渐变模拟轻摆飘带
-            val ribbonColor = skin.palette.ribbon
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(anchorX - ribbonW / 2f, anchorY)
-                quadraticBezierTo(
-                    anchorX - ribbonW / 2f + sway, anchorY + ribbonLen * 0.5f,
-                    anchorX - ribbonW / 2f + sway * 1.5f, anchorY + ribbonLen,
-                )
-                lineTo(anchorX + ribbonW / 2f + sway * 1.5f, anchorY + ribbonLen)
-                quadraticBezierTo(
-                    anchorX + ribbonW / 2f + sway, anchorY + ribbonLen * 0.5f,
-                    anchorX + ribbonW / 2f, anchorY,
-                )
-                close()
-            }
-            // 阴影底层
-            translate(left = 1.5f, top = 2.5f) {
-                drawPath(path, Color.Black.copy(alpha = 0.30f))
-            }
-            // 主体（垂直渐变让丝带从根部到尾部更亮）
-            drawPath(
-                path,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        ribbonColor.copy(alpha = 0.95f),
-                        ribbonColor.copy(alpha = 0.78f),
-                    ),
-                    startY = anchorY,
-                    endY = anchorY + ribbonLen,
-                )
-            )
-            // 中央高光线
-            drawLine(
-                color = Color.White.copy(alpha = 0.45f),
-                start = Offset(anchorX - ribbonW * 0.05f, anchorY + 2f),
-                end = Offset(anchorX - ribbonW * 0.05f + sway * 1.5f, anchorY + ribbonLen - 2f),
-                strokeWidth = ribbonW * 0.18f,
-            )
-            // 末端 V 字燕尾
-            val tailY = anchorY + ribbonLen
-            val notch = androidx.compose.ui.graphics.Path().apply {
-                moveTo(anchorX - ribbonW / 2f + sway * 1.5f, tailY)
-                lineTo(anchorX + sway * 1.5f, tailY - ribbonW * 0.7f)
-                lineTo(anchorX + ribbonW / 2f + sway * 1.5f, tailY)
-                close()
-            }
-            drawPath(notch, skin.palette.cover.base)  // 用封面色"扣"出 V 字
-        }
+        // ── 书签丝带已移除（用户不需要） ──
 
         // ── 跟手高光：拖动时指针位置出现径向白光，松手柔和淡出 ──
         if (highlightStrength.value > 0.01f) {

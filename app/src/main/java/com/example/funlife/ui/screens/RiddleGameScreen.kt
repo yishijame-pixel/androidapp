@@ -141,7 +141,6 @@ fun RiddleGameScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(70.dp)
                     .background(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
@@ -151,6 +150,8 @@ fun RiddleGameScreen(
                             )
                         )
                     )
+                    .statusBarsPadding()
+                    .height(70.dp)
             ) {
                 // 底部霓虹分割线
                 Box(

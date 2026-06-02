@@ -13,6 +13,9 @@ interface CoinDao {
     
     @Query("SELECT coins FROM user_coins WHERE userId = :userId")
     suspend fun getCoinsAmount(userId: Long): Int?
+
+    @Query("SELECT * FROM user_coins WHERE userId = :userId")
+    suspend fun getUserCoinsSync(userId: Long): UserCoins?
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUserCoins(userCoins: UserCoins)

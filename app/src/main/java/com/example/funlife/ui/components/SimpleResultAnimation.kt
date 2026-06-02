@@ -91,14 +91,7 @@ fun StaticCard(
     
     // 加载面板图片
     val panelBitmap = remember(panelSkin) {
-        try {
-            context.assets.open("login/$panelSkin.png").use { inputStream ->
-                android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("StaticCard", "Failed to load panel image: ${e.message}")
-            null
-        }
+        com.example.funlife.utils.ImageCache.loadImage(context, "login/$panelSkin.png", sampleSize = 2)
     }
     
     val (bgColors, accentColor) = when (mode) {
