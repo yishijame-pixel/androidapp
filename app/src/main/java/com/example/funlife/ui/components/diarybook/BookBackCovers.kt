@@ -39,6 +39,12 @@ fun DrawScope.drawBackCoverArt(skin: BookSkin) {
         "builtin::chiyan"    -> drawChiYanBack(skin)
         "builtin::qingluan"  -> drawQingLuanBack(skin)
         "builtin::xinghe"    -> drawXingHeBack(skin)
+        "builtin::xuanbing"  -> drawXuanBingBack(skin)
+        "builtin::zixiao"    -> drawZiXiaoBack(skin)
+        "builtin::liujin"    -> drawLiuJinBack(skin)
+        "builtin::molong"    -> drawMoLongBack(skin)
+        "builtin::shanhu"    -> drawShanHuBack(skin)
+        "builtin::jingleng"  -> drawJingLengBack(skin)
         else                 -> drawGenericBack(skin)
     }
     drawCornerWear(size.width, size.height, skin.palette.foil.base)

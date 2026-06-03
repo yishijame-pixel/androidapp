@@ -130,6 +130,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBottomLightPool
         "builtin::xinghe"    -> Triple(0.20f + pulse * 0.06f, 0.30f, 0.80f)
         "builtin::qingchuan" -> Triple(0.18f + pulse * 0.05f, 0.28f, 0.75f)
         "builtin::qingluan"  -> Triple(0.16f + pulse * 0.05f, 0.25f, 0.75f)
+        "builtin::xuanbing"  -> Triple(0.20f + pulse * 0.07f, 0.32f, 0.82f)
+        "builtin::zixiao"    -> Triple(0.22f + pulse * 0.08f, 0.34f, 0.85f)
+        "builtin::liujin"    -> Triple(0.24f + pulse * 0.08f, 0.36f, 0.88f)
+        "builtin::molong"    -> Triple(0.18f + pulse * 0.06f, 0.28f, 0.78f)
+        "builtin::shanhu"    -> Triple(0.19f + pulse * 0.06f, 0.30f, 0.80f)
+        "builtin::jingleng"  -> Triple(0.21f + pulse * 0.07f, 0.33f, 0.84f)
         else                 -> Triple(0.12f + pulse * 0.04f, 0.20f, 0.70f)
     }
 

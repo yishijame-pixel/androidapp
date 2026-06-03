@@ -9,8 +9,9 @@
 //   · 目录：点击左上"☰"按钮 → 弹出月份索引（Sheet 风格）
 //
 // 数据流：
-//   pages 列表 = [封面] + [按日期升序的 DiaryEntry] + [空白新页（今天还没写）]
-//   翻到空白页提示用户"按 ✎ 写下今日"
+//   每本皮肤（bookSkinId）独立：日记 / 书名 / 署名互不相通
+//   每页一篇（pageSlot = 页索引）；总页数 = VIP 本册页数
+//   [封面] + [题辞] + [按页槽日记] + [空白待书] … + [卷终]
 // ═══════════════════════════════════════════════════════════════════════════
 package com.example.funlife.ui.screens
 
@@ -52,10 +53,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.DiaryEntry
+import com.example.funlife.data.model.VipLevel
 import com.example.funlife.repository.DiaryRepository
 import com.example.funlife.domain.skin.BookSkin
 import com.example.funlife.ui.components.diarybook.PageCurl
+import com.example.funlife.ui.components.diarybook.drawColophonOrnament
+import com.example.funlife.ui.components.diarybook.drawCornerBrackets
+import com.example.funlife.ui.components.diarybook.drawEmbossText
+import com.example.funlife.ui.components.diarybook.drawMetallicFrame
 import com.example.funlife.ui.components.diarybook.drawMiniCover
+import com.example.funlife.ui.components.diarybook.drawSealStamp
+import com.example.funlife.ui.components.diarybook.softGlow
 import com.example.funlife.ui.components.diarybook.skin.BookCustomizationProvider
 import com.example.funlife.ui.components.diarybook.skin.BookCustomizationSheet
 import com.example.funlife.ui.components.diarybook.skin.BookSkinProvider
@@ -80,48 +88,65 @@ fun DiaryBookScreen(
     val repo = remember { DiaryRepository(AppDatabase.getDatabase(ctx).diaryDao()) }
     val scope = rememberCoroutineScope()
 
-    // 加载所有日记（按日期正序）
+    // 本册总页数（VIP）+ 当前皮肤册日记（observe 在 BookSkinProvider 内按 skinId 订阅）
     var entries by remember { mutableStateOf<List<DiaryEntry>>(emptyList()) }
+    var bookPageCount by remember { mutableStateOf(1000) }
     var loaded by remember { mutableStateOf(false) }
     LaunchedEffect(userId) {
-        repo.observeAll(userId).collect {
+        val vipDao = AppDatabase.getDatabase(ctx).userVipDao()
+        val vip = vipDao.getUserVipSync(userId)
+        val level = vip?.getCurrentVipLevel() ?: VipLevel.NORMAL
+        bookPageCount = when (level) {
+            VipLevel.NORMAL -> 1000
+            VipLevel.VIP1   -> 5000
+            VipLevel.VIP2   -> 10000
+            VipLevel.VIP3, VipLevel.PERMANENT -> 50000
+        }
+    }
+
+    // 当前页码（0 = 封面）
+    var pageIndex by remember { mutableStateOf(0) }
+    var jumpToPage by remember { mutableStateOf<Int?>(null) }
+    var showEditor by remember { mutableStateOf(false) }
+    var showCatalog by remember { mutableStateOf(false) }
+    var showSkinPicker by remember { mutableStateOf(false) }
+    var showCustomize by remember { mutableStateOf(false) }
+    var editingPageSlot by remember { mutableStateOf(2) }
+
+    BookSkinProvider {
+    BookCustomizationProvider(userId = userId) {
+    val skin = LocalBookSkin.current
+    val skinId = skin.id.raw
+
+    LaunchedEffect(userId, skinId) {
+        loaded = false
+        pageIndex = 0
+        jumpToPage = null
+        repo.observeByBook(userId, skinId).collect {
             entries = it
             loaded = true
         }
     }
 
-    // 当前页码（0 = 封面，1..N = 已有日记，N+1 = 今日新页）
-    var pageIndex by remember { mutableStateOf(0) }
-    var showEditor by remember { mutableStateOf(false) }
-    var showCatalog by remember { mutableStateOf(false) }
-    var showSkinPicker by remember { mutableStateOf(false) }
-    var showCustomize by remember { mutableStateOf(false) }
-
-    // 构造翻页页面列表
-    //  0           = 封面
-    //  1           = 前扉页（题辞）
-    //  2..K        = 日记（K = entries.size + 1）
-    //  K+1         = 今日新页（仅当今日尚未写）
-    //  last        = 尾页（卷终）
     val today = remember { LocalDate.now() }
-    val hasTodayEntry = entries.any { it.date == today.toString() }
     val frontMatterIdx = 1
     val firstEntryIdx = 2
-    val todayNewIdx = if (hasTodayEntry) -1 else firstEntryIdx + entries.size
-    val backMatterIdx = (if (hasTodayEntry) firstEntryIdx + entries.size else todayNewIdx + 1)
-    val totalPages = backMatterIdx + 1
-
-    // 内容页索引 -> 数据
-    fun entryAt(pageIdx: Int): DiaryEntry? {
-        val idx = pageIdx - firstEntryIdx
-        return if (idx in entries.indices) entries[idx] else null
+    val backMatterIdx = bookPageCount - 1
+    val totalPages = bookPageCount
+    val firstBlankPageIdx = remember(entries, backMatterIdx) {
+        (firstEntryIdx until backMatterIdx).firstOrNull { p ->
+            entries.none { it.pageSlot == p }
+        } ?: -1
     }
+
+    fun entryAt(pageIdx: Int): DiaryEntry? = entries.find { it.pageSlot == pageIdx }
     fun isCover(pageIdx: Int) = pageIdx == 0
     fun isFrontMatter(pageIdx: Int) = pageIdx == frontMatterIdx
     fun isBackMatter(pageIdx: Int) = pageIdx == backMatterIdx
-    fun isTodayNewPage(pageIdx: Int) = !hasTodayEntry && pageIdx == todayNewIdx
+    fun isWritablePage(pageIdx: Int) = pageIdx in firstEntryIdx until backMatterIdx
+    fun isTodayNewPage(pageIdx: Int) = pageIdx == firstBlankPageIdx && firstBlankPageIdx >= 0
+    fun isBlankPage(pageIdx: Int) = isWritablePage(pageIdx) && !isTodayNewPage(pageIdx) && entryAt(pageIdx) == null
 
-    // 字段编辑缓冲（写作模式）
     var editingDate by remember { mutableStateOf(today) }
     var editTitle by remember { mutableStateOf("") }
     var editContent by remember { mutableStateOf("") }
@@ -129,6 +154,8 @@ fun DiaryBookScreen(
     var editMood by remember { mutableStateOf("") }
 
     fun openEditorFor(pageIdx: Int) {
+        if (!isWritablePage(pageIdx)) return
+        editingPageSlot = pageIdx
         val e = entryAt(pageIdx)
         editingDate = e?.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today
         editTitle = e?.title ?: ""
@@ -138,31 +165,27 @@ fun DiaryBookScreen(
         showEditor = true
     }
 
-    // Hub "写下今日" 入口：加载完后自动跳到今日页并打开编辑器（一次性）
     var autoEditorTriggered by remember { mutableStateOf(false) }
-    LaunchedEffect(loaded, openEditorOnLaunch) {
+    LaunchedEffect(loaded, openEditorOnLaunch, skinId, firstBlankPageIdx) {
         if (loaded && openEditorOnLaunch && !autoEditorTriggered) {
-            // 今日页（或今日已写日记）
-            val targetPage = if (hasTodayEntry) {
-                entries.indexOfFirst { it.date == today.toString() }.let {
-                    if (it >= 0) firstEntryIdx + it else backMatterIdx - 1
-                }
-            } else todayNewIdx
+            val todayPage = entries.find { it.date == today.toString() }?.pageSlot
+            val targetPage = todayPage ?: firstBlankPageIdx.coerceAtLeast(firstEntryIdx)
             pageIndex = targetPage.coerceIn(0, totalPages - 1)
+            jumpToPage = pageIndex
             openEditorFor(pageIndex)
             autoEditorTriggered = true
         }
     }
-
-    BookSkinProvider {
-    BookCustomizationProvider(userId = userId) {
-    val skin = LocalBookSkin.current
     val customization = rememberBookCustomization()
     val defaultTitle = stringResource(R.string.diary_book_default_title)
     val defaultSubtitle = stringResource(R.string.diary_book_default_subtitle)
     val coverTitle = DiaryBookCustomizationStore.resolveTitle(customization, defaultTitle)
     val coverOwnerLine = DiaryBookCustomizationStore.resolveOwnerLine(customization, defaultSubtitle)
     val coverRefreshKey = "${skin.id.raw}|$coverTitle|$coverOwnerLine"
+    val pageRefreshKey = remember(coverRefreshKey, skinId, entries) {
+        val sig = entries.joinToString("|") { "${it.pageSlot}:${it.id}:${it.updatedAt}" }
+        "$coverRefreshKey|$skinId|$sig"
+    }
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1A1410))) {
         if (!loaded) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -172,10 +195,11 @@ fun DiaryBookScreen(
         // 卷曲翻页核心
         PageCurl(
             pageCount = totalPages,
-            currentPage = pageIndex,
             onPageChange = { pageIndex = it.coerceIn(0, totalPages - 1) },
+            jumpToPage = jumpToPage,
+            onJumpConsumed = { jumpToPage = null },
             modifier = Modifier.fillMaxSize(),
-            refreshKey = coverRefreshKey
+            refreshKey = pageRefreshKey
         ) { pageIdx ->
             when {
                 isCover(pageIdx) -> drawCoverPage(skin, coverTitle, coverOwnerLine)
@@ -183,7 +207,7 @@ fun DiaryBookScreen(
                 isBackMatter(pageIdx) -> drawBackMatter(skin, entries.size)
                 isTodayNewPage(pageIdx) -> drawTodayNewPage(today, skin)
                 else -> entryAt(pageIdx)?.let { drawDiaryPage(it, skin) }
-                    ?: drawFrontMatter(skin)  // 异常安全回退
+                    ?: drawBlankPage(pageIdx, skin)
             }
         }
 
@@ -277,6 +301,8 @@ fun DiaryBookScreen(
                         repo.saveOrUpdate(
                             DiaryEntry(
                                 userId = userId,
+                                bookSkinId = skinId,
+                                pageSlot = editingPageSlot,
                                 date = editingDate.toString(),
                                 title = editTitle.trim(),
                                 content = editContent.trim(),
@@ -308,13 +334,16 @@ fun DiaryBookScreen(
         if (showCatalog) {
             CatalogSheet(
                 entries = entries,
-                today = today,
-                onPick = { idxInEntries ->
-                    pageIndex = (firstEntryIdx + idxInEntries).coerceIn(0, totalPages - 1)
+                firstBlankPageIdx = firstBlankPageIdx,
+                onPick = { pageSlot ->
+                    pageIndex = pageSlot.coerceIn(0, totalPages - 1)
+                    jumpToPage = pageSlot
                     showCatalog = false
                 },
                 onJumpToNew = {
-                    pageIndex = if (todayNewIdx >= 0) todayNewIdx else backMatterIdx - 1
+                    val target = if (firstBlankPageIdx >= 0) firstBlankPageIdx else firstEntryIdx
+                    pageIndex = target
+                    jumpToPage = target
                     showCatalog = false
                 },
                 onDismiss = { showCatalog = false }
@@ -387,17 +416,17 @@ private fun DrawScope.drawDiaryPage(entry: DiaryEntry, skin: BookSkin) {
     )
 
     // 标题（若有）
-    var contentStartY = h * 0.28f
+    var contentStartY = h * 0.26f
     if (entry.title.isNotBlank()) {
         val titlePaint = android.graphics.Paint().apply {
             color = ink
-            textSize = w * 0.062f
+            textSize = w * 0.058f
             isAntiAlias = true
             typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
             textAlign = android.graphics.Paint.Align.LEFT
         }
-        nc.drawText(entry.title, w * 0.10f, h * 0.27f, titlePaint)
-        contentStartY = h * 0.35f
+        nc.drawText(entry.title, w * 0.10f, h * 0.245f, titlePaint)
+        contentStartY = h * 0.30f
     }
 
     // 正文：自动换行
@@ -431,71 +460,123 @@ private fun DrawScope.drawDiaryPage(entry: DiaryEntry, skin: BookSkin) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 3a. 前扉页（题辞）：宣纸 + 居中题辞 + 烫金小印
+// 3a. 前扉页（题辞）：竖排双栏 + 内框装饰 + 钤印
 // ─────────────────────────────────────────────────────────────────────────
 private fun DrawScope.drawFrontMatter(skin: BookSkin) {
     val w = size.width
     val h = size.height
     val palette = skin.palette
+    val foil = palette.foil.base
+    val accent = palette.foil.accent
     drawPaperBackground(w, h, skin)
 
     val nc = drawContext.canvas.nativeCanvas
+    val cx = w / 2f
 
-    // 主题辞（大字，居中竖排观感）
-    val titlePaint = android.graphics.Paint().apply {
-        color = palette.ink.toArgb()
-        textSize = w * 0.078f
-        isAntiAlias = true
-        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
-        textAlign = android.graphics.Paint.Align.CENTER
-        letterSpacing = 0.6f
-    }
-    nc.drawText("光  阴  荏  苒", w / 2f, h * 0.30f, titlePaint)
-    nc.drawText("且  以  此  册  志  之", w / 2f, h * 0.42f, titlePaint)
+    // 内框：双金边 + 四角护角
+    val pad = (w * 0.11f).coerceAtLeast(8f)
+    val frameSize = Size(w - pad * 2f, h * 0.58f)
+    val frameTop = h * 0.16f
+    drawMetallicFrame(Offset(pad, frameTop), frameSize, w * 0.005f, foil, accent, alpha = 0.55f)
+    val pad2 = pad + w * 0.018f
+    val innerSize = Size(w - pad2 * 2f, frameSize.height - w * 0.036f)
+    val innerTop = frameTop + w * 0.018f
+    drawMetallicFrame(Offset(pad2, innerTop), innerSize, w * 0.003f, foil, accent, alpha = 0.38f)
+    drawCornerBrackets(foil, accent, pad + w * 0.006f, w * 0.055f, w * 0.004f)
 
-    // 装饰横线（双层）
-    drawLine(
-        color = palette.foil.base.copy(alpha = 0.7f),
-        start = Offset(w * 0.30f, h * 0.50f),
-        end = Offset(w * 0.70f, h * 0.50f),
-        strokeWidth = 1.2f
+    // 竖排双栏（右列先读）：字距紧凑，整体居中于内框
+    val charSize = w * 0.072f
+    val charStep = charSize * 1.16f
+    val colGap = charSize * 2.05f
+    val rightColX = cx + colGap / 2f
+    val leftColX = cx - colGap / 2f
+    val rightChars = "光阴荏苒"
+    val leftChars = "且以此册志之"
+    val maxLen = maxOf(rightChars.length, leftChars.length)
+    val blockCenterY = innerTop + innerSize.height / 2f
+    val blockHeight = (maxLen - 1) * charStep + charSize
+    val blockTopBaseline = blockCenterY - blockHeight / 2f + charSize * 0.82f
+
+    softGlow(Offset(cx, blockCenterY), colGap * 0.9f, palette.ink.copy(alpha = 0.35f), 0.12f)
+
+    drawVerticalEpigraphColumn(
+        chars = rightChars,
+        cx = rightColX,
+        topBaselineY = blockTopBaseline + (maxLen - rightChars.length) * charStep * 0.5f,
+        textSize = charSize,
+        step = charStep,
+        base = palette.ink,
+        accent = accent,
     )
-    drawLine(
-        color = palette.foil.base.copy(alpha = 0.4f),
-        start = Offset(w * 0.34f, h * 0.515f),
-        end = Offset(w * 0.66f, h * 0.515f),
-        strokeWidth = 0.6f
+    drawVerticalEpigraphColumn(
+        chars = leftChars,
+        cx = leftColX,
+        topBaselineY = blockTopBaseline + (maxLen - leftChars.length) * charStep * 0.5f,
+        textSize = charSize,
+        step = charStep,
+        base = palette.ink,
+        accent = accent,
     )
 
-    // 副题辞（小字两行）
+    // 栏间竖线（极淡，暗示分栏）
+    val ruleTop = blockTopBaseline - charSize * 0.35f
+    val ruleBot = blockTopBaseline + (maxLen - 1) * charStep + charSize * 0.25f
+    drawLine(
+        color = foil.copy(alpha = 0.22f),
+        start = Offset(cx, ruleTop),
+        end = Offset(cx, ruleBot),
+        strokeWidth = 0.6f,
+    )
+
+    // 副题：单行紧凑，置于内框下方
+    val subY = frameTop + frameSize.height + h * 0.045f
+    val subHalfW = w * 0.22f
+    drawColophonOrnament(cx, subY - charSize * 0.55f, subHalfW, foil, w * 0.003f)
     val subPaint = android.graphics.Paint().apply {
-        color = palette.inkSoft.toArgb()
-        textSize = w * 0.038f
+        color = palette.inkSoft.copy(alpha = 0.82f).toArgb()
+        textSize = w * 0.034f
         isAntiAlias = true
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.NORMAL)
         textAlign = android.graphics.Paint.Align.CENTER
-        letterSpacing = 0.25f
+        letterSpacing = 0.04f
     }
-    nc.drawText("一  时  之  事", w / 2f, h * 0.62f, subPaint)
-    nc.drawText("一  册  之  录", w / 2f, h * 0.69f, subPaint)
+    nc.drawText("一时之事  ·  一册之录", cx, subY, subPaint)
 
-    // 朱砂小印（右下角"启"）
-    val stampSize = w * 0.085f
-    val sx = w * 0.74f
-    val sy = h * 0.84f
-    drawRect(
-        color = palette.seal.copy(alpha = 0.92f),
-        topLeft = Offset(sx, sy),
-        size = Size(stampSize, stampSize)
+    // 右下角钤印「启」
+    val stampSize = w * 0.088f
+    drawSealStamp(
+        center = Offset(w * 0.78f, h * 0.86f),
+        sizePx = stampSize,
+        sealColor = palette.seal,
+        glyph = "启",
+        backing = palette.paper,
     )
-    val stampPaint = android.graphics.Paint().apply {
-        color = palette.paper.toArgb()
-        textSize = stampSize * 0.55f
-        isAntiAlias = true
-        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
-        textAlign = android.graphics.Paint.Align.CENTER
+}
+
+/** 竖排题辞单栏：逐字凸压，字距固定，避免横排大 letterSpacing 导致散碎感。 */
+private fun DrawScope.drawVerticalEpigraphColumn(
+    chars: String,
+    cx: Float,
+    topBaselineY: Float,
+    textSize: Float,
+    step: Float,
+    base: Color,
+    accent: Color,
+) {
+    chars.forEachIndexed { i, ch ->
+        drawEmbossText(
+            text = ch.toString(),
+            cx = cx,
+            cy = topBaselineY + i * step,
+            textSize = textSize,
+            base = base,
+            accent = accent,
+            bold = true,
+            shadowAlpha = 0.38f,
+            highlightAlpha = 0.22f,
+            letterSpacing = 0f,
+        )
     }
-    nc.drawText("启", sx + stampSize / 2f, sy + stampSize * 0.72f, stampPaint)
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -622,6 +703,43 @@ private fun DrawScope.drawTodayNewPage(today: LocalDate, skin: BookSkin) {
         letterSpacing = 0.2f
     }
     nc.drawText("点  击  右  上  角  ✎  落  笔", w / 2f, h * 0.56f, hintPaint)
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 3c. 空白待书页（VIP 本册页数填充，未到卷终前的留白）
+// ─────────────────────────────────────────────────────────────────────────
+private fun DrawScope.drawBlankPage(pageIdx: Int, skin: BookSkin) {
+    val w = size.width
+    val h = size.height
+    val palette = skin.palette
+
+    drawPaperBackground(w, h, skin)
+
+    // 横线稿纸
+    val lineTop = h * 0.22f
+    val lineBot = h * 0.88f
+    val step = (lineBot - lineTop) / 14f
+    for (i in 0..14) {
+        val y = lineTop + step * i
+        drawLine(
+            color = palette.ruling.copy(alpha = 0.28f),
+            start = Offset(w * 0.10f, y),
+            end = Offset(w * 0.90f, y),
+            strokeWidth = 0.6f
+        )
+    }
+
+    val nc = drawContext.canvas.nativeCanvas
+    val pageNum = pageIdx - 1
+    val numPaint = android.graphics.Paint().apply {
+        color = palette.inkSoft.copy(alpha = 0.35f).toArgb()
+        textSize = w * 0.030f
+        isAntiAlias = true
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.NORMAL)
+        textAlign = android.graphics.Paint.Align.CENTER
+        letterSpacing = 0.2f
+    }
+    nc.drawText("—  $pageNum  —", w / 2f, h * 0.94f, numPaint)
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -878,8 +996,8 @@ private fun DiaryEditor(
 @Composable
 private fun CatalogSheet(
     entries: List<DiaryEntry>,
-    today: LocalDate,
-    onPick: (idxInEntries: Int) -> Unit,
+    firstBlankPageIdx: Int,
+    onPick: (pageSlot: Int) -> Unit,
     onJumpToNew: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -916,7 +1034,7 @@ private fun CatalogSheet(
             Spacer(Modifier.height(20.dp))
 
             // 按月分组
-            val byMonth = entries.withIndex().groupBy { it.value.date.substring(0, 7) }
+            val byMonth = entries.groupBy { it.date.substring(0, 7) }
             byMonth.toSortedMap(compareByDescending { it }).forEach { (ym, list) ->
                 Text(
                     text = ym.replace("-", " . "),
@@ -926,7 +1044,7 @@ private fun CatalogSheet(
                     letterSpacing = 3.sp,
                     modifier = Modifier.padding(vertical = 6.dp)
                 )
-                list.forEach { (idxInEntries, e) ->
+                list.sortedBy { it.pageSlot }.forEach { e ->
                     val short = if (e.title.isNotBlank()) e.title else "无题"
                     Text(
                         text = "  ${e.date.substring(8)}    $short",
@@ -934,15 +1052,15 @@ private fun CatalogSheet(
                         color = Color(0xFF3D2A1F),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onPick(idxInEntries) }
+                            .clickable { onPick(e.pageSlot) }
                             .padding(vertical = 4.dp)
                     )
                 }
                 Spacer(Modifier.height(10.dp))
             }
 
-            // 今日按钮（如果今日无日记）
-            if (entries.none { it.date == today.toString() }) {
+            // 下一空白页
+            if (firstBlankPageIdx >= 0) {
                 Spacer(Modifier.height(8.dp))
                 Box(
                     modifier = Modifier

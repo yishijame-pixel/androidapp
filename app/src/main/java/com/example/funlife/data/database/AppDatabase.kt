@@ -120,7 +120,7 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.BookChatSession::class,     // 🆕 v54：AI 读书伴侣长对话存档（VIP3）
         com.example.funlife.data.model.DiaryEntry::class            // 🆕 v55：古籍日记本
     ],
-    version = 55,  // 🆕 v55 - 古籍日记本（diary_entries）
+    version = 56,  // 🆕 v56 - 日记本分册（bookSkinId + pageSlot）
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -1677,6 +1677,36 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_55_56 = object : Migration(55, 56) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `diary_entries` ADD COLUMN `bookSkinId` TEXT NOT NULL DEFAULT 'builtin::hengwu'"
+                )
+                database.execSQL(
+                    "ALTER TABLE `diary_entries` ADD COLUMN `pageSlot` INTEGER NOT NULL DEFAULT 2"
+                )
+                database.execSQL("""
+                    UPDATE `diary_entries` SET `pageSlot` = 2 + (
+                        SELECT COUNT(*) FROM `diary_entries` AS e2
+                        WHERE e2.`userId` = `diary_entries`.`userId`
+                          AND (e2.`date` < `diary_entries`.`date`
+                               OR (e2.`date` = `diary_entries`.`date` AND e2.`id` < `diary_entries`.`id`))
+                    )
+                """.trimIndent())
+                database.execSQL("DROP INDEX IF EXISTS `index_diary_entries_userId_date`")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_diary_entries_bookSkinId` ON `diary_entries` (`bookSkinId`)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_diary_entries_userId_bookSkinId` ON `diary_entries` (`userId`, `bookSkinId`)"
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_diary_entries_userId_bookSkinId_pageSlot` ON `diary_entries` (`userId`, `bookSkinId`, `pageSlot`)"
+                )
+            }
+        }
+
         private val MIGRATION_53_54 = object : Migration(53, 54) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""
@@ -1793,7 +1823,7 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45,
                 MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48,
                 MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51,
-                MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55
+                MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56
             )
             .fallbackToDestructiveMigration()
             .build()

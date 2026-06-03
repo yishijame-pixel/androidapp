@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.example.funlife.domain.skin.BookSkin
@@ -39,6 +40,12 @@ fun DrawScope.drawSpineVerticalEnhanced(
         "builtin::chiyan"    -> drawChiYanSpine(skin, bookTitle, ownerNameRaw)
         "builtin::qingluan"  -> drawQingLuanSpine(skin, bookTitle, ownerNameRaw)
         "builtin::xinghe"    -> drawXingHeSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::xuanbing"  -> drawXuanBingSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::zixiao"    -> drawZiXiaoSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::liujin"    -> drawLiuJinSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::molong"    -> drawMoLongSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::shanhu"    -> drawShanHuSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::jingleng"  -> drawJingLengSpine(skin, bookTitle, ownerNameRaw)
         else                 -> drawHengWuSpine(skin, bookTitle, ownerNameRaw)
     }
 }
@@ -1026,6 +1033,86 @@ internal fun DrawScope.drawSpineEmblem(skin: BookSkin, center: Offset, size: Flo
             }
             drawPath(p, foil.copy(alpha = 0.78f), style = Stroke(width = sw))
             drawCircle(foil.copy(alpha = 0.9f), s * 0.12f, center)
+        }
+    }
+}
+
+/* ── 扩展皮肤书脊（7–12）──────────────────────────────────────────────── */
+
+private fun DrawScope.drawExtendedSpineBase(
+    skin: BookSkin, bookTitle: String, ownerNameRaw: String, glow: Color,
+) {
+    val w = size.width; val h = size.height
+    val foil = skin.palette.foil.base; val accent = skin.palette.foil.accent
+    val seal = skin.palette.seal
+    val nc = drawContext.canvas.nativeCanvas
+    drawSpineLeatherBody(skin, w, h)
+    drawSpineRaisedRails(w, h, foil, skin.palette.coverShadow)
+    listOf(h * 0.10f, h * 0.90f).forEach { cy -> drawSpineCapPlate(skin, w, h, cy, foil, accent) }
+    val (titleChars, ownerChars) = spineTitleOwner(skin, bookTitle, ownerNameRaw)
+    softGlow(Offset(w / 2f, h * 0.46f), w * 0.48f, glow, 0.12f)
+    drawSpineNameplateBlock(nc, w, h, titleChars, ownerChars, foil, accent, seal, skin)
+    drawSpineRuneStrip(skin, w, h, centerY = if (ownerChars.isNotEmpty()) h * 0.76f else h * 0.68f)
+    finishSpineEdges(w, h)
+}
+
+private fun DrawScope.drawXuanBingSpine(skin: BookSkin, bookTitle: String, ownerNameRaw: String) {
+    val w = size.width; val h = size.height; val foil = skin.palette.foil.base
+    drawExtendedSpineBase(skin, bookTitle, ownerNameRaw, Color(0xFF6FE8FF))
+    for (i in 0 until 6) {
+        val y = h * (0.22f + i * 0.10f)
+        drawLine(foil.copy(alpha = 0.30f), Offset(w * 0.25f, y), Offset(w * 0.75f, y), 0.45f)
+    }
+}
+
+private fun DrawScope.drawZiXiaoSpine(skin: BookSkin, bookTitle: String, ownerNameRaw: String) {
+    val w = size.width; val h = size.height; val accent = skin.palette.foil.accent
+    drawExtendedSpineBase(skin, bookTitle, ownerNameRaw, accent)
+    listOf(-1f, 1f).forEach { sgn ->
+        val bolt = Path().apply {
+            moveTo(w / 2f + sgn * w * 0.04f, h * 0.20f)
+            lineTo(w / 2f, h * 0.38f); lineTo(w / 2f + sgn * w * 0.03f, h * 0.38f)
+            lineTo(w / 2f - sgn * w * 0.02f, h * 0.58f)
+        }
+        drawPath(bolt, accent.copy(alpha = 0.55f), style = Stroke(0.65f))
+    }
+}
+
+private fun DrawScope.drawLiuJinSpine(skin: BookSkin, bookTitle: String, ownerNameRaw: String) {
+    val w = size.width; val h = size.height; val foil = skin.palette.foil.base
+    drawExtendedSpineBase(skin, bookTitle, ownerNameRaw, Color(0xFFFFD75A))
+    for (i in 0 until 5) {
+        val y = h * (0.20f + i * 0.12f)
+        drawLine(foil.copy(alpha = 0.35f), Offset(w * 0.20f, y), Offset(w * 0.80f, y + w * 0.01f), 0.5f)
+    }
+}
+
+private fun DrawScope.drawMoLongSpine(skin: BookSkin, bookTitle: String, ownerNameRaw: String) {
+    val w = size.width; val h = size.height; val foil = skin.palette.foil.base
+    drawExtendedSpineBase(skin, bookTitle, ownerNameRaw, Color(0xFFD4AF37))
+    for (i in 0 until 8) {
+        rotate(i * 45f, Offset(w / 2f, h * 0.50f)) {
+            drawLine(foil.copy(alpha = 0.28f), Offset(w / 2f, h * 0.38f), Offset(w / 2f, h * 0.62f), 0.45f)
+        }
+    }
+}
+
+private fun DrawScope.drawShanHuSpine(skin: BookSkin, bookTitle: String, ownerNameRaw: String) {
+    val w = size.width; val h = size.height
+    val coral = Color(0xFFFF8A7A); val teal = Color(0xFF4ECDC4)
+    drawExtendedSpineBase(skin, bookTitle, ownerNameRaw, coral)
+    listOf(h * 0.28f, h * 0.48f, h * 0.68f).forEach { cy ->
+        drawCircle(teal.copy(alpha = 0.35f), w * 0.04f, Offset(w * 0.30f, cy), style = Stroke(0.5f))
+        drawCircle(coral.copy(alpha = 0.40f), w * 0.035f, Offset(w * 0.70f, cy), style = Stroke(0.5f))
+    }
+}
+
+private fun DrawScope.drawJingLengSpine(skin: BookSkin, bookTitle: String, ownerNameRaw: String) {
+    val w = size.width; val h = size.height; val foil = skin.palette.foil.base
+    drawExtendedSpineBase(skin, bookTitle, ownerNameRaw, Color(0xFFB388FF))
+    for (i in 0 until 3) {
+        rotate(i * 120f, Offset(w / 2f, h * 0.50f)) {
+            drawLine(foil.copy(alpha = 0.40f), Offset(w / 2f, h * 0.36f), Offset(w / 2f, h * 0.64f), 0.55f)
         }
     }
 }

@@ -1,10 +1,10 @@
-// DiaryEntry.kt — 日记本条目（DB v55）
+// DiaryEntry.kt — 日记本条目（DB v56）
 //
-// 区别于 mood_entries.note（短小情绪日记）：DiaryEntry 是用户在"古籍日记本"中
-// 写下的长文反思，每天一篇，标题 + 正文 + 元数据（天气/心情/温度）。
+// 区别于 mood_entries.note（短小情绪日记）：DiaryEntry 是用户在某一册「古籍日记本」
+// （按 bookSkinId 区分皮肤）中写下的长文，每页一篇，标题 + 正文 + 元数据。
 //
-// 🔒 数据隔离：userId 无默认值；@Index("userId")；(userId, date) 唯一索引避免一日多篇。
-// 📅 date：yyyy-MM-dd，作为业务主键的一部分，跨设备同步友好。
+// 🔒 数据隔离：userId + bookSkinId + pageSlot 唯一；不同皮肤的书互不相通。
+// 📄 pageSlot：在书中的页码（2 = 第一内容页，不含封面/题辞）。
 package com.example.funlife.data.model
 
 import androidx.room.Entity
@@ -15,20 +15,26 @@ import androidx.room.PrimaryKey
     tableName = "diary_entries",
     indices = [
         Index("userId"),
-        Index(value = ["userId", "date"], unique = true)
+        Index("bookSkinId"),
+        Index(value = ["userId", "bookSkinId"]),
+        Index(value = ["userId", "bookSkinId", "pageSlot"], unique = true),
     ]
 )
 data class DiaryEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val userId: Long,                       // 🔒 无默认
-    val date: String,                       // yyyy-MM-dd
-    val title: String = "",                 // 标题（可空，UI 显示时用日期作 fallback）
-    val content: String = "",               // 正文（纯文本，富文本留 v2）
-    val weather: String? = null,            // "晴" / "小雨" / null
-    val temperature: Float? = null,         // 摄氏度
-    val moodEmoji: String? = null,          // "😊" 等，可关联当日 mood_entries.mood
-    val location: String? = null,           // 可选地理位置
-    val bookmarked: Boolean = false,        // 是否加书签（v2 红绳书签用）
+    /** 所属魔法书皮肤，如 builtin::qingchuan */
+    val bookSkinId: String,
+    /** 在书中的页码（2 起为正文页，与 PageCurl 页索引一致） */
+    val pageSlot: Int,
+    val date: String,                       // yyyy-MM-dd（元数据，可编辑）
+    val title: String = "",
+    val content: String = "",
+    val weather: String? = null,
+    val temperature: Float? = null,
+    val moodEmoji: String? = null,
+    val location: String? = null,
+    val bookmarked: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
 )

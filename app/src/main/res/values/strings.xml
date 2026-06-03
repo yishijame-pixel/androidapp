@@ -185,6 +185,19 @@
     <string name="skin_xinghe_name">星河长卷</string>
     <string name="skin_xinghe_desc">深海宝蓝 · 星辰银箔 · 银河纸页 · 浩瀚星海航海志</string>
 
+    <string name="skin_xuanbing_name">玄冰古卷</string>
+    <string name="skin_xuanbing_desc">霜蓝冰晶 · 六角法阵 · 银箔寒光 · 极寒秘典</string>
+    <string name="skin_zixiao_name">紫霄雷典</string>
+    <string name="skin_zixiao_desc">紫电云幕 · 雷弧环阵 · 靛蓝纸页 · 天雷魔典</string>
+    <string name="skin_liujin_name">鎏金沙经</string>
+    <string name="skin_liujin_desc">流沙琥珀 · 金字塔日轮 · 烫金古纹 · 大漠神谕</string>
+    <string name="skin_molong_name">墨龙天书</string>
+    <string name="skin_molong_desc">墨漆龙鳞 · 烫金龙徽 · 玄黑纸页 · 游龙秘典</string>
+    <string name="skin_shanhu_name">珊瑚秘海</string>
+    <string name="skin_shanhu_desc">珊瑚暖粉 · 气泡灵珠 · 碧涛纸页 · 深海遗卷</string>
+    <string name="skin_jingleng_name">晶棱幻书</string>
+    <string name="skin_jingleng_desc">三棱折射 · 虹彩切面 · 紫晶纸页 · 幻光秘典</string>
+
     <string name="skin_picker_title">挑选皮肤</string>
     <string name="skin_locked_hint">此皮肤暂未解锁</string>
     <string name="skin_apply">应用</string>

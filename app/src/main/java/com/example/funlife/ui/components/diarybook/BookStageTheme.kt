@@ -42,6 +42,12 @@ fun bookStageThemeFor(rawId: String): BookStageTheme = when (rawId) {
     "builtin::qingchuan" -> qingChuanStage
     "builtin::qingluan"  -> qingLuanStage
     "builtin::xinghe"    -> xingHeStage
+    "builtin::xuanbing"  -> xuanBingStage
+    "builtin::zixiao"    -> ziXiaoStage
+    "builtin::liujin"    -> liuJinStage
+    "builtin::molong"    -> moLongStage
+    "builtin::shanhu"    -> shanHuStage
+    "builtin::jingleng"  -> jingLengStage
     else                 -> hengWuStage
 }
 
@@ -163,4 +169,64 @@ private val hengWuStage = BookStageTheme(
     primaryStart = Color(0xFFD8B25A),
     primaryEnd   = Color(0xFF8A6A28),
     primaryText  = Color(0xFF2A1E08),
+)
+
+// ── 玄冰古卷 · 极寒冰雾 ──────────────────────────────────────────────────
+private val xuanBingStage = BookStageTheme(
+    bgTop = Color(0xFF040C14), bgMid = Color(0xFF0A1828), bgBot = Color(0xFF122838),
+    halo = Color(0xFF6FE8FF), haloCore = Color(0xFFB8F0FF),
+    ground = Color(0xFF4ECDC4), groundAlpha = 0.42f, spotlight = Color(0xFF9ED4FF),
+    title = Color(0xFFE8F8FF), subtitle = Color(0xFF8EC8E8), icon = Color(0xFFB8E8FF),
+    statValue = Color(0xFFE8F8FF), statLabel = Color(0xFF6AA8C8),
+    primaryStart = Color(0xFF4ECDC4), primaryEnd = Color(0xFF1A4868), primaryText = Color(0xFF041018),
+)
+
+// ── 紫霄雷典 · 紫电夜幕 ──────────────────────────────────────────────────
+private val ziXiaoStage = BookStageTheme(
+    bgTop = Color(0xFF0A0418), bgMid = Color(0xFF140828), bgBot = Color(0xFF1E0C38),
+    halo = Color(0xFF7C4DFF), haloCore = Color(0xFFB388FF),
+    ground = Color(0xFF00E5FF), groundAlpha = 0.48f, spotlight = Color(0xFF6FE8FF),
+    title = Color(0xFFE8D4FF), subtitle = Color(0xFFA888D8), icon = Color(0xFFC8B0F0),
+    statValue = Color(0xFFE8D4FF), statLabel = Color(0xFF8868B8),
+    primaryStart = Color(0xFF7C4DFF), primaryEnd = Color(0xFF2A0868), primaryText = Color(0xFFF0E8FF),
+)
+
+// ── 鎏金沙经 · 大漠熔金 ──────────────────────────────────────────────────
+private val liuJinStage = BookStageTheme(
+    bgTop = Color(0xFF140A04), bgMid = Color(0xFF281808), bgBot = Color(0xFF3C240C),
+    halo = Color(0xFFFFD75A), haloCore = Color(0xFFFFE08A),
+    ground = Color(0xFFE8A838), groundAlpha = 0.52f, spotlight = Color(0xFFFFE08A),
+    title = Color(0xFFFFF0C8), subtitle = Color(0xFFD4A868), icon = Color(0xFFE8C878),
+    statValue = Color(0xFFFFF0C8), statLabel = Color(0xFFB88848),
+    primaryStart = Color(0xFFFFD75A), primaryEnd = Color(0xFF8B5A18), primaryText = Color(0xFF2A1808),
+)
+
+// ── 墨龙天书 · 玄墨龙鳞 ──────────────────────────────────────────────────
+private val moLongStage = BookStageTheme(
+    bgTop = Color(0xFF040408), bgMid = Color(0xFF0A0A10), bgBot = Color(0xFF121218),
+    halo = Color(0xFFD4AF37), haloCore = Color(0xFFE8C676),
+    ground = Color(0xFFB8860B), groundAlpha = 0.45f, spotlight = Color(0xFFE8C676),
+    title = Color(0xFFF0E8D8), subtitle = Color(0xFFA89878), icon = Color(0xFFD4C0A0),
+    statValue = Color(0xFFF0E8D8), statLabel = Color(0xFF887858),
+    primaryStart = Color(0xFFD4AF37), primaryEnd = Color(0xFF4A3818), primaryText = Color(0xFF0A0808),
+)
+
+// ── 珊瑚秘海 · 深海珊瑚 ──────────────────────────────────────────────────
+private val shanHuStage = BookStageTheme(
+    bgTop = Color(0xFF041018), bgMid = Color(0xFF081828), bgBot = Color(0xFF0C2438),
+    halo = Color(0xFFFF8A7A), haloCore = Color(0xFFFFB4A8),
+    ground = Color(0xFF4ECDC4), groundAlpha = 0.46f, spotlight = Color(0xFF7EEDE4),
+    title = Color(0xFFE8FFF8), subtitle = Color(0xFF88C8C0), icon = Color(0xFFB8E8E0),
+    statValue = Color(0xFFE8FFF8), statLabel = Color(0xFF68A8A0),
+    primaryStart = Color(0xFFFF8A7A), primaryEnd = Color(0xFF1A4858), primaryText = Color(0xFF041018),
+)
+
+// ── 晶棱幻书 · 虹彩晶域 ──────────────────────────────────────────────────
+private val jingLengStage = BookStageTheme(
+    bgTop = Color(0xFF0C0418), bgMid = Color(0xFF180828), bgBot = Color(0xFF240C38),
+    halo = Color(0xFFB388FF), haloCore = Color(0xFFE8D4FF),
+    ground = Color(0xFF9D6BFF), groundAlpha = 0.44f, spotlight = Color(0xFFFF6B9D),
+    title = Color(0xFFF0E8FF), subtitle = Color(0xFFB898D8), icon = Color(0xFFD8C0F0),
+    statValue = Color(0xFFF0E8FF), statLabel = Color(0xFF9078B8),
+    primaryStart = Color(0xFF9D6BFF), primaryEnd = Color(0xFF3A1858), primaryText = Color(0xFFF8F0FF),
 )

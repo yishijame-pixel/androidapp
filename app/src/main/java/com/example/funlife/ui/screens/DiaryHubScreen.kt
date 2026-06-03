@@ -120,31 +120,31 @@ fun DiaryHubScreen(
         }
     }
 
-    LaunchedEffect(userId) {
-        repo.observeAll(userId).collect { all ->
-            totalCount = all.size
-            val today = LocalDate.now()
-            hasTodayEntry = all.any { it.date == today.toString() }
-            // 连续天数（从今天起向前数，相邻日期差 1）
-            val days = all.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
-                .toSortedSet().toList()
-            var s = 0
-            var cursor = today
-            // 若今天没写、但昨天有，连续天数从昨天起；否则今天起
-            if (!hasTodayEntry && days.contains(today.minusDays(1))) {
-                cursor = today.minusDays(1)
-            }
-            while (days.contains(cursor)) {
-                s++
-                cursor = cursor.minusDays(1)
-            }
-            streak = s
-        }
-    }
-
     BookSkinProvider {
         BookCustomizationProvider(userId = userId) {
         val skin = LocalBookSkin.current
+        val skinId = skin.id.raw
+
+        LaunchedEffect(userId, skinId) {
+            repo.observeByBook(userId, skinId).collect { all ->
+                totalCount = all.size
+                val today = LocalDate.now()
+                hasTodayEntry = all.any { it.date == today.toString() }
+                val days = all.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+                    .toSortedSet().toList()
+                var s = 0
+                var cursor = today
+                if (!hasTodayEntry && days.contains(today.minusDays(1))) {
+                    cursor = today.minusDays(1)
+                }
+                while (days.contains(cursor)) {
+                    s++
+                    cursor = cursor.minusDays(1)
+                }
+                streak = s
+            }
+        }
+
         val stage = com.example.funlife.ui.components.diarybook.bookStageThemeFor(skin.id.raw)
         var showSkinPicker by remember { mutableStateOf(false) }
         var showCustomize by remember { mutableStateOf(false) }

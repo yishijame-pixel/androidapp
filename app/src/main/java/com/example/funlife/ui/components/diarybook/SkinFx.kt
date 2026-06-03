@@ -7,7 +7,12 @@
 //   • 晴川早春  → 樱花瓣旋转飘落
 //   • 赤焰天书  → 火焰粒子（橙红向上飘 + 飞溅火星）
 //   • 青鸾翠竹  → 翠绿光斑 + 飘落竹叶
-//   • 星河长卷  → 蓝色流星划过 + 闪烁星点
+//   · 玄冰古卷  → 极光寒雾 + 冰晶暴雪 + 寒霜脉冲
+//   · 紫霄雷典  → 青紫连环闪电 + 电荷星尘
+//   · 鎏金沙经  → 日轮神光 + 流沙金雨
+//   · 墨龙天书  → 中国神龙穿云 + 龙睛明灭 + 金墨玄烟
+//   · 珊瑚秘海  → 水底光柱 + 气泡群 + 珊瑚微粒
+//   · 晶棱幻书  → 虹彩光束 + 棱镜碎屑 + 虹闪
 // ═══════════════════════════════════════════════════════════════════════════
 package com.example.funlife.ui.components.diarybook
 
@@ -23,14 +28,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.Dp
@@ -57,6 +65,7 @@ fun SkinFx(
         )
     } else null
     val composition = compositionResult?.value
+    val lottieFailed = compositionResult?.isFailure == true
 
     // 不再使用 darkBacking——特效直接画在 hub 背景上，避免硬色块与浅黄页面强对比
     val needsDarkBacking = false
@@ -64,26 +73,30 @@ fun SkinFx(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        if (composition != null) {
-            // Lottie 加载成功：用专业级动画
-            if (needsDarkBacking) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawDarkVignette(skin.id.raw)
+        when {
+            composition != null -> {
+                if (needsDarkBacking) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawDarkVignette(skin.id.raw)
+                    }
                 }
+                com.airbnb.lottie.compose.LottieAnimation(
+                    composition = composition,
+                    iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
-            com.airbnb.lottie.compose.LottieAnimation(
-                composition = composition,
-                iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            // 没找到 Lottie / 还在加载 / 加载失败 → 回退到手写 Canvas 特效
-            LegacySkinFxCanvas(
-                skin = skin,
-                widthDp = widthDp,
-                heightDp = heightDp,
-                needsDarkBacking = needsDarkBacking,
-            )
+            assetName != null && !lottieFailed -> {
+                // 有 assets 且正在解析（大 JSON 可能数百 KB）— 不闪 Canvas 兜底
+            }
+            else -> {
+                LegacySkinFxCanvas(
+                    skin = skin,
+                    widthDp = widthDp,
+                    heightDp = heightDp,
+                    needsDarkBacking = needsDarkBacking,
+                )
+            }
         }
     }
 }
@@ -151,6 +164,12 @@ private fun LegacySkinFxCanvas(
             "builtin::qingchuan" -> drawSakura(t, foil)
             "builtin::qingluan"  -> drawBambooLeaves(t, cover, foil)
             "builtin::xinghe"    -> drawMeteors(t, foil, ribbon)
+            "builtin::xuanbing"  -> drawXuanBingFrost(t, foil, accent, ribbon)
+            "builtin::zixiao"    -> drawZiXiaoThunder(t, foil, accent)
+            "builtin::liujin"    -> drawLiuJinSandstorm(t, foil, accent)
+            "builtin::molong"    -> drawMoLongDragonAura(t, foil, accent)
+            "builtin::shanhu"    -> drawShanHuReef(t, foil, accent, ribbon)
+            "builtin::jingleng"  -> drawJingLengPrism(t, foil, accent)
             else                 -> drawGoldDust(t, foil)
         }
     }
@@ -195,8 +214,66 @@ private fun DrawScope.drawDarkVignette(skinIdRaw: String) {
                 size = androidx.compose.ui.geometry.Size(w, botY),
             )
         }
+        "builtin::xuanbing" -> {
+            drawRect(
+                brush = Brush.radialGradient(
+                    listOf(Color(0x4060A0FF), Color(0x18204080), Color.Transparent),
+                    center = Offset(w * 0.5f, h * 0.35f), radius = w * 0.9f,
+                ),
+                topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(w, h),
+            )
+        }
+        "builtin::zixiao" -> {
+            val botY = h * 0.50f
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(Color(0xC0080428), Color(0x50080428), Color.Transparent),
+                    startY = 0f, endY = botY,
+                ),
+                topLeft = Offset(0f, 0f), size = androidx.compose.ui.geometry.Size(w, botY),
+            )
+        }
+        "builtin::liujin" -> {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(Color.Transparent, Color(0x30FF8A00), Color(0x60C04800)),
+                    startY = h * 0.55f, endY = h,
+                ),
+                topLeft = Offset(0f, h * 0.55f), size = androidx.compose.ui.geometry.Size(w, h * 0.45f),
+            )
+        }
+        "builtin::molong" -> {
+            drawRect(
+                brush = Brush.radialGradient(
+                    listOf(Color(0x50D4AF37), Color(0x18080400), Color.Transparent),
+                    center = Offset(w * 0.5f, h * 0.55f), radius = w * 0.85f,
+                ),
+                topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(w, h),
+            )
+        }
+        "builtin::shanhu" -> {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    listOf(Color.Transparent, Color(0x404ECDC4), Color(0x70FF6B6B)),
+                    startY = h * 0.50f, endY = h,
+                ),
+                topLeft = Offset(0f, h * 0.50f), size = androidx.compose.ui.geometry.Size(w, h * 0.5f),
+            )
+        }
+        "builtin::jingleng" -> {
+            drawRect(
+                brush = Brush.radialGradient(
+                    listOf(Color(0x55B388FF), Color(0x30FF6B9D), Color.Transparent),
+                    center = Offset(w * 0.5f, h * 0.45f), radius = w * 1.0f,
+                ),
+                topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(w, h),
+            )
+        }
     }
 }
+
+/** 安全 alpha，避免 Color.copy 崩溃。 */
+private fun Color.safeAlpha(a: Float) = copy(alpha = a.coerceIn(0f, 1f))
 
 /* ── helpers ──────────────────────────────────────────────────────────── */
 
@@ -983,4 +1060,335 @@ private fun DrawScope.drawMeteor(
     drawCircle(Color.White.copy(alpha = headA), headSize * 1.2f, Offset(hx, hy))
     drawCircle(color.copy(alpha = (headA * 0.55f).coerceIn(0f, 1f)),
         headSize * 3.5f, Offset(hx, hy))
+}
+
+/* ══ 扩展皮肤 7–12：剧场级粒子特效 ══════════════════════════════════════ */
+
+/** 玄冰古卷 · 极光寒雾 + 冰晶暴雪 */
+private fun DrawScope.drawXuanBingFrost(t: Float, foil: Color, accent: Color, ribbon: Color) {
+    val w = size.width; val h = size.height; val cx = w / 2f; val cy = h * 0.38f
+    val ice = Color(0xFFB8F0FF); val cyan = Color(0xFF6FE8FF)
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(ice.safeAlpha(0.28f), cyan.safeAlpha(0.12f), Color.Transparent),
+            center = Offset(cx, cy), radius = w * 0.75f,
+        ),
+        radius = w * 0.75f, center = Offset(cx, cy), blendMode = BlendMode.Plus,
+    )
+
+    // 顶部极光带（缓慢波动）
+    for (band in 0 until 3) {
+        val wave = sin((t * 0.6f + band * 1.2f).toDouble()).toFloat() * h * 0.04f
+        val y0 = h * (0.08f + band * 0.06f) + wave
+        drawLine(
+            brush = Brush.horizontalGradient(
+                listOf(Color.Transparent, ribbon.safeAlpha(0.35f), ice.safeAlpha(0.5f), ribbon.safeAlpha(0.35f), Color.Transparent),
+            ),
+            start = Offset(0f, y0), end = Offset(w, y0), strokeWidth = 3f + band,
+        )
+    }
+
+    // 冰晶粒子（加色辉光）
+    for (i in 0 until 55) {
+        val phase = (t * (0.12f + rand(i, 10) * 0.18f) + rand(i, 11)) % 1f
+        val px = rand(i, 12) * w + sin((t * 0.8f + i).toDouble()).toFloat() * 18f
+        val py = phase * h * 1.05f - h * 0.05f
+        val tw = (0.5f + 0.5f * sin((t * 2.5f + i * 0.6f).toDouble()).toFloat()).coerceIn(0f, 1f)
+        val r = 1f + rand(i, 13) * 2.2f
+        glowCircle(Offset(px, py), r, ice.safeAlpha(tw * 0.9f), blur = 0f)
+        glowCircle(Offset(px, py), r * 4f, cyan.safeAlpha(tw * 0.35f), blur = 8f)
+        if (i % 4 == 0) {
+            rotate(i * 30f + t * 25f, Offset(px, py)) {
+                drawLine(foil.safeAlpha(tw * 0.6f), Offset(px, py - 5f), Offset(px, py + 5f), 1.2f)
+                drawLine(accent.safeAlpha(tw * 0.4f), Offset(px - 4f, py), Offset(px + 4f, py), 0.8f)
+            }
+        }
+    }
+
+    // 周期寒霜脉冲（4s）
+    val pulse = (t % 4f) / 4f
+    if (pulse < 0.25f) {
+        val p = sin((pulse / 0.25f * PI).toFloat())
+        screenFlash(ice.safeAlpha(p * 0.18f))
+        drawCircle(ice.safeAlpha(p * 0.25f), 40f + p * 80f, Offset(cx, cy))
+    }
+}
+
+/** 紫霄雷典 · 青紫双闪电 + 电荷星尘 */
+private fun DrawScope.drawZiXiaoThunder(t: Float, foil: Color, accent: Color) {
+    val w = size.width; val h = size.height; val cx = w / 2f
+    val cyan = Color(0xFF6FE8FF); val purple = Color(0xFF7C4DFF)
+
+    for (i in 0 until 22) {
+        val angle = (t * 0.35f + rand(i, 30) * 6.28f).toDouble()
+        val rx = w * 0.42f * (0.5f + rand(i, 31))
+        val ry = h * 0.38f * (0.5f + rand(i, 32))
+        val px = cx + cos(angle).toFloat() * rx
+        val py = h * 0.45f + sin(angle * 1.1).toFloat() * ry
+        val tw = (0.45f + 0.55f * sin((t * 3.5f + i * 1.3f).toDouble()).toFloat()).coerceIn(0f, 1f)
+        glowCircle(Offset(px, py), 1.5f, cyan.safeAlpha(tw * 0.95f), blur = 0f)
+        glowCircle(Offset(px, py), 7f, purple.safeAlpha(tw * 0.45f), blur = 7f)
+    }
+
+    val cycle = 1.8f
+    val cyclePhase = t % cycle
+    val cycleIdx = (t / cycle).toInt()
+    val strikes = floatArrayOf(0f, 0.06f, 0.14f, 0.24f)
+    var flash = 0f
+    for ((idx, start) in strikes.withIndex()) {
+        val dt = cyclePhase - start
+        val intensity = when {
+            dt < 0f -> 0f
+            dt < 0.04f -> 1f
+            idx == strikes.lastIndex && dt < 0.35f ->
+                ((0.35f - dt) / 0.35f).coerceAtLeast(0f) * 0.5f
+            else -> 0f
+        }
+        if (intensity <= 0f) continue
+        flash = kotlin.math.max(flash, intensity)
+        val rng = java.util.Random((cycleIdx * 77L + idx) xor 0xDEADBEEFL)
+        val sx = cx + (rng.nextFloat() - 0.5f) * w * 0.9f
+        val ex = cx + (rng.nextFloat() - 0.5f) * w * 0.5f
+        drawRealLightning(
+            from = Offset(sx, 0f), to = Offset(ex, h),
+            rng = rng, depth = 0, intensity = intensity,
+            core = Color.White, glow = cyan, outer = purple,
+        )
+    }
+    if (flash > 0.12f) screenFlash(cyan.safeAlpha(flash * 0.28f))
+}
+
+/** 鎏金沙经 · 流沙金雨 + 日轮神光 */
+private fun DrawScope.drawLiuJinSandstorm(t: Float, foil: Color, accent: Color) {
+    val w = size.width; val h = size.height; val cx = w / 2f
+    val gold = Color(0xFFFFD75A); val sand = Color(0xFFE8A838)
+
+    // 顶部日轮神光
+    val sunY = h * 0.12f
+    val sunPulse = 0.85f + 0.15f * sin((t * 1.1f).toDouble()).toFloat()
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(gold.safeAlpha(0.45f * sunPulse), sand.safeAlpha(0.2f), Color.Transparent),
+            center = Offset(cx, sunY), radius = w * 0.55f,
+        ),
+        radius = w * 0.55f, center = Offset(cx, sunY), blendMode = BlendMode.Plus,
+    )
+    for (ray in 0 until 12) {
+        val ang = ray * 30f + t * 8f
+        rotate(ang, Offset(cx, sunY)) {
+            drawLine(
+                brush = Brush.verticalGradient(
+                    listOf(gold.safeAlpha(0.35f), Color.Transparent),
+                    startY = sunY, endY = h * 0.55f,
+                ),
+                start = Offset(cx, sunY), end = Offset(cx, h * 0.55f), strokeWidth = 2.5f,
+            )
+        }
+    }
+
+    // 流沙粒子（螺旋上扬）
+    for (i in 0 until 90) {
+        val phase = (t * (0.15f + rand(i, 50) * 0.2f) + rand(i, 51)) % 1f
+        val ang = (phase * 4f + rand(i, 52) * 6.28f).toDouble()
+        val rad = (0.15f + phase * 0.35f) * w * 0.5f
+        val px = cx + cos(ang).toFloat() * rad + sin((t + i).toDouble()).toFloat() * 6f
+        val py = h * (1f - phase * 0.95f)
+        val tw = (0.4f + 0.6f * sin((t * 2f + i).toDouble()).toFloat()).coerceIn(0f, 1f)
+        val r = 0.8f + rand(i, 53) * 2f
+        glowCircle(Offset(px, py), r, gold.safeAlpha(tw * 0.85f), blur = 0f)
+        glowCircle(Offset(px, py), r * 3.5f, sand.safeAlpha(tw * 0.4f), blur = 5f)
+    }
+
+    // 沙尘横扫（底部暖雾）
+    drawRect(
+        brush = Brush.verticalGradient(
+            listOf(Color.Transparent, sand.safeAlpha(0.25f), gold.safeAlpha(0.35f)),
+            startY = h * 0.75f, endY = h,
+        ),
+        topLeft = Offset(0f, h * 0.75f), size = androidx.compose.ui.geometry.Size(w, h * 0.25f),
+        blendMode = BlendMode.Plus,
+    )
+}
+
+/** 墨龙天书 · 中国神龙穿云 + 龙息金墨 + 玄烟 */
+private fun DrawScope.drawMoLongDragonAura(t: Float, foil: Color, accent: Color) {
+    val w = size.width; val h = size.height; val cx = w / 2f
+    val gold = Color(0xFFD4AF37); val ink = Color(0xFF1A1410)
+    val dragonColors = ChineseDragonColors(
+        ink = ink,
+        body = Color(0xFF14100C),
+        gold = gold,
+        goldLight = foil,
+        accent = accent,
+        eye = Color(0xFFFFD54F),
+    )
+
+    // 玄墨底雾
+    drawRect(
+        brush = Brush.radialGradient(
+            listOf(ink.safeAlpha(0.35f), Color.Transparent),
+            center = Offset(cx, h * 0.45f),
+            radius = w * 0.72f,
+        ),
+    )
+
+    // 中国传统神龙（缓慢游动）
+    val dragonW = w * 0.92f
+    val dragonH = h * 0.38f
+    val dragonTop = h * 0.08f + sin(t * 0.35f) * h * 0.015f
+    drawDragonClouds(
+        bounds = Rect(
+            left = cx - dragonW / 2f,
+            top = dragonTop + dragonH * 0.55f,
+            right = cx + dragonW / 2f,
+            bottom = dragonTop + dragonH * 0.95f,
+        ),
+        colors = dragonColors,
+        phase = t,
+        alpha = 0.55f,
+    )
+    drawChineseDragon(
+        bounds = Rect(
+            left = cx - dragonW / 2f,
+            top = dragonTop,
+            right = cx + dragonW / 2f,
+            bottom = dragonTop + dragonH,
+        ),
+        colors = dragonColors,
+        phase = t,
+        facingRight = true,
+        detail = ChineseDragonDetail.Ambient,
+        bodyAlpha = 0.72f,
+    )
+
+    // 龙睛明灭（落在龙头区域）
+    val eyeCycle = (t % 6f) / 6f
+    val eyeGlow = if (eyeCycle < 0.4f) sin((eyeCycle / 0.4f * PI).toFloat()) else 0f
+    val eyeX = cx - dragonW * 0.38f
+    val eyeY = dragonTop + dragonH * 0.42f
+    if (eyeGlow > 0.05f) {
+        glowCircle(Offset(eyeX, eyeY), 10f, gold.safeAlpha(eyeGlow * 0.95f), blur = 2f)
+        glowCircle(Offset(eyeX, eyeY), 40f, gold.safeAlpha(eyeGlow * 0.38f), blur = 28f)
+        glowCircle(Offset(eyeX, eyeY), 100f, accent.safeAlpha(eyeGlow * 0.12f), blur = 65f)
+    }
+
+    // 金墨粒子螺旋上升
+    for (i in 0 until 70) {
+        val phase = (t * (0.08f + rand(i, 60) * 0.12f) + rand(i, 61)) % 1f
+        val spiral = phase * 5f + rand(i, 62) * 0.5f
+        val rad = (0.08f + phase * 0.28f) * w
+        val px = cx + cos(spiral.toDouble()).toFloat() * rad
+        val py = h * (0.92f - phase * 0.85f)
+        val tw = (0.35f + 0.65f * sin((t * 1.8f + i).toDouble()).toFloat()).coerceIn(0f, 1f)
+        glowCircle(Offset(px, py), 1.2f + rand(i, 63), gold.safeAlpha(tw * 0.9f), blur = 0f)
+        glowCircle(Offset(px, py), 5f, foil.safeAlpha(tw * 0.35f), blur = 4f)
+    }
+
+    // 玄烟游丝
+    for (i in 0 until 14) {
+        val phase = (t * 0.25f + rand(i, 70)) % 1f
+        val bx = rand(i, 71) * w
+        val by = h * (0.5f + rand(i, 72) * 0.4f)
+        val p = Path().apply {
+            moveTo(bx, by)
+            quadraticBezierTo(
+                bx + sin(phase * 6.28f) * w * 0.12f, by - h * 0.08f,
+                bx + w * 0.06f, by + h * 0.05f,
+            )
+        }
+        drawPath(p, ink.safeAlpha((0.35f + phase * 0.2f).coerceIn(0f, 1f)), style = Stroke(2f))
+        drawPath(p, gold.safeAlpha(0.15f), style = Stroke(0.8f))
+    }
+}
+
+/** 珊瑚秘海 · 海底光柱 + 气泡群 */
+private fun DrawScope.drawShanHuReef(t: Float, foil: Color, accent: Color, ribbon: Color) {
+    val w = size.width; val h = size.height; val cx = w / 2f
+    val coral = Color(0xFFFF8A7A); val teal = Color(0xFF4ECDC4)
+
+    // 水底焦散光柱
+    for (beam in 0 until 5) {
+        val bx = w * (0.12f + beam * 0.19f) + sin((t * 0.5f + beam).toDouble()).toFloat() * 12f
+        val sway = sin((t * 0.7f + beam * 1.3f).toDouble()).toFloat() * w * 0.03f
+        drawLine(
+            brush = Brush.verticalGradient(
+                listOf(teal.safeAlpha(0.45f), teal.safeAlpha(0.12f), Color.Transparent),
+                startY = h, endY = h * 0.25f,
+            ),
+            start = Offset(bx + sway, h), end = Offset(bx - sway * 0.5f, h * 0.2f), strokeWidth = 14f + beam * 2,
+        )
+    }
+
+    // 上升气泡（加色）
+    for (i in 0 until 45) {
+        val rise = (t * (0.10f + rand(i, 80) * 0.14f) + rand(i, 81)) % 1f
+        val px = rand(i, 82) * w + sin((t * 0.9f + i).toDouble()).toFloat() * 20f
+        val py = h * (1.02f - rise)
+        val r = 2f + rand(i, 83) * 6f
+        val a = ((1f - rise) * 0.85f).coerceIn(0f, 1f)
+        glowCircle(Offset(px, py), r, teal.safeAlpha(a * 0.4f), blur = r * 0.8f)
+        drawCircle(ribbon.safeAlpha(a * 0.55f), r, Offset(px, py), style = Stroke((r * 0.15f).coerceAtLeast(0.6f)))
+        glowCircle(Offset(px - r * 0.25f, py - r * 0.25f), r * 0.3f, Color.White.safeAlpha(a * 0.7f), blur = 0f)
+    }
+
+    // 珊瑚微粒闪烁
+    for (i in 0 until 25) {
+        val tw = (0.4f + 0.6f * sin((t * 2.2f + i * 0.9f).toDouble()).toFloat()).coerceIn(0f, 1f)
+        val px = rand(i, 84) * w
+        val py = rand(i, 85) * h * 0.7f + h * 0.15f
+        glowCircle(Offset(px, py), 2f, coral.safeAlpha(tw * 0.8f), blur = 3f)
+    }
+}
+
+/** 晶棱幻书 · 虹彩光束 + 棱镜碎屑 */
+private fun DrawScope.drawJingLengPrism(t: Float, foil: Color, accent: Color) {
+    val w = size.width; val h = size.height; val cx = w / 2f; val cy = h * 0.45f
+    val c1 = Color(0xFFFF6B9D); val c2 = Color(0xFF6B9DFF); val c3 = Color(0xFF9DFF6B)
+
+    // 中心虹彩辐射
+    for (i in 0 until 9) {
+        val ang = i * 40f + t * 12f
+        rotate(ang, Offset(cx, cy)) {
+            drawLine(
+                brush = Brush.linearGradient(
+                    listOf(
+                        when (i % 3) { 0 -> c1; 1 -> c2; else -> c3 }.safeAlpha(0.5f),
+                        Color.Transparent,
+                    ),
+                    start = Offset(cx, cy), end = Offset(cx, cy - h * 0.55f),
+                ),
+                start = Offset(cx, cy), end = Offset(cx, cy - h * 0.55f), strokeWidth = 3f,
+            )
+        }
+    }
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(foil.safeAlpha(0.35f), accent.safeAlpha(0.15f), Color.Transparent),
+            center = Offset(cx, cy), radius = w * 0.5f,
+        ),
+        radius = w * 0.5f, center = Offset(cx, cy), blendMode = BlendMode.Plus,
+    )
+
+    // 棱镜碎屑
+    val colors = listOf(c1, c2, c3, foil, accent)
+    for (i in 0 until 40) {
+        val px = rand(i, 90) * w
+        val py = rand(i, 91) * h * 0.85f
+        val tw = (0.45f + 0.55f * sin((t * 1.8f + i * 0.7f).toDouble()).toFloat()).coerceIn(0f, 1f)
+        val c = colors[i % colors.size]
+        rotate(t * 30f + i * 40f, Offset(px, py)) {
+            glowLine(Offset(px, py - 7f), Offset(px + 5f, py + 6f), 2f, c.safeAlpha(tw * 0.85f), blur = 2f)
+            glowLine(Offset(px + 5f, py + 6f), Offset(px - 5f, py + 6f), 1.5f, c.safeAlpha(tw * 0.6f), blur = 1.5f)
+        }
+    }
+
+    // 虹闪（3.5s）
+    val flashPhase = (t % 3.5f) / 3.5f
+    if (flashPhase < 0.12f) {
+        val p = sin((flashPhase / 0.12f * PI).toFloat())
+        screenFlash(c1.safeAlpha(p * 0.08f))
+        screenFlash(c2.safeAlpha(p * 0.06f))
+    }
 }

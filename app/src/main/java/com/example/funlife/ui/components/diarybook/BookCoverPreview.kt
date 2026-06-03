@@ -42,6 +42,12 @@ fun DrawScope.drawMiniCover(
         "builtin::chiyan"    -> drawChiYanFront(skin, title, author)
         "builtin::qingluan"  -> drawQingLuanFront(skin, title, author)
         "builtin::xinghe"    -> drawXingHeFront(skin, title, author)
+        "builtin::xuanbing"  -> drawXuanBingFront(skin, title, author)
+        "builtin::zixiao"    -> drawZiXiaoFront(skin, title, author)
+        "builtin::liujin"    -> drawLiuJinFront(skin, title, author)
+        "builtin::molong"    -> drawMoLongFront(skin, title, author)
+        "builtin::shanhu"    -> drawShanHuFront(skin, title, author)
+        "builtin::jingleng"  -> drawJingLengFront(skin, title, author)
         else                 -> drawGenericFront(skin, title, author)
     }
 

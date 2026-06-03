@@ -108,6 +108,12 @@ public class PageFlip {
     // view size
     private GLViewRect mViewRect;
 
+    // GL clear color (default paper-cream to avoid black flash between frames)
+    private float mClearRed = 0.96f;
+    private float mClearGreen = 0.94f;
+    private float mClearBlue = 0.88f;
+    private float mClearAlpha = 1f;
+
     // the pixel size for each mesh
     private int mPixelsOfMesh;
 
@@ -413,6 +419,19 @@ public class PageFlip {
         return this;
     }
 
+    /** Set GL clear color used before each frame (reduces black flash between draws). */
+    public PageFlip setClearColor(float r, float g, float b, float a) {
+        mClearRed = r;
+        mClearGreen = g;
+        mClearBlue = b;
+        mClearAlpha = a;
+        return this;
+    }
+
+    private void applyClearColor() {
+        glClearColor(mClearRed, mClearGreen, mClearBlue, mClearAlpha);
+    }
+
     /**
      * Set mask alpha for back of fold page
      * <p>Mask alpha will be invalid in double pages</p>
@@ -524,7 +543,7 @@ public class PageFlip {
      * @throws PageFlipException if failed to compile and link OpenGL shader
      */
     public void onSurfaceCreated() throws PageFlipException {
-        glClearColor(0, 0, 0, 1f);
+        applyClearColor();
         glClearDepthf(1.0f);
         glEnable(GL_DEPTH_TEST);
 
@@ -1097,6 +1116,7 @@ public class PageFlip {
      * Draw flipping frame
      */
     public void drawFlipFrame() {
+        applyClearColor();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         final boolean hasSecondPage = mPages[SECOND_PAGE] != null;
 
@@ -1127,6 +1147,7 @@ public class PageFlip {
      * Draw frame with full page
      */
     public void drawPageFrame() {
+        applyClearColor();
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(mVertexProgram.mProgramRef);
         glUniformMatrix4fv(mVertexProgram.mMVPMatrixLoc, 1, false,
