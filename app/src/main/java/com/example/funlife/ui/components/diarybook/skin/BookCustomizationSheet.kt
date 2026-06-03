@@ -81,6 +81,12 @@ fun BookCustomizationSheet(
         }
     }
 
+    LaunchedEffect(skinRawId) {
+        val c = customizationState.customization
+        titleInput = c.bookTitle.ifBlank { defaultTitle }
+        ownerInput = c.ownerName
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

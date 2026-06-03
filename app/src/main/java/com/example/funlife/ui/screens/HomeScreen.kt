@@ -94,6 +94,15 @@ fun HomeScreen(
     val userAvatarDao = remember { database.userAvatarDao() }
     val userAvatar by userAvatarDao.getUserAvatar(userSession?.userId ?: 0L)
         .collectAsState(initial = null)
+
+    // 登录后：先确保社交会话，再强制补拉好友待办 → 收件箱 + 铃铛红点
+    LaunchedEffect(userSession?.userId) {
+        val uid = userSession?.userId ?: return@LaunchedEffect
+        if (uid > 0L) {
+            com.example.funlife.social.SocialSessionManager.warmStartAsync(context)
+            com.example.funlife.social.SocialInboxSync.syncNowAsync(context, force = true)
+        }
+    }
     
     // VIP首次进入特效状态
     var showFirstEntryEffect by remember { mutableStateOf(false) }
@@ -336,7 +345,8 @@ fun PinnedAnniversaryHeader(
     onClick: () -> Unit,
     userSession: com.example.funlife.data.model.UserSession? = null,  // 🔥 新增
     avatarUri: String? = null,  // 🔥 新增
-    vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL  // 🔥 新增
+    vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL,  // 🔥 新增
+    onOpenInbox: () -> Unit = {},
 ) {
     val daysRemaining = anniversary.getDaysRemaining()
     val isToday = daysRemaining == 0L
@@ -440,6 +450,15 @@ fun PinnedAnniversaryHeader(
                     )
             )
             
+            com.example.funlife.ui.components.NotificationBellButton(
+                onClick = onOpenInbox,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 8.dp, top = 8.dp),
+                iconTint = Color.White,
+                bubbleBackground = Color.Black.copy(alpha = 0.35f),
+            )
+
             // 取消置顶按钮
             IconButton(
                 onClick = onUnpin,
@@ -820,56 +839,11 @@ fun WelcomeHeader(
                     }
                 }
                 
-                // 通知铃铛 → 跳转收件箱（响应式未读数：消息变化/标已读后自动更新）
-                val ctxLocal = androidx.compose.ui.platform.LocalContext.current
-                val unread by com.example.funlife.notifications.InboxStore.unreadFlow.collectAsState()
-                val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-                androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-                    val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
-                        if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                            com.example.funlife.notifications.InboxStore.refreshUnread(ctxLocal)
-                        }
-                    }
-                    lifecycleOwner.lifecycle.addObserver(obs)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
-                }
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.30f),
-                                    Color.White.copy(alpha = 0.12f)
-                                )
-                            )
-                        )
-                        .clickable(
-                            onClick = onOpenInbox,
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Notifications,
-                        contentDescription = "通知",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    if (unread > 0) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .offset(x = 8.dp, y = (-8).dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF5252))
-                                .border(1.5.dp, Color.White, CircleShape)
-                                .align(Alignment.TopEnd)
-                        )
-                    }
-                }
+                com.example.funlife.ui.components.NotificationBellButton(
+                    onClick = onOpenInbox,
+                    iconTint = Color.White,
+                    bubbleBackground = Color.White.copy(alpha = 0.28f),
+                )
             }
             
             // 底部：问候语和图标 - 增加摆动动画 + 日期副标题
@@ -1941,6 +1915,7 @@ fun FunctionCardsSection(navController: NavController) {
         FuncItem("VIP会员", "👑", listOf(Color(0xFFFFD700), Color(0xFFFF6B9D)), "vip"),
         FuncItem("聊天记账", "💬", listOf(Color(0xFFFF8A80), Color(0xFFFF5252)), "chat_bill"),
         FuncItem("时光信箱", "✉️", listOf(Color(0xFFB39DDB), Color(0xFF7E57C2)), "letter_mailbox"),
+        FuncItem("好友", "👥", listOf(Color(0xFF8B6CF7), Color(0xFF6B4CE6)), "friends"),
         FuncItem("阅光书房", "📖", listOf(Color(0xFFFFB74D), Color(0xFFFF8A65)), "reading_room"),
         FuncItem("日记本", "📔", listOf(Color(0xFF8E6E53), Color(0xFFB23A48)), "diary_book"),
         FuncItem("头像框", "🖼️", listOf(Color(0xFF9C27B0), Color(0xFFE91E63)), "avatar_frame_shop"),

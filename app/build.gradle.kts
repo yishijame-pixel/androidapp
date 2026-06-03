@@ -61,6 +61,9 @@ android {
             "boolean", "CHAT_AI_USE_PROXY",
             props.getProperty("CHAT_AI_USE_PROXY", "true")
         )
+        // 🆕 PocketBase 社交层（Phase1 好友）— 留空则社交入口显示「未配置」
+        buildConfigField("String", "POCKETBASE_URL", "\"${props.getProperty("POCKETBASE_URL", "")}\"")
+        buildConfigField("String", "POCKETBASE_PIN", "\"${props.getProperty("POCKETBASE_PIN", "")}\"")
     }
 
     buildTypes {

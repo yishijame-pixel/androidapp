@@ -152,6 +152,7 @@ sealed class Screen(val route: String, val title: String) {
     object QuoteGalaxy : Screen("quote_galaxy", "摘抄星河")
     object ReaderDna : Screen("reader_dna", "读者 DNA")
     object PostcardDrift : Screen("postcard_drift", "明信片漂流")
+    object Friends : Screen("friends", "好友")
     // 🆕 v55 古籍日记本
     object DiaryBook : Screen("diary_book", "日记本")
     object DiaryBookFull : Screen("diary_book_full", "日记本")
@@ -395,7 +396,42 @@ fun NavGraph(
                 },
                 onNavigateToInbox = {
                     navController.navigate(Screen.Inbox.route)
+                },
+                onNavigateToFriends = {
+                    navController.navigate(Screen.Friends.route)
+                },
+            )
+        }
+
+        composable(Screen.Friends.route) {
+            val context = LocalContext.current
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession == null) {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
+                return@composable
+            }
+            val friendsViewModel: com.example.funlife.viewmodel.FriendsViewModel = viewModel(
+                key = "friends_${userSession.userId}",
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        @Suppress("UNCHECKED_CAST")
+                        return com.example.funlife.viewmodel.FriendsViewModel(
+                            application = context.applicationContext as android.app.Application,
+                            currentUserId = userSession.userId,
+                            funlifeUsername = userSession.username,
+                            displayName = userSession.nickname.ifBlank { userSession.username },
+                        ) as T
+                    }
+                },
+            )
+            FriendsScreen(
+                viewModel = friendsViewModel,
+                onNavigateBack = { navController.popBackStack() },
             )
         }
         

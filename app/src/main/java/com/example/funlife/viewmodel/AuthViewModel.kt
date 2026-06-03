@@ -4,8 +4,10 @@ package com.example.funlife.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.funlife.FunLifeApplication
 import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.UserSession
+import com.example.funlife.repository.SocialLinkRepository
 import com.example.funlife.repository.UserRepository
 import com.example.funlife.utils.UserSessionManager
 import kotlinx.coroutines.Dispatchers
@@ -172,6 +174,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
                     _isLoggedIn.value = true
                     _authState.value = AuthState.Success(session)
+                    com.example.funlife.social.SocialSessionManager.warmStartAsync(getApplication())
                     // 登录成功后稍后再刷一次 token 健康度（兜底 registerLog 完成后）
                     refreshTokenHealth()
                 } else {
@@ -423,6 +426,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        val uid = sessionManager.getCurrentUserId()
+        if (uid > 0L) {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val app = getApplication<FunLifeApplication>()
+                    SocialLinkRepository(app, app.database.socialDao()).clearLocal(uid)
+                    com.example.funlife.social.SocialPushTokenRegistry.clearToken(app, uid)
+                }
+            }
+            com.example.funlife.social.SocialSessionManager.shutdown(getApplication())
+        }
         sessionManager.clearSession()
         _isLoggedIn.value = false
         _authState.value = AuthState.Idle

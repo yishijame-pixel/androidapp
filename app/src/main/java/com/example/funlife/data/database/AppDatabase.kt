@@ -118,9 +118,11 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.MorningHeraldLog::class,   // 🆕 v53：晨光信使日志
         com.example.funlife.data.model.SystemQuotaUsed::class,     // 🆕 v53：系统赠送配额
         com.example.funlife.data.model.BookChatSession::class,     // 🆕 v54：AI 读书伴侣长对话存档（VIP3）
-        com.example.funlife.data.model.DiaryEntry::class            // 🆕 v55：古籍日记本
+        com.example.funlife.data.model.DiaryEntry::class,            // 🆕 v55：古籍日记本
+        com.example.funlife.data.model.SocialPocketBaseLink::class,  // 🆕 v57：PocketBase 绑定
+        com.example.funlife.data.model.SocialFriendCache::class,     // 🆕 v57：好友本地缓存
     ],
-    version = 56,  // 🆕 v56 - 日记本分册（bookSkinId + pageSlot）
+    version = 57,  // 🆕 v57 - PocketBase 社交 Phase1（好友）
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -171,7 +173,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun systemQuotaUsedDao(): com.example.funlife.data.dao.SystemQuotaUsedDao      // 🆕 v53
     abstract fun bookChatSessionDao(): com.example.funlife.data.dao.BookChatSessionDao      // 🆕 v54
     abstract fun diaryDao(): com.example.funlife.data.dao.DiaryDao                          // 🆕 v55
-    
+    abstract fun socialDao(): com.example.funlife.data.dao.SocialDao                        // 🆕 v57
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -1678,6 +1681,40 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_56_57 = object : Migration(56, 57) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `social_pb_links` (
+                        `userId` INTEGER NOT NULL,
+                        `pbRecordId` TEXT NOT NULL,
+                        `pbIdentity` TEXT NOT NULL,
+                        `linkedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`userId`)
+                    )
+                """.trimIndent())
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_pb_links_userId` ON `social_pb_links` (`userId`)",
+                )
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `social_friend_cache` (
+                        `userId` INTEGER NOT NULL,
+                        `friendPbId` TEXT NOT NULL,
+                        `funlifeUsername` TEXT NOT NULL,
+                        `displayName` TEXT NOT NULL,
+                        `avatarUrl` TEXT,
+                        `friendshipId` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `remark` TEXT NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`userId`, `friendPbId`)
+                    )
+                """.trimIndent())
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_friend_cache_userId` ON `social_friend_cache` (`userId`)",
+                )
+            }
+        }
+
         private val MIGRATION_55_56 = object : Migration(55, 56) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
@@ -1823,7 +1860,8 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45,
                 MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48,
                 MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51,
-                MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56
+                MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56,
+                MIGRATION_56_57,
             )
             .fallbackToDestructiveMigration()
             .build()

@@ -203,8 +203,8 @@ fun DiaryBookScreen(
         ) { pageIdx ->
             when {
                 isCover(pageIdx) -> drawCoverPage(skin, coverTitle, coverOwnerLine)
-                isFrontMatter(pageIdx) -> drawFrontMatter(skin)
-                isBackMatter(pageIdx) -> drawBackMatter(skin, entries.size)
+                isFrontMatter(pageIdx) -> drawFrontMatter(skin, customization.ownerName)
+                isBackMatter(pageIdx) -> drawBackMatter(skin, entries.size, customization.ownerName)
                 isTodayNewPage(pageIdx) -> drawTodayNewPage(today, skin)
                 else -> entryAt(pageIdx)?.let { drawDiaryPage(it, skin) }
                     ?: drawBlankPage(pageIdx, skin)
@@ -319,7 +319,8 @@ fun DiaryBookScreen(
         // 皮肤选择底栏
         if (showSkinPicker) {
             SkinPickerSheet(
-                onDismiss = { showSkinPicker = false }
+                userId = userId,
+                onDismiss = { showSkinPicker = false },
             )
         }
         if (showCustomize) {
@@ -462,7 +463,7 @@ private fun DrawScope.drawDiaryPage(entry: DiaryEntry, skin: BookSkin) {
 // ─────────────────────────────────────────────────────────────────────────
 // 3a. 前扉页（题辞）：竖排双栏 + 内框装饰 + 钤印
 // ─────────────────────────────────────────────────────────────────────────
-private fun DrawScope.drawFrontMatter(skin: BookSkin) {
+private fun DrawScope.drawFrontMatter(skin: BookSkin, ownerName: String) {
     val w = size.width
     val h = size.height
     val palette = skin.palette
@@ -540,7 +541,8 @@ private fun DrawScope.drawFrontMatter(skin: BookSkin) {
         textAlign = android.graphics.Paint.Align.CENTER
         letterSpacing = 0.04f
     }
-    nc.drawText("一时之事  ·  一册之录", cx, subY, subPaint)
+    val subText = ownerName.trim().ifBlank { "一时之事  ·  一册之录" }
+    nc.drawText(subText, cx, subY, subPaint)
 
     // 右下角钤印「启」
     val stampSize = w * 0.088f
@@ -582,7 +584,7 @@ private fun DrawScope.drawVerticalEpigraphColumn(
 // ─────────────────────────────────────────────────────────────────────────
 // 3b. 后尾页（卷终）：宣纸 + "卷终" + 总篇数 + 落款印
 // ─────────────────────────────────────────────────────────────────────────
-private fun DrawScope.drawBackMatter(skin: BookSkin, entriesCount: Int) {
+private fun DrawScope.drawBackMatter(skin: BookSkin, entriesCount: Int, ownerName: String) {
     val w = size.width
     val h = size.height
     val palette = skin.palette
@@ -648,7 +650,8 @@ private fun DrawScope.drawBackMatter(skin: BookSkin, entriesCount: Int) {
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
         textAlign = android.graphics.Paint.Align.CENTER
     }
-    nc.drawText("终", sx + stampSize / 2f, sy + stampSize * 0.72f, stampPaint)
+    val stampGlyph = ownerName.trim().take(1).ifBlank { "终" }
+    nc.drawText(stampGlyph, sx + stampSize / 2f, sy + stampSize * 0.72f, stampPaint)
 }
 
 // ─────────────────────────────────────────────────────────────────────────

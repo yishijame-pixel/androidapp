@@ -98,5 +98,11 @@ hs_err_pid*.log
 *.backup
 *.bak
 
-# º¬ HMAC_SECRET£¬½ûÖ¹Ìá½»
+# ï¿½ï¿½ HMAC_SECRETï¿½ï¿½ï¿½ï¿½?ï¿½?
 backend/cloudbaserc.json
+
+# PocketBase ???????????? pocketbase/README.md ?????
+pocketbase/pocketbase.exe
+pocketbase/pb_data/
+pocketbase/*.zip
+pocketbase/DEV.local.md

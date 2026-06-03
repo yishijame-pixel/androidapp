@@ -77,11 +77,17 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
         // 🔄 进程级前台监听：App 从后台回到前台时刷新 VIP 配置
         //   节流交给 VipRuntimeConfig 内部 30s 控制，这里只是触发
         try {
+            com.example.funlife.notifications.SocialAlertBus.installProcessObserver()
             androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
                 object : androidx.lifecycle.DefaultLifecycleObserver {
                     override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
-                        // 仅在 App 已 bootstrap 过后触发；首次启动 bootstrap 已经做了 force=true
                         com.example.funlife.vip.VipRuntimeConfig.refreshAsync(applicationContext)
+                        com.example.funlife.social.SocialSessionManager.warmStartAsync(applicationContext)
+                        com.example.funlife.social.SocialForegroundPoller.onAppForeground(applicationContext)
+                    }
+
+                    override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                        com.example.funlife.social.SocialForegroundPoller.onAppBackground()
                     }
                 }
             )

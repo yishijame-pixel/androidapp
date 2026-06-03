@@ -57,7 +57,8 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onNavigateToInventory: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToInbox: () -> Unit = {}
+    onNavigateToInbox: () -> Unit = {},
+    onNavigateToFriends: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val application = context.applicationContext as com.example.funlife.FunLifeApplication
@@ -294,43 +295,12 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                        // 通知铃铛 → 收件箱（响应式未读数）
-                        val unread by com.example.funlife.notifications.InboxStore.unreadFlow.collectAsState()
-                        val lifecycleOwnerProfile = androidx.compose.ui.platform.LocalLifecycleOwner.current
-                        androidx.compose.runtime.DisposableEffect(lifecycleOwnerProfile) {
-                            val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
-                                if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                                    com.example.funlife.notifications.InboxStore.refreshUnread(context)
-                                }
-                            }
-                            lifecycleOwnerProfile.lifecycle.addObserver(obs)
-                            onDispose { lifecycleOwnerProfile.lifecycle.removeObserver(obs) }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(
-                                    Color.White.copy(alpha = 0.18f),
-                                    RoundedCornerShape(11.dp)
-                                )
-                                .clickable { onNavigateToInbox() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                contentDescription = "通知",
-                                tint = Color.White,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            if (unread > 0) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .offset(x = 6.dp, y = (-6).dp)
-                                        .background(Color(0xFFFDE68A), CircleShape)
-                                )
-                            }
-                        }
+                        com.example.funlife.ui.components.NotificationBellButton(
+                            onClick = onNavigateToInbox,
+                            variant = com.example.funlife.ui.components.NotificationBellVariant.Profile,
+                            iconTint = Color.White,
+                            bubbleBackground = Color.White.copy(alpha = 0.18f),
+                        )
                     }
                 }
                 
@@ -695,6 +665,17 @@ fun ProfileScreen(
                         delay = 0
                     )
                     MenuItemCard(
+                        icon = Icons.Default.People,
+                        label = "好友",
+                        subtitle = "添加好友 · 管理备注",
+                        color = Color(0xFF8B6CF7),
+                        bgColor = Color(0xFFF7F4FF),
+                        borderColor = Color(0x268B6CF7),
+                        tag = "Beta",
+                        onClick = onNavigateToFriends,
+                        delay = 60
+                    )
+                    MenuItemCard(
                         icon = Icons.Default.Image,
                         label = "头像框",
                         subtitle = "外观个性定制",
@@ -703,7 +684,7 @@ fun ProfileScreen(
                         borderColor = Color(0x26E8505B),
                         tag = null,
                         onClick = { /* TODO */ },
-                        delay = 60
+                        delay = 120
                     )
                     MenuItemCard(
                         icon = Icons.Default.Wallpaper,
@@ -714,7 +695,7 @@ fun ProfileScreen(
                         borderColor = Color(0x2EF5A623),
                         tag = null,
                         onClick = { /* TODO */ },
-                        delay = 120
+                        delay = 180
                     )
                     MenuItemCard(
                         icon = Icons.Default.CalendarMonth,
@@ -725,7 +706,7 @@ fun ProfileScreen(
                         borderColor = Color(0x2E6DAB8A),
                         tag = "今日",
                         onClick = { /* TODO */ },
-                        delay = 180
+                        delay = 240
                     )
                     MenuItemCard(
                         icon = Icons.Default.BarChart,
@@ -736,7 +717,7 @@ fun ProfileScreen(
                         borderColor = Color(0x268B6CF7),
                         tag = null,
                         onClick = { /* TODO */ },
-                        delay = 240
+                        delay = 300
                     )
                     MenuItemCard(
                         icon = Icons.Default.Settings,
@@ -747,7 +728,7 @@ fun ProfileScreen(
                         borderColor = Color(0x1FB07D66),
                         tag = null,
                         onClick = onNavigateToSettings,
-                        delay = 300
+                        delay = 360
                     )
                 }
             }

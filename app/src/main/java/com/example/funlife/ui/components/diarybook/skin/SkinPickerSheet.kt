@@ -68,13 +68,16 @@ import com.example.funlife.data.skin.SkinModule
 import com.example.funlife.data.skin.SkinRepository
 import com.example.funlife.domain.skin.BookSkin
 import com.example.funlife.domain.skin.SkinId
+import com.example.funlife.data.DiaryBookCustomizationStore
 import com.example.funlife.ui.components.diarybook.bookStageThemeFor
 import com.example.funlife.ui.components.diarybook.drawMiniCover
+import com.example.funlife.ui.components.diarybook.skin.rememberBookCustomization
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SkinPickerSheet(
+    userId: Long,
     onDismiss: () -> Unit,
     onAppliedMessage: (String) -> Unit = {},
     repository: SkinRepository = SkinModule.provide(LocalContext.current)
@@ -136,6 +139,7 @@ fun SkinPickerSheet(
             ) {
                 items(available, key = { it.id.raw }) { skin ->
                     SkinPreviewCard(
+                        userId = userId,
                         skin = skin,
                         isSelected = skin.id == currentSkin.id,
                         isUnlocked = unlockedMap.value[skin.id] ?: false,
@@ -164,12 +168,14 @@ fun SkinPickerSheet(
 
 @Composable
 private fun SkinPreviewCard(
+    userId: Long,
     skin: BookSkin,
     isSelected: Boolean,
     isUnlocked: Boolean,
     stage: com.example.funlife.ui.components.diarybook.BookStageTheme,
     onClick: () -> Unit,
 ) {
+    val ctx = LocalContext.current
     val palette = skin.palette
     val borderColor = when {
         isSelected -> stage.halo
@@ -201,10 +207,21 @@ private fun SkinPreviewCard(
                     shape = RoundedCornerShape(6.dp),
                 ),
         ) {
+            val customization = if (isSelected) {
+                rememberBookCustomization()
+            } else {
+                remember(userId, skin.id.raw) {
+                    DiaryBookCustomizationStore.load(ctx, userId, skin.id.raw)
+                }
+            }
+            val defaultTitle = stringResource(R.string.diary_book_default_title)
+            val defaultSubtitle = stringResource(R.string.diary_book_default_subtitle)
+            val coverTitle = DiaryBookCustomizationStore.resolveTitle(customization, defaultTitle)
+            val coverOwner = DiaryBookCustomizationStore.resolveOwnerLine(customization, defaultSubtitle)
             Canvas(
                 modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
             ) {
-                drawMiniCover(skin)
+                drawMiniCover(skin, coverTitle, coverOwner)
             }
             // 选中标记
             if (isSelected) {

@@ -4,9 +4,12 @@
 // ═════════════════════════════════════════════════════════════════════════
 package com.example.funlife.notifications
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 
 /**
@@ -105,6 +108,14 @@ enum class FunChannel(
         description = "你写给过去/未来的信件，已由 AI 替身回复送达",
         systemImportance = NotificationManager.IMPORTANCE_HIGH,
         emoji = "✉️"
+    ),
+    SOCIAL(
+        id = "fun_social",
+        displayName = "好友与社交",
+        description = "好友申请、验证消息等社交提醒",
+        systemImportance = NotificationManager.IMPORTANCE_HIGH,
+        respectQuietHours = false,
+        emoji = "👥",
     );
 
     companion object {
@@ -114,10 +125,12 @@ enum class FunChannel(
 
 object NotificationChannels {
 
-    /** 一次性迁移版本号；提升后会重建受影响的 channel 让 setShowBadge 生效 */
+    /** 一次性迁移版本号；提升后会重建受影响的 channel */
     private const val BADGE_MIGRATION_VERSION = 2
+    private const val SOCIAL_CHANNEL_MIGRATION_VERSION = 4
     private const val PREFS = "fun_channels_meta"
     private const val KEY_BADGE_MIGRATION = "badge_migration_v"
+    private const val KEY_SOCIAL_CHANNEL_MIGRATION = "social_channel_v"
 
     /** 在 App 启动 / Receiver 入口处调用，幂等。 */
     fun ensureAll(context: Context) {
@@ -137,17 +150,58 @@ object NotificationChannels {
             prefs.edit().putInt(KEY_BADGE_MIGRATION, BADGE_MIGRATION_VERSION).apply()
         }
 
+        // 社交 channel 升级为 HIGH → 支持 heads-up 横幅通知（需删旧 channel 重建）
+        val socialVer = prefs.getInt(KEY_SOCIAL_CHANNEL_MIGRATION, 0)
+        if (socialVer < SOCIAL_CHANNEL_MIGRATION_VERSION) {
+            runCatching { mgr.deleteNotificationChannel(FunChannel.SOCIAL.id) }
+            runCatching { mgr.deleteNotificationChannel("fun_social") }
+            prefs.edit().putInt(KEY_SOCIAL_CHANNEL_MIGRATION, SOCIAL_CHANNEL_MIGRATION_VERSION).apply()
+        }
+
         FunChannel.values().forEach { ch ->
-            if (mgr.getNotificationChannel(ch.id) == null) {
-                val nc = NotificationChannel(ch.id, ch.displayName, ch.systemImportance).apply {
-                    description = ch.description
-                    enableLights(true)
-                    enableVibration(ch.systemImportance >= NotificationManager.IMPORTANCE_DEFAULT)
-                    // 🔴 仅强提醒类 channel 污染桌面 dot，避免多余小红点
-                    setShowBadge(ch.showBadge)
+            ensureChannel(mgr, ch)
+        }
+    }
+
+    private fun ensureChannel(mgr: NotificationManager, ch: FunChannel) {
+        val existing = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mgr.getNotificationChannel(ch.id)
+        } else null
+        if (existing != null && !channelOutOfSync(existing, ch)) return
+        runCatching { mgr.deleteNotificationChannel(ch.id) }
+        createChannel(mgr, ch)
+    }
+
+    private fun channelOutOfSync(existing: NotificationChannel, ch: FunChannel): Boolean {
+        if (existing.importance != ch.systemImportance) return true
+        if (ch == FunChannel.SOCIAL) {
+            if (!existing.shouldVibrate()) return true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !existing.canBypassDnd()) return true
+        }
+        return false
+    }
+
+    private fun createChannel(mgr: NotificationManager, ch: FunChannel) {
+        val nc = NotificationChannel(ch.id, ch.displayName, ch.systemImportance).apply {
+            description = ch.description
+            enableLights(true)
+            enableVibration(ch.systemImportance >= NotificationManager.IMPORTANCE_DEFAULT)
+            setShowBadge(ch.showBadge)
+            if (ch == FunChannel.SOCIAL) {
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 120, 60, 120, 60, 180)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setBypassDnd(true)
                 }
-                mgr.createNotificationChannel(nc)
+                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                setSound(soundUri, attrs)
             }
         }
+        mgr.createNotificationChannel(nc)
     }
 }

@@ -370,7 +370,7 @@ internal fun buildFaceBitmaps(
         back   = renderToBitmap(wPx, hPx) { drawBackCoverArt(skin) },
         right  = renderToBitmap(maxOf(tPx, 4), hPx) { drawPageEdgeVerticalEnhanced(skin) },
         left   = renderToBitmap(maxOf(tPx, 4), hPx) {
-            drawSpineVerticalEnhanced(skin, bookTitle, ownerNameRaw)
+            drawSpineVerticalEnhanced(skin, bookTitle, ownerNameRaw, ownerLine)
         },
         top    = renderToBitmap(wPx, maxOf(tPx, 4)) { drawPageEdgeHorizontalEnhanced(skin) },
         bottom = renderToBitmap(wPx, maxOf(tPx, 4)) { drawPageEdgeHorizontalEnhanced(skin) },

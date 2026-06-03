@@ -25,6 +25,8 @@ import com.example.funlife.R
  * @param dedupWindowMs 同一渠道在该窗口内只允许发一次（0 表示不去重）
  * @param bypassQuietHours 强制不被静默时段拦截
  * @param onlyIfChannelEnabled 当前渠道关闭时是否拦截（默认 true）
+ * @param alwaysDeliverInbox 为 true 时：无论总开关/渠道/静默，都写入收件箱（首页铃铛红点）
+ * @param inboxDedupeKey 收件箱去重键（同一 key 只保留一条，如 friend_req_xxx）
  */
 data class NotificationSpec(
     val channel: FunChannel,
@@ -35,7 +37,9 @@ data class NotificationSpec(
     val deepLinkRoute: String? = null,
     val dedupWindowMs: Long = 0L,
     val bypassQuietHours: Boolean = false,
-    val onlyIfChannelEnabled: Boolean = true
+    val onlyIfChannelEnabled: Boolean = true,
+    val alwaysDeliverInbox: Boolean = false,
+    val inboxDedupeKey: String? = null,
 )
 
 object NotificationCenter {
@@ -50,28 +54,35 @@ object NotificationCenter {
         return try {
             NotificationChannels.ensureAll(context)
 
-            // 1) 总开关
-            if (!NotificationPrefs.isGlobalEnabled(context)) {
-                android.util.Log.d(TAG, "blocked by global switch: ${spec.channel.id}")
-                return false
+            if (spec.alwaysDeliverInbox) {
+                runCatching {
+                    InboxStore.add(
+                        context, spec.channel, spec.title, spec.body, spec.deepLinkRoute,
+                        dedupeKey = spec.inboxDedupeKey,
+                    )
+                }
             }
-            // 2) 渠道开关
-            if (spec.onlyIfChannelEnabled && !NotificationPrefs.isChannelEnabled(context, spec.channel)) {
-                android.util.Log.d(TAG, "blocked by channel switch: ${spec.channel.id}")
-                return false
-            }
-            // 3) 静默时段
-            if (!spec.bypassQuietHours && spec.channel.respectQuietHours
-                && NotificationPrefs.nowInQuietHours(context)
-            ) {
-                android.util.Log.d(TAG, "blocked by quiet hours: ${spec.channel.id}")
-                return false
-            }
-            // 4) 去重
-            if (spec.dedupWindowMs > 0 &&
+
+            val globalOn = NotificationPrefs.isGlobalEnabled(context)
+            val channelOn = !spec.onlyIfChannelEnabled ||
+                NotificationPrefs.isChannelEnabled(context, spec.channel)
+            val quietBlocked = !spec.bypassQuietHours && spec.channel.respectQuietHours &&
+                NotificationPrefs.nowInQuietHours(context)
+            val dedupBlocked = spec.dedupWindowMs > 0 &&
                 NotificationPrefs.firedWithin(context, spec.channel, spec.dedupWindowMs)
-            ) {
-                android.util.Log.d(TAG, "blocked by dedup: ${spec.channel.id}")
+
+            val canShowSystem = globalOn && channelOn && !quietBlocked && !dedupBlocked
+            if (!canShowSystem) {
+                if (spec.alwaysDeliverInbox) {
+                    android.util.Log.d(TAG, "inbox only (system blocked): ${spec.channel.id}")
+                    return true
+                }
+                when {
+                    !globalOn -> android.util.Log.d(TAG, "blocked by global switch: ${spec.channel.id}")
+                    !channelOn -> android.util.Log.d(TAG, "blocked by channel switch: ${spec.channel.id}")
+                    quietBlocked -> android.util.Log.d(TAG, "blocked by quiet hours: ${spec.channel.id}")
+                    dedupBlocked -> android.util.Log.d(TAG, "blocked by dedup: ${spec.channel.id}")
+                }
                 return false
             }
 
@@ -91,30 +102,48 @@ object NotificationCenter {
             )
 
             val title = if (spec.emojiPrefix) "${spec.channel.emoji} ${spec.title}" else spec.title
-            val notification = NotificationCompat.Builder(context, spec.channel.id)
+            if (!spec.alwaysDeliverInbox) {
+                runCatching {
+                    InboxStore.add(
+                        context, spec.channel, spec.title, spec.body, spec.deepLinkRoute,
+                        dedupeKey = spec.inboxDedupeKey,
+                    )
+                }
+            }
+
+            val notificationBuilder = NotificationCompat.Builder(context, spec.channel.id)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(spec.body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(spec.body))
-                .setPriority(mapPriority(spec.channel.systemImportance))
-                .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
                 .setContentIntent(contentIntent)
-                .build()
+
+            if (spec.channel == FunChannel.SOCIAL) {
+                notificationBuilder
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                    .setDefaults(NotificationCompat.DEFAULT_ALL)
+                    .setOnlyAlertOnce(false)
+                    .setVibrate(longArrayOf(0, 120, 60, 120, 60, 180))
+            } else {
+                notificationBuilder
+                    .setPriority(mapPriority(spec.channel.systemImportance))
+                    .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            }
+
+            val notification = notificationBuilder.build()
 
             try {
                 NotificationManagerCompat.from(context).notify(spec.id, notification)
             } catch (_: SecurityException) {
-                // 缺 POST_NOTIFICATIONS 权限
-                return false
+                // 缺 POST_NOTIFICATIONS：系统栏不弹，但收件箱与红点仍有效
+                if (spec.dedupWindowMs > 0) NotificationPrefs.markFired(context, spec.channel)
+                return true
             }
 
             if (spec.dedupWindowMs > 0) NotificationPrefs.markFired(context, spec.channel)
-            // 写入应用内收件箱
-            runCatching {
-                InboxStore.add(context, spec.channel, spec.title, spec.body, spec.deepLinkRoute)
-            }
             true
         } catch (e: Exception) {
             android.util.Log.e(TAG, "notify failed", e)

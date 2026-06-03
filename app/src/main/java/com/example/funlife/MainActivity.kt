@@ -475,7 +475,9 @@ fun MainScreen(soundManager: SoundEffectManager) {
         Screen.DiaryBookFull.route,
         Screen.DiaryBookFull.route + "?openEditor={openEditor}",
         "riddle_game",
-        "dice_game"
+        "dice_game",
+        // 好友页沉浸式（Phase 1 Beta）
+        Screen.Friends.route,
     )
     
     com.example.funlife.ui.components.topdrawer.TopDrawerHost(
@@ -662,6 +664,15 @@ fun MainScreen(soundManager: SoundEffectManager) {
                         navController.navigate("anniversary")
                     }
                 )
+            }
+
+            // 👥 好友申请前台横幅（OEM 拦截系统 heads-up 时的兜底）
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+            ) {
+                com.example.funlife.ui.components.SocialHeadsUpBanner()
             }
 
             // 底部导航栏 - 波浪延伸到屏幕真正底部，覆盖系统手势/3键区

@@ -238,7 +238,7 @@ fun DiaryHubScreen(
                 )
 
                 // 皮肤缩略图条
-                SkinThumbRail(currentSkinId = skin.id.raw, stage = stage)
+                SkinThumbRail(userId = userId, currentSkinId = skin.id.raw, stage = stage)
 
                 Spacer(Modifier.height(14.dp))
 
@@ -290,7 +290,7 @@ fun DiaryHubScreen(
             }
 
             if (showSkinPicker) {
-                SkinPickerSheet(onDismiss = { showSkinPicker = false })
+                SkinPickerSheet(userId = userId, onDismiss = { showSkinPicker = false })
             }
             if (showCustomize) {
                 BookCustomizationSheet(
@@ -448,6 +448,7 @@ private fun HubAction(
  */
 @Composable
 private fun SkinThumbRail(
+    userId: Long,
     currentSkinId: String,
     stage: com.example.funlife.ui.components.diarybook.BookStageTheme
 ) {
@@ -478,6 +479,7 @@ private fun SkinThumbRail(
     ) {
         available.forEach { s ->
             SkinThumb(
+                userId = userId,
                 skin = s,
                 isSelected = s.id.raw == currentSkinId,
                 stage = stage,
@@ -494,11 +496,13 @@ private fun SkinThumbRail(
 
 @Composable
 private fun SkinThumb(
+    userId: Long,
     skin: BookSkin,
     isSelected: Boolean,
     stage: com.example.funlife.ui.components.diarybook.BookStageTheme,
     onClick: () -> Unit
 ) {
+    val ctx = LocalContext.current
     val thumbW by animateDpAsState(
         targetValue = if (isSelected) 58.dp else 48.dp,
         animationSpec = tween(280),
@@ -552,7 +556,13 @@ private fun SkinThumb(
                     .clip(RoundedCornerShape(5.dp))
                     .border(borderWidth, borderColor, RoundedCornerShape(5.dp)),
             ) {
-                val customization = rememberBookCustomization()
+                val customization = if (isSelected) {
+                    rememberBookCustomization()
+                } else {
+                    remember(userId, skin.id.raw) {
+                        DiaryBookCustomizationStore.load(ctx, userId, skin.id.raw)
+                    }
+                }
                 val defaultTitle = stringResource(R.string.diary_book_default_title)
                 val defaultSubtitle = stringResource(R.string.diary_book_default_subtitle)
                 val coverTitle = DiaryBookCustomizationStore.resolveTitle(customization, defaultTitle)

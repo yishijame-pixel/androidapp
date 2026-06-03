@@ -248,7 +248,7 @@ private fun DrawScope.drawGenericFront(
         textAlign = android.graphics.Paint.Align.CENTER
         letterSpacing = skin.typography.titleLetterSpacingEm.coerceAtMost(0.4f)
     }
-    nc.drawText("一  人  一  册", w / 2f, h * 0.73f, subPaint)
+    nc.drawText(author, w / 2f, h * 0.73f, subPaint)
 
     // 9. 底部装饰横线（双线）
     val bottomY1 = h * 0.84f

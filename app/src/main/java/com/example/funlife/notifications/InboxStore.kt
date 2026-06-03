@@ -5,6 +5,8 @@
 package com.example.funlife.notifications
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.example.funlife.utils.UserSessionManager
 import org.json.JSONArray
 import org.json.JSONObject
@@ -28,10 +30,16 @@ object InboxStore {
     // ── 响应式未读计数：UI 用 collectAsState 即可自动随消息变化更新 ──
     private val _unreadFlow = kotlinx.coroutines.flow.MutableStateFlow(0)
     val unreadFlow: kotlinx.coroutines.flow.StateFlow<Int> = _unreadFlow
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /** UI 重新可见时调用一次（如 ON_RESUME），刷新最新未读数 */
     fun refreshUnread(ctx: Context) {
-        _unreadFlow.value = unreadCount(ctx)
+        val count = unreadCount(ctx)
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _unreadFlow.value = count
+        } else {
+            mainHandler.post { _unreadFlow.value = count }
+        }
     }
 
     private fun prefs(ctx: Context) =
@@ -44,15 +52,17 @@ object InboxStore {
 
     private fun key(ctx: Context): String = "${K_LIST}_${uidTag(ctx)}"
 
-    /** 追加一条通知。返回新建条目的 id。 */
+    /** 追加一条通知。若 [dedupeKey] 已存在则跳过（防好友申请重复推送）。返回新建 id，跳过返回 0。 */
     fun add(
         ctx: Context,
         channel: FunChannel,
         title: String,
         body: String,
-        deepLink: String? = null
+        deepLink: String? = null,
+        dedupeKey: String? = null,
     ): Long = synchronized(this) {
         try {
+            if (!dedupeKey.isNullOrBlank() && hasDedupeKeyInternal(ctx, dedupeKey)) return 0L
             val k = key(ctx)
             val arr = readArray(ctx, k)
             val id = System.currentTimeMillis()
@@ -64,6 +74,7 @@ object InboxStore {
                 put("ts", id)
                 put("link", deepLink ?: "")
                 put("read", false)
+                if (!dedupeKey.isNullOrBlank()) put("dedupe", dedupeKey)
             }
             // 倒序：新条目在前
             val newArr = JSONArray()
@@ -97,6 +108,32 @@ object InboxStore {
     } catch (_: Throwable) { emptyList() }
 
     fun unreadCount(ctx: Context): Int = getAll(ctx).count { !it.read }
+
+    fun hasDedupeKey(ctx: Context, dedupeKey: String): Boolean = synchronized(this) {
+        hasDedupeKeyInternal(ctx, dedupeKey)
+    }
+
+    fun removeByDedupeKey(ctx: Context, dedupeKey: String) = synchronized(this) {
+        try {
+            val k = key(ctx)
+            val arr = readArray(ctx, k)
+            val newArr = JSONArray()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                if (o.optString("dedupe") != dedupeKey) newArr.put(o)
+            }
+            prefs(ctx).edit().putString(k, newArr.toString()).apply()
+            refreshUnread(ctx)
+        } catch (_: Throwable) {}
+    }
+
+    private fun hasDedupeKeyInternal(ctx: Context, dedupeKey: String): Boolean {
+        val arr = readArray(ctx, key(ctx))
+        for (i in 0 until arr.length()) {
+            if (arr.getJSONObject(i).optString("dedupe") == dedupeKey) return true
+        }
+        return false
+    }
 
     fun markRead(ctx: Context, id: Long) = synchronized(this) {
         mutate(ctx) { o -> if (o.optLong("id") == id) o.put("read", true) }

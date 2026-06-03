@@ -288,6 +288,7 @@ private fun channelAccent(ch: FunChannel?): Color = when (ch) {
     FunChannel.SYSTEM -> Color(0xFF6B7280)
     FunChannel.BOOKKEEPING -> Color(0xFFFFA726)
     FunChannel.LETTER -> Color(0xFFB39DDB)
+    FunChannel.SOCIAL -> Color(0xFF2563EB)
     null -> Color(0xFF6B7280)
 }
 

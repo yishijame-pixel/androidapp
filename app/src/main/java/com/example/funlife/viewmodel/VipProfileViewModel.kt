@@ -116,6 +116,12 @@ class VipProfileViewModel(
                 if (internalUri != null) {
                     // 更新数据库中的URI
                     profileRepository.updateAvatarUri(userId, internalUri)
+                    runCatching {
+                        com.example.funlife.repository.SocialLinkRepository(
+                            context.applicationContext,
+                            (context.applicationContext as com.example.funlife.FunLifeApplication).database.socialDao(),
+                        ).syncAvatarToPocketBase(userId)
+                    }
                     _message.value = "头像更新成功"
                 } else {
                     _message.value = "头像保存失败，请重试"

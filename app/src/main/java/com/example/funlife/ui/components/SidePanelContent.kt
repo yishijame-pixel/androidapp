@@ -62,6 +62,7 @@ fun SidePanelContent(
     // 通知未读：使用响应式 Flow，新消息到达 / 标已读后自动刷新（与首页同步）
     val unreadCount by InboxStore.unreadFlow.collectAsState()
     val inboxPreview = remember(tick, unreadCount) { InboxStore.getAll(ctx).take(2) }
+    LaunchedEffect(Unit) { InboxStore.refreshUnread(ctx) }
     val sidePanelLifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(sidePanelLifecycle) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->

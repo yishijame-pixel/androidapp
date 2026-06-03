@@ -25,6 +25,7 @@ class EngagementWorker(
         android.util.Log.d(TAG, "EngagementWorker 唤醒，扫描空模块")
         // 复用同步实现（suspend），保证逻辑一致
         EngagementNotifier.runOnce(applicationContext)
+        com.example.funlife.social.SocialInboxSync.syncNow(applicationContext)
         Result.success()
     } catch (e: Exception) {
         android.util.Log.e(TAG, "EngagementWorker 失败", e)

@@ -28,25 +28,28 @@ fun DrawScope.drawSpineVerticalEnhanced(
     skin: BookSkin,
     bookTitle: String,
     ownerNameRaw: String,
+    /** 未刻印署名时，从封面副标题（如「一  人  一  时  一  册」）取字上脊 */
+    ownerLineFallback: String = "",
 ) {
     val w = size.width
     val h = size.height
     if (w < 1f || h < 1f) return
+    val spineOwner = resolveSpineOwnerText(ownerNameRaw, ownerLineFallback)
 
     when (skin.id.raw) {
-        "builtin::hengwu"    -> drawHengWuSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::jiyue"     -> drawJiYueSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::qingchuan" -> drawQingChuanSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::chiyan"    -> drawChiYanSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::qingluan"  -> drawQingLuanSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::xinghe"    -> drawXingHeSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::xuanbing"  -> drawXuanBingSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::zixiao"    -> drawZiXiaoSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::liujin"    -> drawLiuJinSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::molong"    -> drawMoLongSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::shanhu"    -> drawShanHuSpine(skin, bookTitle, ownerNameRaw)
-        "builtin::jingleng"  -> drawJingLengSpine(skin, bookTitle, ownerNameRaw)
-        else                 -> drawHengWuSpine(skin, bookTitle, ownerNameRaw)
+        "builtin::hengwu"    -> drawHengWuSpine(skin, bookTitle, spineOwner)
+        "builtin::jiyue"     -> drawJiYueSpine(skin, bookTitle, spineOwner)
+        "builtin::qingchuan" -> drawQingChuanSpine(skin, bookTitle, spineOwner)
+        "builtin::chiyan"    -> drawChiYanSpine(skin, bookTitle, spineOwner)
+        "builtin::qingluan"  -> drawQingLuanSpine(skin, bookTitle, spineOwner)
+        "builtin::xinghe"    -> drawXingHeSpine(skin, bookTitle, spineOwner)
+        "builtin::xuanbing"  -> drawXuanBingSpine(skin, bookTitle, spineOwner)
+        "builtin::zixiao"    -> drawZiXiaoSpine(skin, bookTitle, spineOwner)
+        "builtin::liujin"    -> drawLiuJinSpine(skin, bookTitle, spineOwner)
+        "builtin::molong"    -> drawMoLongSpine(skin, bookTitle, spineOwner)
+        "builtin::shanhu"    -> drawShanHuSpine(skin, bookTitle, spineOwner)
+        "builtin::jingleng"  -> drawJingLengSpine(skin, bookTitle, spineOwner)
+        else                 -> drawHengWuSpine(skin, bookTitle, spineOwner)
     }
 }
 
@@ -225,6 +228,12 @@ private fun DrawScope.drawSpinePlateCornerOrnaments(
         }
     }
 }
+
+/** 书脊署名：优先用户刻印，否则从封面副标题去空格取前 4 字。 */
+internal fun resolveSpineOwnerText(ownerNameRaw: String, ownerLineFallback: String): String =
+    ownerNameRaw.trim().ifBlank {
+        ownerLineFallback.replace(Regex("\\s+"), "")
+    }.take(4)
 
 private fun spineTitleOwner(skin: BookSkin, bookTitle: String, ownerNameRaw: String) =
     Pair(
