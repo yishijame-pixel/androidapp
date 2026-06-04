@@ -39,16 +39,19 @@ data class PendingFriendAction(
 class FriendsViewModel(
     application: Application,
     currentUserId: Long,
-    funlifeUsername: String,
+    val myFunlifeUsername: String,
     displayName: String,
 ) : AndroidViewModel(application) {
 
     private val interactor = FriendsInteractor(
         application.applicationContext,
         currentUserId,
-        funlifeUsername,
+        myFunlifeUsername,
         displayName,
     )
+
+    private val _conversations = MutableStateFlow<List<com.example.funlife.social.model.ConversationUiModel>>(emptyList())
+    val conversations: StateFlow<List<com.example.funlife.social.model.ConversationUiModel>> = _conversations.asStateFlow()
 
     val linkState: StateFlow<com.example.funlife.social.model.SocialLinkState> =
         SocialSessionManager.linkState
@@ -90,6 +93,9 @@ class FriendsViewModel(
         } else {
             viewModelScope.launch {
                 interactor.observeFriends().collect { items -> applyUiModels(items) }
+            }
+            viewModelScope.launch {
+                interactor.observeConversations().collect { _conversations.value = it }
             }
             viewModelScope.launch {
                 SocialSessionManager.snapshot.collect {
@@ -137,6 +143,7 @@ class FriendsViewModel(
             try {
                 interactor.syncFriends(forceSession = true)
                     .onFailure { showFailure(it) }
+                interactor.syncConversations().onFailure { /* 会话同步失败不阻断好友列表 */ }
                 refreshCredentialSnapshot()
             } finally {
                 _isSyncing.value = false

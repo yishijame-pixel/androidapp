@@ -7,6 +7,9 @@ plugins {
     id("com.google.devtools.ksp") version "1.9.20-1.0.14"
 }
 
+val googleServicesFile = file("google-services.json")
+val fcmEnabled = googleServicesFile.exists()
+
 android {
     namespace = "com.example.funlife"
     compileSdk = 34
@@ -64,6 +67,7 @@ android {
         // 🆕 PocketBase 社交层（Phase1 好友）— 留空则社交入口显示「未配置」
         buildConfigField("String", "POCKETBASE_URL", "\"${props.getProperty("POCKETBASE_URL", "")}\"")
         buildConfigField("String", "POCKETBASE_PIN", "\"${props.getProperty("POCKETBASE_PIN", "")}\"")
+        buildConfigField("boolean", "FCM_ENABLED", fcmEnabled.toString())
     }
 
     buildTypes {
@@ -160,6 +164,10 @@ dependencies {
 
     // 🔔 WorkManager - 后台定期检查纪念日（更可靠，能抗 OEM 后台杀进程）
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // 🔥 Firebase Cloud Messaging — 杀进程级私聊/好友推送（需 app/google-services.json）
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
     
     // Retrofit + Gson (AI Service / 数据备份)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -208,4 +216,10 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
     }
+}
+
+if (fcmEnabled) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle("FCM disabled: place google-services.json in app/ to enable push")
 }

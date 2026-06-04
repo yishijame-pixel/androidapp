@@ -69,6 +69,21 @@ class MainActivity : ComponentActivity() {
         )?.let { com.example.funlife.notifications.DeepLinkBus.publish(it) }
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001 &&
+            grantResults.isNotEmpty() &&
+            grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            com.example.funlife.notifications.FcmPushBootstrap.initAsync(this)
+            com.example.funlife.social.SocialSessionManager.warmStartAsync(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -127,7 +142,6 @@ class MainActivity : ComponentActivity() {
         }
 
         // 🔋 引导用户允许"忽略电池优化"（系统级弹框，用户点"允许"即可）
-        // 这是让闹钟在 App 被杀后仍能触发的关键权限
         if (!com.example.funlife.utils.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this)) {
             val prefs = getSharedPreferences("app_perm_prefs", MODE_PRIVATE)
             if (!prefs.getBoolean("battery_opt_asked", false)) {
@@ -435,7 +449,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
     }
 
     // 判断是否显示底部导航栏（登录/注册/欢迎页/宠物页/游戏计分页/商城页/背包页/转盘页/纪念日页/目标页/VIP页/头像框商城不显示）
-    val showBottomBar = currentDestination?.route !in listOf(
+    val hideBottomBarRoutes = listOf(
         Screen.Welcome.route,
         Screen.Login.route,
         Screen.Register.route,
@@ -478,8 +492,13 @@ fun MainScreen(soundManager: SoundEffectManager) {
         "dice_game",
         // 好友页沉浸式（Phase 1 Beta）
         Screen.Friends.route,
+        // Phase 2 私聊详情：全屏沉浸，隐藏主 Tab 底栏
+        Screen.FriendChat.route,
     )
-    
+    val immersiveRoute = currentDestination?.route
+    val showBottomBar = immersiveRoute !in hideBottomBarRoutes &&
+        immersiveRoute?.startsWith("friend_chat/") != true
+
     com.example.funlife.ui.components.topdrawer.TopDrawerHost(
         state = topDrawerState,
         userId = currentUserIdForTopDrawer
@@ -717,7 +736,10 @@ fun MainScreen(soundManager: SoundEffectManager) {
                                         return@BottomNavItem
                                     }
                                     navController.navigate(item.screen.route) {
-                                        popUpTo(Screen.Home.route) { inclusive = false }
+                                        popUpTo(Screen.Home.route) {
+                                            inclusive = false
+                                            saveState = true
+                                        }
                                         launchSingleTop = true
                                         restoreState = true
                                     }

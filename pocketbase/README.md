@@ -166,4 +166,83 @@ SocialSessionManager（企业级会话中枢）
 - [ ] 登出后重新登录可自动 re-link
 - [ ] 未配置 POCKETBASE_URL 时显示友好提示
 
-Phase 2（私聊）验收通过后再开发 `conversations` / `messages` 集合。
+## 5b. Phase 2 私聊
+
+| 集合 | 字段 | Rules 要点 |
+|------|------|------------|
+| **conversations** | `member_a`, `member_b`, `pair_key`(unique), `last_preview`, `last_message_at` | 仅双方可见/改 |
+| **messages** | `conversation`, `sender`, `body` | 仅会话参与者可读；create 需 `sender = auth` |
+
+App：`ChatInteractor` + Room v58（**按 userId 隔离**）；好友页 **好友/消息** Tab；Realtime 订阅 `messages`；前台横幅 + 系统通知。
+
+| 能力 | 说明 |
+|------|------|
+| 会话列表 | 本地 Room + 云端 sync，按最后消息时间排序 |
+| Realtime | SSE 同时订阅 `friendships` + `messages` |
+| 消息通知 | 非当前聊天页：系统通知 + App 内 heads-up |
+| ChatFocusTracker | 正在看的会话不重复弹通知 |
+| 降级补拉 | SSE 不健康时 60s 同步会话/消息 |
+
+### Phase 2 验收清单
+
+- [ ] 两名已接受好友可互发文字消息
+- [ ] **消息 Tab** 显示会话列表与预览
+- [ ] Realtime：对方发消息几乎即时出现在聊天页
+- [ ] 不在聊天页时收到通知，点击跳进对应私聊
+- [ ] 消息本地 Room 缓存，换账号不可见
+- [ ] 非参与者无法读取会话消息（PB Rules）
+- [ ] 登出清除本地 chat 缓存
+
+```powershell
+.\setup-schema.ps1              # 含 conversations / messages
+node pocketbase/tools/test_social_chat_e2e.js
+```
+
+## 6. 企业级自动化测试
+
+### 一键跑社交全套（推荐）
+
+先启动 PocketBase，再：
+
+```powershell
+.\scripts\run-social-tests.ps1
+```
+
+| 参数 | 说明 |
+|------|------|
+| `-BaseUrl http://192.168.x.x:8090` | 指定 PB 地址 |
+| `-SetupSchema` | E2E 前自动执行 `setup-schema.ps1` |
+| `-SkipE2E` | 仅跑 Kotlin 纯逻辑单元测试 |
+| `-SkipKotlin` | 仅跑 Node E2E（需 PB 运行） |
+| `-KeepData` | 保留 E2E 创建的测试账号 |
+| `-CI` | CI 模式（无颜色） |
+
+### E2E 覆盖场景（`pocketbase/tools/test_social_e2e.js`）
+
+| 类别 | 场景 |
+|------|------|
+| 基础设施 | `/api/health` |
+| 账号 | 双用户注册、Token refresh |
+| 搜索 | 命中 / 未命中 |
+| 好友申请 | 发送、重复拦截、pending+expand |
+| 操作 | 拒绝、接受、删除 |
+| 安全 | 未登录 401、代他人发申请 403 |
+| 资料 | `getUserById` 补全（通知 fallback） |
+| 清理 | Admin 删除测试数据 |
+
+### 私聊 E2E（`pocketbase/tools/test_social_chat_e2e.js`）
+
+| 类别 | 场景 |
+|------|------|
+| 好友 | A↔B 接受好友 |
+| 会话 | findOrCreate + pair_key 幂等 |
+| 消息 | 双向发送 + 列表拉取 |
+| 安全 | 非参与者 C 无法读消息 |
+| 清理 | Admin 删除测试数据 |
+
+### 纳入全栈测试
+
+```powershell
+.\scripts\run-all-tests.ps1              # 含社交 E2E（需 PB 运行）
+.\scripts\run-all-tests.ps1 -SkipSocial  # 无 PB 时跳过
+```

@@ -156,10 +156,15 @@ object FriendRequestNotifier {
             }
 
         val api = PocketBaseApiClient(app)
-        val pendingIn = api.listPendingIncoming(cred.token, cred.pbRecordId).map { dto ->
-            val requester = dto.requester?.takeUnless { it.funlifeUsername.isBlank() }
-                ?: api.getUserById(cred.token, dto.requesterId)
-            dtoToIncomingUi(dto.copy(requester = requester ?: dto.requester))
+        val pendingIn = runCatching {
+            api.listPendingIncoming(cred.token, cred.pbRecordId).map { dto ->
+                val requester = dto.requester?.takeUnless { it.funlifeUsername.isBlank() }
+                    ?: api.getUserById(cred.token, dto.requesterId)
+                dtoToIncomingUi(dto.copy(requester = requester ?: dto.requester))
+            }
+        }.getOrElse {
+            Log.w(TAG, "poll network failed: ${it.message}")
+            return@withContext
         }
         if (pendingIn.isNotEmpty()) {
             notifyNewIncomingRequests(app, userId, pendingIn, pruneNotified = true)

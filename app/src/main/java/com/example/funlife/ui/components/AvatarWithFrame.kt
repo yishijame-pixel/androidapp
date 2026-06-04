@@ -19,7 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import com.example.funlife.utils.AvatarStorageHelper
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlin.math.cos
 import kotlin.math.sin
@@ -92,6 +94,81 @@ private fun loadAndAnalyzeFrame(
     return Pair(bitmap.asImageBitmap(), ratio.coerceIn(0.40f, 0.95f))
 }
 
+@Composable
+private fun DefaultCircleAvatar(
+    size: Dp,
+    defaultText: String,
+    useWarmGradient: Boolean,
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(
+                if (useWarmGradient) {
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFFFD54F),
+                            Color(0xFFFF9800),
+                        ),
+                    )
+                } else {
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        colors = listOf(Color.White, Color.White),
+                    )
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = defaultText,
+            fontSize = (size.value * if (useWarmGradient) 0.26f else 0.48f).sp,
+            fontWeight = FontWeight.Bold,
+            color = if (useWarmGradient) Color.White else Color(0xFF9C27B0),
+        )
+    }
+}
+
+@Composable
+private fun UserAvatarImage(
+    avatarUri: String?,
+    size: Dp,
+    defaultText: String,
+    useWarmGradient: Boolean,
+) {
+    val context = LocalContext.current
+    val loadableUri = remember(avatarUri) {
+        AvatarStorageHelper.resolveLoadableAvatarUri(context, avatarUri)
+    }
+
+    if (loadableUri == null) {
+        DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
+        return
+    }
+
+    val model = remember(loadableUri) {
+        ImageRequest.Builder(context)
+            .data(loadableUri)
+            .crossfade(true)
+            .build()
+    }
+
+    SubcomposeAsyncImage(
+        model = model,
+        contentDescription = "用户头像",
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape),
+        contentScale = ContentScale.Crop,
+        loading = {
+            DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
+        },
+        error = {
+            DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
+        },
+    )
+}
+
 /**
  * 带头像框的头像组件（优化版 - 自动适配）
  * 
@@ -151,42 +228,12 @@ fun AvatarWithFrame(
             // ═══════════════════════════════════════════════════════
             
             // 🔥 底层：圆形头像（自动适配大小，紧贴框内边缘）
-            if (avatarUri != null) {
-                AsyncImage(
-                    model = coil.request.ImageRequest.Builder(context)
-                        .data(avatarUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "用户头像",
-                    modifier = Modifier
-                        .size(frameSize * avatarRatio)  // 🔥 自动适配，紧贴框内
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                // 默认头像（圆形 + 渐变背景）
-                Box(
-                    modifier = Modifier
-                        .size(frameSize * avatarRatio)
-                        .clip(CircleShape)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFFD54F),
-                                    Color(0xFFFF9800)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = defaultText,
-                        fontSize = (frameSize.value * 0.26f).sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
+            UserAvatarImage(
+                avatarUri = avatarUri,
+                size = frameSize * avatarRatio,
+                defaultText = defaultText,
+                useWarmGradient = true,
+            )
             
             // 🔥 顶层：PNG头像框（完整显示，装饰保留）
             Image(
@@ -210,35 +257,12 @@ fun AvatarWithFrame(
             }
             
             // 用户头像（居中）
-            if (avatarUri != null) {
-                AsyncImage(
-                    model = coil.request.ImageRequest.Builder(context)
-                        .data(avatarUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "用户头像",
-                    modifier = Modifier
-                        .size(frameSize)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                // 默认头像
-                Box(
-                    modifier = Modifier
-                        .size(frameSize)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = defaultText,
-                        fontSize = (frameSize.value * 0.48f).sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF9C27B0)
-                    )
-                }
-            }
+            UserAvatarImage(
+                avatarUri = avatarUri,
+                size = frameSize,
+                defaultText = defaultText,
+                useWarmGradient = false,
+            )
             
         }
         

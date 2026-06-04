@@ -3,6 +3,7 @@ package com.example.funlife.social
 import android.util.Log
 import com.example.funlife.social.model.FriendUiModel
 import com.example.funlife.social.model.FriendshipStatus
+import com.example.funlife.social.model.MessageDto
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 
 /**
- * PocketBase Realtime（SSE）：监听 friendships 新建，实现好友申请即时通知。
+ * PocketBase Realtime（SSE）：好友申请 + 私聊消息即时感知。
  */
 class PocketBaseRealtimeClient {
 
@@ -28,10 +29,11 @@ class PocketBaseRealtimeClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun listenFriendships(
+    suspend fun listenSocial(
         authToken: String,
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
+        onIncomingMessage: suspend (MessageDto, String?, String?) -> Unit,
     ) {
         val url = "${PocketBaseConfig.apiBase()}/realtime"
         val request = Request.Builder()
@@ -73,6 +75,7 @@ class PocketBaseRealtimeClient {
                                 authToken = authToken,
                                 myPbId = myPbId,
                                 onIncomingRequest = onIncomingRequest,
+                                onIncomingMessage = onIncomingMessage,
                             )
                             dataLines.clear()
                             eventName = ""
@@ -86,38 +89,49 @@ class PocketBaseRealtimeClient {
         }
     }
 
+    /** @deprecated 使用 [listenSocial] */
+    suspend fun listenFriendships(
+        authToken: String,
+        myPbId: String,
+        onIncomingRequest: (FriendUiModel) -> Unit,
+    ) = listenSocial(authToken, myPbId, onIncomingRequest) { _, _, _ -> }
+
     private fun inferEventName(data: String): String =
         if (data.contains("clientId")) "PB_CONNECT" else "PB_EVENT"
 
-    private fun handleSseEvent(
+    private suspend fun handleSseEvent(
         eventName: String,
         data: String,
         authToken: String,
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
+        onIncomingMessage: suspend (MessageDto, String?, String?) -> Unit,
     ) {
         when {
             eventName == "PB_CONNECT" || data.contains("clientId") -> {
                 val obj = JsonParser.parseString(data).asJsonObject
                 val id = obj.get("clientId")?.asString ?: return
-                // 必须同步订阅，避免 PB_EVENT 在 subscribe 完成前丢失
-                val ok = subscribeFriendships(id, authToken)
+                val ok = subscribeSocial(id, authToken)
                 Log.d(TAG, "Realtime subscribe ok=$ok clientId=$id")
             }
             eventName == "PB_EVENT" || data.contains("\"action\"") -> {
                 parseIncomingFriendRequest(data, myPbId)?.let {
                     Log.d(TAG, "incoming friend request ${it.friendshipId}")
                     onIncomingRequest(it)
+                    return
+                }
+                parseIncomingMessage(data)?.let { (dto, name, username) ->
+                    Log.d(TAG, "incoming message ${dto.id} conv=${dto.conversationId}")
+                    onIncomingMessage(dto, name, username)
                 }
             }
         }
     }
 
-    private fun subscribeFriendships(clientId: String, authToken: String): Boolean {
+    private fun subscribeSocial(clientId: String, authToken: String): Boolean {
         val body = mapOf(
             "clientId" to clientId,
-            // PocketBase 官方格式：集合名，非 friendships/*
-            "subscriptions" to listOf("friendships"),
+            "subscriptions" to listOf("friendships", "messages"),
         )
         val req = Request.Builder()
             .url("${PocketBaseConfig.apiBase()}/realtime")
@@ -141,6 +155,7 @@ class PocketBaseRealtimeClient {
             val action = root.get("action")?.asString ?: return null
             if (action != "create") return null
             val record = root.getAsJsonObject("record") ?: return null
+            if (record.get("status") == null) return null
             val status = record.get("status")?.asString
             val addresseeId = relationId(record.get("addressee"))
             val requesterId = relationId(record.get("requester"))
@@ -169,7 +184,37 @@ class PocketBaseRealtimeClient {
                 isIncomingRequest = true,
                 remark = "",
             )
-        }.onFailure { Log.w(TAG, "parse PB_EVENT failed: ${it.message} data=${data.take(200)}") }
+        }.onFailure { Log.w(TAG, "parse friend PB_EVENT failed: ${it.message}") }
+            .getOrNull()
+    }
+
+    private fun parseIncomingMessage(data: String): Triple<MessageDto, String?, String?>? {
+        return runCatching {
+            val root = JsonParser.parseString(data).asJsonObject
+            val action = root.get("action")?.asString ?: return null
+            if (action != "create") return null
+            val record = root.getAsJsonObject("record") ?: return null
+            if (record.get("body") == null || record.get("conversation") == null) return null
+            val id = record.get("id")?.asString ?: return null
+            val conversationId = relationId(record.get("conversation")).orEmpty()
+            val senderPbId = relationId(record.get("sender")).orEmpty()
+            val body = record.get("body")?.asString.orEmpty()
+            if (conversationId.isBlank() || senderPbId.isBlank() || body.isBlank()) return null
+            val createdRaw = record.get("created")?.asString
+            val createdAt = SocialChatUtils.parseCreatedAt(createdRaw)
+                .takeIf { it > 0L } ?: System.currentTimeMillis()
+            val expand = record.getAsJsonObject("expand")
+            val senderJson = expand?.getAsJsonObject("sender")
+            val profile = senderJson?.let { parseUserJson(it) }
+            val dto = MessageDto(
+                id = id,
+                conversationId = conversationId,
+                senderPbId = senderPbId,
+                body = body,
+                createdAt = createdAt,
+            )
+            Triple(dto, profile?.displayName, profile?.funlifeUsername)
+        }.onFailure { Log.w(TAG, "parse message PB_EVENT failed: ${it.message}") }
             .getOrNull()
     }
 

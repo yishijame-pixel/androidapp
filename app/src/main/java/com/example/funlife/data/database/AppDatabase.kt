@@ -2,6 +2,7 @@
 package com.example.funlife.data.database
 
 import android.content.Context
+import com.example.funlife.BuildConfig
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -121,8 +122,10 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.DiaryEntry::class,            // 🆕 v55：古籍日记本
         com.example.funlife.data.model.SocialPocketBaseLink::class,  // 🆕 v57：PocketBase 绑定
         com.example.funlife.data.model.SocialFriendCache::class,     // 🆕 v57：好友本地缓存
+        com.example.funlife.data.model.SocialConversationCache::class, // 🆕 v58：私聊会话缓存
+        com.example.funlife.data.model.SocialMessageCache::class,      // 🆕 v58：私聊消息缓存
     ],
-    version = 57,  // 🆕 v57 - PocketBase 社交 Phase1（好友）
+    version = 58,  // 🆕 v58 - PocketBase 社交 Phase2（私聊）
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -1681,6 +1684,48 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_57_58 = object : Migration(57, 58) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `social_conversation_cache` (
+                        `userId` INTEGER NOT NULL,
+                        `conversationId` TEXT NOT NULL,
+                        `peerPbId` TEXT NOT NULL,
+                        `peerUsername` TEXT NOT NULL,
+                        `peerDisplayName` TEXT NOT NULL,
+                        `peerAvatarUrl` TEXT,
+                        `lastPreview` TEXT NOT NULL,
+                        `lastMessageAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`userId`, `conversationId`)
+                    )
+                """.trimIndent())
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_conversation_cache_userId` ON `social_conversation_cache` (`userId`)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_conversation_cache_userId_lastMessageAt` ON `social_conversation_cache` (`userId`, `lastMessageAt`)",
+                )
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `social_message_cache` (
+                        `userId` INTEGER NOT NULL,
+                        `conversationId` TEXT NOT NULL,
+                        `messageId` TEXT NOT NULL,
+                        `senderPbId` TEXT NOT NULL,
+                        `body` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`userId`, `messageId`)
+                    )
+                """.trimIndent())
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_message_cache_userId` ON `social_message_cache` (`userId`)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_message_cache_userId_conversationId_createdAt` ON `social_message_cache` (`userId`, `conversationId`, `createdAt`)",
+                )
+            }
+        }
+
         private val MIGRATION_56_57 = object : Migration(56, 57) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""
@@ -1841,7 +1886,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context): AppDatabase {
-            return Room.databaseBuilder(
+            val builder = Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "funlife_database"
@@ -1862,9 +1907,22 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51,
                 MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56,
                 MIGRATION_56_57,
+                MIGRATION_57_58,
             )
-            .fallbackToDestructiveMigration()
-            .build()
+            // Release 禁止 destructive migration，避免升级误删全库
+            if (BuildConfig.DEBUG) {
+                builder.fallbackToDestructiveMigration()
+            }
+            return builder.build()
+        }
+
+        private fun deleteDatabaseFiles(context: Context) {
+            try {
+                context.getDatabasePath("funlife_database").delete()
+                context.getDatabasePath("funlife_database-shm").delete()
+                context.getDatabasePath("funlife_database-wal").delete()
+            } catch (_: Exception) {
+            }
         }
 
         fun getDatabase(context: Context): AppDatabase {
@@ -1872,23 +1930,25 @@ abstract class AppDatabase : RoomDatabase() {
                 INSTANCE ?: run {
                     val instance = try {
                         val db = buildDatabase(context)
-                        // � 强制打开触发 schema 校验，提前暴露任何 Entity↔Migration 不一致
                         db.openHelper.writableDatabase
                         db
                     } catch (e: Exception) {
-                        // � 终极防御：任何 schema 不一致（"Migration didn't properly handle"）或迁移异常
-                        //   一律清库重建，避免用户卡在闪退/无法登录状态
-                        android.util.Log.e(
-                            "AppDatabase",
-                            "DB open failed (likely schema mismatch). Recreating DB. Cause: ${e.message}",
-                            e
-                        )
-                        try {
-                            context.getDatabasePath("funlife_database").delete()
-                            context.getDatabasePath("funlife_database-shm").delete()
-                            context.getDatabasePath("funlife_database-wal").delete()
-                        } catch (_: Exception) {}
-                        buildDatabase(context)
+                        if (BuildConfig.DEBUG) {
+                            android.util.Log.e(
+                                "AppDatabase",
+                                "DB open failed (debug recreate). Cause: ${e.message}",
+                                e,
+                            )
+                            deleteDatabaseFiles(context)
+                            buildDatabase(context)
+                        } else {
+                            android.util.Log.e(
+                                "AppDatabase",
+                                "DB migration failed — user data preserved, fix migration. Cause: ${e.message}",
+                                e,
+                            )
+                            throw e
+                        }
                     }
                     INSTANCE = instance
                     instance

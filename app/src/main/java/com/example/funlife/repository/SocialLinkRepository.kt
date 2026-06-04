@@ -43,7 +43,9 @@ class SocialLinkRepository(
                     SocialTokenCache.put(userId, token)
                     runCatching { api.updateOnline(token, true) }
                     // 头像同步放后台，避免阻塞好友页首屏
-                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    kotlinx.coroutines.CoroutineScope(
+                        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+                    ).launch {
                         syncAvatarToPocketBase(userId, token, existing.pbRecordId)
                     }
                     return@withContext Result.success(existing)
@@ -107,6 +109,9 @@ class SocialLinkRepository(
         SocialTokenCache.clear(userId)
         socialDao.deleteLink(userId)
         socialDao.clearFriends(userId)
+        socialDao.clearConversations(userId)
+        socialDao.clearMessages(userId)
+        com.example.funlife.notifications.ChatMessageNotifier.clearUser(context, userId)
     }
 
     private fun refreshTokenIfNeeded(userId: Long, identity: String): String? {

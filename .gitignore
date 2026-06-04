@@ -106,3 +106,12 @@ pocketbase/pocketbase.exe
 pocketbase/pb_data/
 pocketbase/*.zip
 pocketbase/DEV.local.md
+
+# Firebase / FCM???????
+app/google-services.json
+**/firebase-adminsdk*.json
+pocketbase/tools/fcm_relay/node_modules/
+
+# ???????
+debug_screen.png
+*.backup3

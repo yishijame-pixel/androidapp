@@ -5,6 +5,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +26,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -49,6 +55,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.example.funlife.social.PocketBaseConfig
+import com.example.funlife.social.model.ConversationUiModel
 import com.example.funlife.social.model.FriendUiModel
 import com.example.funlife.social.model.FriendsUiState
 import com.example.funlife.social.model.PbUserProfile
@@ -60,16 +68,22 @@ import com.example.funlife.viewmodel.PendingFriendAction
 import com.example.funlife.viewmodel.PendingFriendActionKind
 import kotlinx.coroutines.delay
 
-/** 企业级社交页调色板 */
+/** 企业级社交页调色板（会话列表对齐微信） */
 private object FriendsPalette {
-    val bgTop = Color(0xFFF0F4FA)
-    val bgBottom = Color(0xFFE8EEF6)
+    val bgTop = Color(0xFFEDEDED)
+    val bgBottom = Color(0xFFEDEDED)
+    val listRow = Color(0xFFFFFFFF)
+    val listDivider = Color(0xFFE5E5E5)
+    val sectionBg = Color(0xFFEDEDED)
+    val sectionText = Color(0xFF888888)
+    val previewText = Color(0xFFB2B2B2)
+    val timeText = Color(0xFFB2B2B2)
     val surface = Color(0xFFFFFFFF)
     val surfaceMuted = Color(0xFFF8FAFC)
     val primary = Color(0xFF2563EB)
     val primaryDark = Color(0xFF1D4ED8)
     val primarySoft = Color(0xFFEFF6FF)
-    val ink = Color(0xFF0F172A)
+    val ink = Color(0xFF000000)
     val inkSecondary = Color(0xFF475569)
     val inkMuted = Color(0xFF94A3B8)
     val border = Color(0xFFE2E8F0)
@@ -80,8 +94,9 @@ private object FriendsPalette {
     val danger = Color(0xFFDC2626)
     val dangerSoft = Color(0xFFFEF2F2)
     val online = Color(0xFF22C55E)
-    val headerLine = Color(0xFFF1F5F9)
-    val searchFill = Color(0xFFF8FAFC)
+    val headerLine = Color(0xFFE7E7E7)
+    val toolbar = Color(0xFFF7F7F7)
+    val searchFill = Color(0xFFEDEDED)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +104,7 @@ private object FriendsPalette {
 fun FriendsScreen(
     viewModel: FriendsViewModel,
     onNavigateBack: () -> Unit,
+    onNavigateToChat: (peerPbId: String) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val linkState by viewModel.linkState.collectAsState()
@@ -99,8 +115,11 @@ fun FriendsScreen(
     val isSyncing by viewModel.isSyncing.collectAsState()
     val pbAuthToken by viewModel.pbAuthToken.collectAsState()
     val sessionReady by viewModel.sessionReady.collectAsState()
+    val conversations by viewModel.conversations.collectAsState()
     val toast by viewModel.toast.collectAsState()
+    var selectedTab by remember { mutableIntStateOf(1) }
     var searchQuery by remember { mutableStateOf("") }
+    var searchExpanded by remember { mutableStateOf(false) }
     var remarkDialogFriend by remember { mutableStateOf<FriendUiModel?>(null) }
     var remarkText by remember { mutableStateOf("") }
 
@@ -111,15 +130,25 @@ fun FriendsScreen(
         }
     }
 
+    // 进入页时自动尝试绑定一次（PocketBase 刚启动 / 换 WiFi 后常见）
+    LaunchedEffect(Unit) {
+        delay(400)
+        if (!sessionReady) viewModel.retryBootstrap()
+    }
+
     val readyState = uiState as? FriendsUiState.Ready
 
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
             FriendsTopBar(
-                friendCount = readyState?.friends?.size ?: 0,
                 pendingCount = (readyState?.pendingIn?.size ?: 0) + (readyState?.pendingOut?.size ?: 0),
                 isRefreshing = isSyncing,
+                searchExpanded = searchExpanded,
+                onSearchExpandedChange = { expanded ->
+                    searchExpanded = expanded
+                    if (!expanded) searchQuery = ""
+                },
                 searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it },
                 onSearch = { viewModel.searchUser(searchQuery) },
@@ -130,7 +159,14 @@ fun FriendsScreen(
                 onSendRequest = { viewModel.sendRequest(it) },
                 sendingToPbId = sendingToPbId,
                 pbAuthToken = pbAuthToken,
-                onBack = onNavigateBack,
+                onBack = {
+                    if (searchExpanded) {
+                        searchExpanded = false
+                        searchQuery = ""
+                    } else {
+                        onNavigateBack()
+                    }
+                },
                 onRefresh = {
                     if (linkState is SocialLinkState.Linked) viewModel.refresh()
                     else viewModel.retryBootstrap()
@@ -167,13 +203,37 @@ fun FriendsScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(bottom = 8.dp),
             ) {
                 if (linkState is SocialLinkState.Linking) {
                     item { ConnectingBanner() }
                 }
-                when (val state = uiState) {
+                item {
+                    FriendsSegmentTabs(
+                        selected = selectedTab,
+                        friendCount = readyState?.friends?.size ?: 0,
+                        messageCount = conversations.size,
+                        onSelect = { selectedTab = it },
+                    )
+                }
+                if (selectedTab == 1) {
+                    if (conversations.isEmpty()) {
+                        item { EmptyConversationsHint() }
+                    } else {
+                        items(
+                            conversations.size,
+                            key = { conversations[it].conversationId },
+                        ) { index ->
+                            val conv = conversations[index]
+                            WeChatConversationRow(
+                                conversation = conv,
+                                pbAuthToken = pbAuthToken,
+                                onClick = { onNavigateToChat(conv.peerPbId) },
+                                showDivider = index < conversations.lastIndex,
+                            )
+                        }
+                    }
+                } else when (val state = uiState) {
                     FriendsUiState.Loading -> Unit
                     is FriendsUiState.Error -> {
                         item {
@@ -187,13 +247,7 @@ fun FriendsScreen(
                     }
                     is FriendsUiState.Ready -> {
                         if (state.pendingIn.isNotEmpty()) {
-                            item {
-                                SectionHeader(
-                                    title = "待处理请求",
-                                    badge = state.pendingIn.size.toString(),
-                                    badgeColor = FriendsPalette.warning,
-                                )
-                            }
+                            item { WeChatSectionLabel("新的朋友") }
                             items(state.pendingIn, key = { "in_${it.friendshipId}" }) { f ->
                                 PendingRequestCard(
                                     friend = f,
@@ -205,38 +259,27 @@ fun FriendsScreen(
                             }
                         }
                         if (state.pendingOut.isNotEmpty()) {
-                            item {
-                                SectionHeader(
-                                    title = "等待对方确认",
-                                    badge = state.pendingOut.size.toString(),
-                                    badgeColor = FriendsPalette.primary,
-                                )
-                            }
+                            item { WeChatSectionLabel("等待对方确认") }
                             items(state.pendingOut, key = { "out_${it.friendshipId}" }) { f ->
-                                FriendListCard(
+                                WeChatFriendRow(
                                     friend = f,
                                     showPending = true,
                                     pbAuthToken = pbAuthToken,
+                                    onClick = {},
                                     onDelete = { viewModel.removeFriend(f.friendshipId) },
-                                    onRemark = {},
                                 )
                             }
                         }
-                        item {
-                            SectionHeader(
-                                title = "我的好友",
-                                badge = state.friends.size.toString(),
-                                badgeColor = FriendsPalette.success,
-                            )
-                        }
+                        item { WeChatSectionLabel("我的好友 ${state.friends.size}") }
                         if (state.friends.isEmpty()) {
                             item { EmptyFriendsHint() }
                         } else {
                             items(state.friends, key = { it.friendshipId }) { f ->
-                                FriendListCard(
+                                WeChatFriendRow(
                                     friend = f,
                                     showPending = false,
                                     pbAuthToken = pbAuthToken,
+                                    onClick = { onNavigateToChat(f.friendPbId) },
                                     onDelete = { viewModel.removeFriend(f.friendshipId) },
                                     onRemark = {
                                         remarkDialogFriend = f
@@ -310,9 +353,10 @@ fun FriendsScreen(
 
 @Composable
 private fun FriendsTopBar(
-    friendCount: Int,
     pendingCount: Int,
     isRefreshing: Boolean,
+    searchExpanded: Boolean,
+    onSearchExpandedChange: (Boolean) -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -326,93 +370,153 @@ private fun FriendsTopBar(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+    val searchFocus = remember { FocusRequester() }
+
+    LaunchedEffect(searchExpanded) {
+        if (searchExpanded) {
+            delay(120)
+            searchFocus.requestFocus()
+        } else {
+            focusManager.clearFocus()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 3.dp, spotColor = Color(0x1A0F172A))
-            .background(
-                Brush.verticalGradient(
-                    listOf(FriendsPalette.surface, FriendsPalette.headerLine),
-                ),
-            )
+            .background(FriendsPalette.toolbar)
             .statusBarsPadding(),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                .height(48.dp)
+                .padding(horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToolIconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "返回", tint = FriendsPalette.ink, modifier = Modifier.size(18.dp))
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("好友", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = FriendsPalette.ink, letterSpacing = 0.3.sp)
-                    BetaBadge()
-                }
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MiniStatPill("好友", friendCount, FriendsPalette.primary)
-                    MiniStatPill("待办", pendingCount, FriendsPalette.warning)
-                }
-            }
-            ToolIconButton(onClick = onRefresh, enabled = !isRefreshing) {
-                if (isRefreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = FriendsPalette.primary,
-                    )
-                } else {
-                    Icon(Icons.Default.Refresh, "刷新", tint = FriendsPalette.primary, modifier = Modifier.size(18.dp))
-                }
-            }
-        }
-        EnterpriseSearchBar(
-            query = searchQuery,
-            onQueryChange = onSearchQueryChange,
-            onSearch = onSearch,
-            searchEnabled = searchEnabled,
-            isSearching = isSearching,
-            sessionReady = sessionReady,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
-        )
-        if (!sessionReady) {
-            Text(
-                "正在连接社交服务… 搜索时将自动重试",
-                fontSize = 11.sp,
-                color = FriendsPalette.warning,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-            )
-        }
-        AnimatedVisibility(
-            visible = searchResult != null,
-            enter = fadeIn() + slideInVertically { -it / 3 },
-        ) {
-            searchResult?.let { profile ->
-                SearchResultRow(
-                    profile = profile,
-                    isSending = sendingToPbId == profile.id,
-                    sendEnabled = sendingToPbId == null,
-                    pbAuthToken = pbAuthToken,
-                    onAdd = { onSendRequest(profile) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            WeChatHeaderIconButton(onClick = onBack) {
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = FriendsPalette.ink,
+                    modifier = Modifier.size(22.dp),
                 )
             }
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        "好友",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = FriendsPalette.ink,
+                    )
+                    if (pendingCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(FriendsPalette.warning),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (pendingCount > 9) "9+" else pendingCount.toString(),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+            WeChatHeaderIconButton(
+                onClick = {
+                    if (searchExpanded) {
+                        onSearchExpandedChange(false)
+                    } else {
+                        onSearchExpandedChange(true)
+                    }
+                },
+            ) {
+                Icon(
+                    if (searchExpanded) Icons.Default.Close else Icons.Outlined.Search,
+                    contentDescription = if (searchExpanded) "关闭搜索" else "搜索好友",
+                    tint = FriendsPalette.ink,
+                    modifier = Modifier.size(if (searchExpanded) 20.dp else 22.dp),
+                )
+            }
+            WeChatHeaderIconButton(onClick = onRefresh, enabled = !isRefreshing) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = FriendsPalette.inkSecondary,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "刷新",
+                        tint = FriendsPalette.inkSecondary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
         }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(FriendsPalette.border.copy(alpha = 0.7f)),
-        )
+
+        AnimatedVisibility(
+            visible = searchExpanded,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+            ) {
+                EnterpriseSearchBar(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange,
+                    onSearch = onSearch,
+                    searchEnabled = searchEnabled,
+                    isSearching = isSearching,
+                    sessionReady = sessionReady,
+                    focusRequester = searchFocus,
+                )
+                if (!sessionReady) {
+                    SocialConnectionHint(
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                AnimatedVisibility(
+                    visible = searchResult != null,
+                    enter = fadeIn() + slideInVertically { -it / 3 },
+                ) {
+                    searchResult?.let { profile ->
+                        SearchResultRow(
+                            profile = profile,
+                            isSending = sendingToPbId == profile.id,
+                            sendEnabled = sendingToPbId == null,
+                            pbAuthToken = pbAuthToken,
+                            onAdd = { onSendRequest(profile) },
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        Divider(color = FriendsPalette.headerLine, thickness = 0.5.dp)
     }
 }
 
 @Composable
-private fun ToolIconButton(
+private fun WeChatHeaderIconButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     content: @Composable () -> Unit,
@@ -420,49 +524,9 @@ private fun ToolIconButton(
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(FriendsPalette.surfaceMuted)
-            .border(1.dp, FriendsPalette.border.copy(alpha = 0.8f), RoundedCornerShape(10.dp)),
+        modifier = Modifier.size(44.dp),
     ) {
         content()
-    }
-}
-
-@Composable
-private fun BetaBadge() {
-    Text(
-        "BETA",
-        fontSize = 9.sp,
-        fontWeight = FontWeight.Bold,
-        color = FriendsPalette.primary,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(FriendsPalette.primary.copy(alpha = 0.1f))
-            .border(1.dp, FriendsPalette.primary.copy(alpha = 0.22f), RoundedCornerShape(4.dp))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    )
-}
-
-@Composable
-private fun MiniStatPill(label: String, count: Int, accent: Color) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(accent.copy(alpha = 0.08f))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(label, fontSize = 10.sp, color = FriendsPalette.inkMuted)
-        Text(
-            count.toString(),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = accent,
-        )
     }
 }
 
@@ -474,73 +538,82 @@ private fun EnterpriseSearchBar(
     searchEnabled: Boolean,
     isSearching: Boolean,
     sessionReady: Boolean,
+    focusRequester: FocusRequester = FocusRequester(),
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val placeholder = "搜索 一十 用户名"
+    val shape = RoundedCornerShape(8.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
-            .shadow(elevation = 1.dp, shape = shape, spotColor = Color(0x120F172A))
+            .height(38.dp)
             .clip(shape)
             .background(FriendsPalette.searchFill)
-            .border(1.dp, FriendsPalette.border, shape)
-            .padding(start = 12.dp, end = 4.dp),
+            .padding(start = 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Outlined.Search, null, tint = FriendsPalette.inkMuted, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
+        Icon(Icons.Outlined.Search, null, tint = FriendsPalette.previewText, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
         Text(
             "@",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = FriendsPalette.primary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = FriendsPalette.inkSecondary,
         )
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(2.dp))
         BasicTextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester),
             singleLine = true,
-            textStyle = TextStyle(fontSize = 14.sp, color = FriendsPalette.ink),
+            textStyle = TextStyle(fontSize = 15.sp, color = FriendsPalette.ink),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { if (searchEnabled) onSearch() }),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
-                        Text("搜索 FunLife 用户名", fontSize = 14.sp, color = FriendsPalette.inkMuted)
+                        Text(placeholder, fontSize = 15.sp, color = FriendsPalette.previewText)
                     }
                     inner()
                 }
             },
         )
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 8.dp)
-                .width(1.dp)
-                .height(22.dp)
-                .background(FriendsPalette.border),
-        )
+        if (query.isNotEmpty()) {
+            IconButton(
+                onClick = { onQueryChange("") },
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "清空",
+                    tint = FriendsPalette.previewText,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
         TextButton(
             onClick = onSearch,
             enabled = searchEnabled,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-            modifier = Modifier.height(34.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+            modifier = Modifier.height(32.dp),
         ) {
             if (isSearching) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
-                    color = FriendsPalette.primary,
+                    color = FriendsPalette.success,
                 )
             } else {
                 Text(
                     "搜索",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
                     color = when {
                         !sessionReady -> FriendsPalette.warning
-                        else -> FriendsPalette.primary
+                        searchEnabled -> FriendsPalette.success
+                        else -> FriendsPalette.previewText
                     },
                 )
             }
@@ -627,19 +700,13 @@ private fun SearchResultRow(
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(8.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(2.dp, shape, spotColor = FriendsPalette.primary.copy(alpha = 0.12f))
             .clip(shape)
-            .background(
-                Brush.horizontalGradient(
-                    listOf(FriendsPalette.primarySoft, FriendsPalette.surface),
-                ),
-            )
-            .border(1.dp, FriendsPalette.primary.copy(alpha = 0.15f), shape)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .background(FriendsPalette.listRow)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AvatarBubble(
@@ -664,12 +731,12 @@ private fun SearchResultRow(
         Button(
             onClick = onAdd,
             enabled = sendEnabled && !isSending,
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-            modifier = Modifier.height(36.dp),
+            shape = RoundedCornerShape(6.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            modifier = Modifier.height(34.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = FriendsPalette.primary,
-                disabledContainerColor = FriendsPalette.primary.copy(alpha = 0.4f),
+                containerColor = FriendsPalette.success,
+                disabledContainerColor = FriendsPalette.success.copy(alpha = 0.4f),
             ),
         ) {
             if (isSending) {
@@ -800,54 +867,312 @@ private fun PendingRequestCard(
 }
 
 @Composable
-private fun FriendListCard(
-    friend: FriendUiModel,
-    showPending: Boolean,
-    pbAuthToken: String?,
-    onDelete: () -> Unit,
-    onRemark: () -> Unit,
+private fun FriendsSegmentTabs(
+    selected: Int,
+    friendCount: Int,
+    messageCount: Int,
+    onSelect: (Int) -> Unit,
 ) {
-    val displayName = if (friend.remark.isNotBlank()) friend.remark else friend.displayName
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(1.dp, RoundedCornerShape(12.dp), spotColor = Color(0x0A0F172A))
-            .clip(RoundedCornerShape(12.dp))
-            .background(FriendsPalette.surface)
-            .border(1.dp, FriendsPalette.border.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onRemark)
-            .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(FriendsPalette.listRow)
+            .padding(horizontal = 8.dp),
     ) {
-        AvatarBubble(displayName, friend.avatarUrl, 40.dp, showOnline = false, pbAuthToken)
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(displayName, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = FriendsPalette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (showPending) {
-                    Text(
-                        "待确认",
-                        fontSize = 10.sp,
-                        color = FriendsPalette.primary,
-                        modifier = Modifier
-                            .padding(start = 6.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(FriendsPalette.primarySoft)
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                    )
+        WeChatTabItem(
+            label = "消息",
+            badge = messageCount,
+            selected = selected == 1,
+            onClick = { onSelect(1) },
+            modifier = Modifier.weight(1f),
+        )
+        WeChatTabItem(
+            label = "通讯录",
+            badge = friendCount,
+            selected = selected == 0,
+            onClick = { onSelect(0) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Divider(color = FriendsPalette.listDivider, thickness = 0.5.dp)
+}
+
+@Composable
+private fun WeChatTabItem(
+    label: String,
+    badge: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(top = 12.dp, bottom = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = if (badge > 0) "$label ($badge)" else label,
+            fontSize = 15.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) FriendsPalette.ink else FriendsPalette.previewText,
+        )
+        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier
+                .height(2.dp)
+                .width(28.dp)
+                .clip(RoundedCornerShape(1.dp))
+                .background(if (selected) FriendsPalette.success else Color.Transparent),
+        )
+    }
+}
+
+@Composable
+private fun WeChatSectionLabel(title: String) {
+    Text(
+        text = title,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FriendsPalette.sectionBg)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        fontSize = 13.sp,
+        color = FriendsPalette.sectionText,
+    )
+}
+
+@Composable
+private fun WeChatConversationRow(
+    conversation: ConversationUiModel,
+    pbAuthToken: String?,
+    onClick: () -> Unit,
+    showDivider: Boolean,
+) {
+    WeChatListRow(
+        name = conversation.peerDisplayName,
+        avatarUrl = conversation.peerAvatarUrl,
+        pbAuthToken = pbAuthToken,
+        title = conversation.peerDisplayName,
+        subtitle = if (conversation.lastPreview.isBlank()) "暂无消息" else conversation.lastPreview,
+        timeText = if (conversation.lastMessageAt > 0L) {
+            formatWeChatListTime(conversation.lastMessageAt)
+        } else {
+            null
+        },
+        onClick = onClick,
+        showDivider = showDivider,
+    )
+}
+
+@Composable
+private fun WeChatFriendRow(
+    friend: FriendUiModel,
+    showPending: Boolean,
+    pbAuthToken: String?,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onRemark: (() -> Unit)? = null,
+) {
+    val displayName = if (friend.remark.isNotBlank()) friend.remark else friend.displayName
+    val subtitle = if (showPending) "等待对方确认" else "@${friend.funlifeUsername}"
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(FriendsPalette.listRow)
+                .clickable(onClick = onClick)
+                .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WeChatAvatar(displayName, friend.avatarUrl, pbAuthToken)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    displayName,
+                    fontSize = 17.sp,
+                    color = FriendsPalette.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    subtitle,
+                    fontSize = 14.sp,
+                    color = FriendsPalette.previewText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onRemark != null) {
+                IconButton(onClick = onRemark, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Edit, "备注", tint = FriendsPalette.previewText, modifier = Modifier.size(18.dp))
                 }
             }
-            Text("@${friend.funlifeUsername}", fontSize = 11.sp, color = FriendsPalette.inkMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (!showPending) {
-            IconButton(onClick = onRemark, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Edit, "备注", tint = FriendsPalette.inkMuted, modifier = Modifier.size(18.dp))
+            IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Outlined.DeleteOutline, "删除", tint = FriendsPalette.previewText, modifier = Modifier.size(18.dp))
             }
         }
-        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Outlined.DeleteOutline, "删除", tint = FriendsPalette.inkMuted, modifier = Modifier.size(18.dp))
+        Divider(
+            modifier = Modifier.padding(start = 76.dp),
+            thickness = 0.5.dp,
+            color = FriendsPalette.listDivider,
+        )
+    }
+}
+
+@Composable
+private fun WeChatListRow(
+    name: String,
+    avatarUrl: String?,
+    pbAuthToken: String?,
+    title: String,
+    subtitle: String,
+    timeText: String?,
+    onClick: () -> Unit,
+    showDivider: Boolean,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(FriendsPalette.listRow)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WeChatAvatar(name, avatarUrl, pbAuthToken)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        title,
+                        modifier = Modifier.weight(1f),
+                        fontSize = 17.sp,
+                        color = FriendsPalette.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (timeText != null) {
+                        Text(
+                            timeText,
+                            fontSize = 12.sp,
+                            color = FriendsPalette.timeText,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    subtitle,
+                    fontSize = 14.sp,
+                    color = FriendsPalette.previewText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (showDivider) {
+            Divider(
+                modifier = Modifier.padding(start = 76.dp),
+                thickness = 0.5.dp,
+                color = FriendsPalette.listDivider,
+            )
         }
     }
+}
+
+@Composable
+private fun WeChatAvatar(
+    name: String,
+    url: String?,
+    pbAuthToken: String?,
+    size: androidx.compose.ui.unit.Dp = 48.dp,
+) {
+    val context = LocalContext.current
+    val initial = name.trim().take(1).uppercase().ifBlank { "?" }
+    val shape = RoundedCornerShape(4.dp)
+    val boxModifier = Modifier
+        .size(size)
+        .clip(shape)
+        .background(Color(0xFFCCCCCC))
+
+    @Composable
+    fun InitialPlaceholder() {
+        Box(
+            modifier = boxModifier.background(
+                Brush.linearGradient(listOf(FriendsPalette.primary, FriendsPalette.primaryDark)),
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(initial, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 18.sp)
+        }
+    }
+
+    if (!url.isNullOrBlank()) {
+        val needsAuth = url.contains("/api/files/") && !pbAuthToken.isNullOrBlank()
+        val model = remember(url, pbAuthToken) {
+            ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(true)
+                .apply {
+                    if (needsAuth) addHeader("Authorization", "Bearer $pbAuthToken")
+                }
+                .build()
+        }
+        SubcomposeAsyncImage(
+            model = model,
+            contentDescription = null,
+            modifier = boxModifier,
+            contentScale = ContentScale.Crop,
+            loading = { InitialPlaceholder() },
+            error = { InitialPlaceholder() },
+        )
+    } else {
+        InitialPlaceholder()
+    }
+}
+
+@Composable
+private fun EmptyConversationsHint() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("💬", fontSize = 36.sp)
+        Spacer(Modifier.height(8.dp))
+        Text("还没有聊天记录", fontSize = 14.sp, color = FriendsPalette.inkMuted)
+        Text("在「好友」里点 💬 开始聊天", fontSize = 12.sp, color = FriendsPalette.inkMuted)
+    }
+}
+
+private fun formatWeChatListTime(epochMs: Long): String {
+    if (epochMs <= 0L) return ""
+    val now = java.util.Calendar.getInstance()
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = epochMs }
+    fun isSameDay(a: java.util.Calendar, b: java.util.Calendar) =
+        a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR) &&
+            a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
+    if (isSameDay(now, cal)) {
+        return java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(epochMs))
+    }
+    val yesterday = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+    if (isSameDay(yesterday, cal)) return "昨天"
+    val weekAgo = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -6) }
+    if (epochMs >= weekAgo.timeInMillis) {
+        val weekdays = arrayOf("周日", "周一", "周二", "周三", "周四", "周五", "周六")
+        return weekdays[cal.get(java.util.Calendar.DAY_OF_WEEK) - 1]
+    }
+    if (cal.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR)) {
+        return java.text.SimpleDateFormat("M月d日", java.util.Locale.CHINA)
+            .format(java.util.Date(epochMs))
+    }
+    return java.text.SimpleDateFormat("yyyy年M月d日", java.util.Locale.CHINA)
+        .format(java.util.Date(epochMs))
 }
 
 @Composable
@@ -949,10 +1274,33 @@ private fun EmptyFriendsHint() {
             color = FriendsPalette.ink,
         )
         Text(
-            "在顶部搜索 @用户名 发送好友申请",
+            "点击右上角搜索图标，输入 @用户名 发送好友申请",
             fontSize = 13.sp,
             color = FriendsPalette.inkMuted,
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun SocialConnectionHint(modifier: Modifier = Modifier) {
+    val server = PocketBaseConfig.baseUrl()
+    Column(modifier = modifier) {
+        Text(
+            "手机暂时连不上社交服务器",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = FriendsPalette.warning,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "当前地址：$server\n" +
+                "· 开发：电脑运行 pocketbase\\start.ps1，手机与电脑同一 WiFi\n" +
+                "· 或 USB：adb reverse tcp:8090 tcp:8090，并把 POCKETBASE_URL 改为 http://127.0.0.1:8090\n" +
+                "· 长期：部署到公网 HTTPS（见 pocketbase/README.md）",
+            fontSize = 11.sp,
+            lineHeight = 16.sp,
+            color = FriendsPalette.inkMuted,
         )
     }
 }

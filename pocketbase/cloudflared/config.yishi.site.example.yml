@@ -1,0 +1,20 @@
+# Cloudflare Named Tunnel — FunLife PocketBase
+# 域名：yishi.site → pb.yishi.site
+#
+# 使用前：
+#   1. 在 Cloudflare 添加站点 yishi.site（改 NS 到 Cloudflare，或阿里云 DNS 仅 CNAME 到 CF）
+#   2. cloudflared tunnel login
+#   3. cloudflared tunnel create funlife-pb
+#   4. 将下方 <TUNNEL_UUID>、credentials 路径替换为实际值
+#   5. 复制到 %USERPROFILE%\.cloudflared\config.yml
+#
+# DNS 绑定：
+#   cloudflared tunnel route dns funlife-pb pb.yishi.site
+
+tunnel: <TUNNEL_UUID>
+credentials-file: C:\Users\<你的用户名>\.cloudflared\<TUNNEL_UUID>.json
+
+ingress:
+  - hostname: pb.yishi.site
+    service: http://127.0.0.1:8090
+  - service: http_status:404

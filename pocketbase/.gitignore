@@ -1,0 +1,9 @@
+# 本地推送密钥（自动生成，勿提交）
+secrets/
+secrets/*.json
+secrets/*.key
+secrets/push.env
+secrets/firebase-adminsdk.json
+
+# 本地工具依赖（npm install 生成）
+tools/**/node_modules/

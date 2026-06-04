@@ -78,6 +78,12 @@
     public *;
 }
 
+# ─── Firebase Cloud Messaging ───
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-keep class com.example.funlife.notifications.FunLifeFirebaseMessagingService { *; }
+-dontwarn com.google.firebase.**
+
 # ─── release 包剥离 error 级日志（极少数关键错误仍打到系统日志）───
 -assumenosideeffects class android.util.Log {
     public static *** e(...);

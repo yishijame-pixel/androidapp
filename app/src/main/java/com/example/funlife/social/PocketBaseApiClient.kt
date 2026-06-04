@@ -3,6 +3,8 @@ package com.example.funlife.social
 import android.content.Context
 import com.example.funlife.social.model.FriendshipDto
 import com.example.funlife.social.model.FriendshipStatus
+import com.example.funlife.social.model.ConversationDto
+import com.example.funlife.social.model.MessageDto
 import com.example.funlife.social.model.PbUserProfile
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -181,6 +183,122 @@ class PocketBaseApiClient(private val context: Context) {
         delete("$apiBase/collections/friendships/records/$friendshipId", token)
     }
 
+    // ── Phase 2: Conversations / Messages ───────────────────────────────
+
+    fun findConversationByPairKey(token: String, pairKey: String): ConversationDto? {
+        val filter = URLEncoder.encode(
+            "pair_key = '${escapeFilter(pairKey)}'",
+            StandardCharsets.UTF_8.name(),
+        )
+        val url = "$apiBase/collections/conversations/records?filter=$filter&perPage=1"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return null
+        if (items.size() == 0) return null
+        return parseConversation(items[0].asJsonObject)
+    }
+
+    fun createConversation(
+        token: String,
+        memberAId: String,
+        memberBId: String,
+        pairKey: String,
+    ): ConversationDto {
+        val body = mapOf(
+            "member_a" to memberAId,
+            "member_b" to memberBId,
+            "pair_key" to pairKey,
+            "last_preview" to "",
+            "last_message_at" to 0,
+        )
+        val json = postJson("$apiBase/collections/conversations/records", body, authToken = token)
+        return parseConversation(json)
+    }
+
+    fun findOrCreateConversation(
+        token: String,
+        myPbId: String,
+        peerPbId: String,
+    ): ConversationDto {
+        val pairKey = SocialChatUtils.computePairKey(myPbId, peerPbId)
+        findConversationByPairKey(token, pairKey)?.let { return it }
+        val (memberA, memberB) = SocialChatUtils.orderedMembers(myPbId, peerPbId)
+        return createConversation(token, memberA, memberB, pairKey)
+    }
+
+    fun listConversations(token: String, myPbId: String): List<ConversationDto> {
+        val filter = URLEncoder.encode(
+            "member_a = '$myPbId' || member_b = '$myPbId'",
+            StandardCharsets.UTF_8.name(),
+        )
+        val url = "$apiBase/collections/conversations/records?filter=$filter&perPage=100&sort=-last_message_at,-updated"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return emptyList()
+        return items.map { parseConversation(it.asJsonObject) }
+    }
+
+    fun listMessages(
+        token: String,
+        conversationId: String,
+        page: Int = 1,
+        perPage: Int = 50,
+    ): List<MessageDto> = listMessagesPage(token, conversationId, page, perPage).messages
+
+    /** 分页拉取；newestFirst=true 时 page=1 为最新一页（用于聊天同步）。 */
+    fun listMessagesPage(
+        token: String,
+        conversationId: String,
+        page: Int = 1,
+        perPage: Int = 50,
+        newestFirst: Boolean = true,
+    ): MessagePageResult {
+        val filter = URLEncoder.encode(
+            "conversation = '${escapeFilter(conversationId)}'",
+            StandardCharsets.UTF_8.name(),
+        )
+        val sort = if (newestFirst) "-created" else "created"
+        val url = "$apiBase/collections/messages/records?filter=$filter&perPage=$perPage&page=$page&sort=$sort"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return MessagePageResult(emptyList(), hasMore = false)
+        val currentPage = json.get("page")?.asInt ?: page
+        val totalPages = json.get("totalPages")?.asInt ?: 1
+        val messages = items.map { parseMessage(it.asJsonObject) }
+            .sortedBy { it.createdAt }
+        return MessagePageResult(
+            messages = messages,
+            hasMore = currentPage < totalPages,
+        )
+    }
+
+    fun sendMessage(
+        token: String,
+        conversationId: String,
+        senderPbId: String,
+        memberAId: String,
+        memberBId: String,
+        body: String,
+    ): MessageDto {
+        val payload = mapOf(
+            "conversation" to conversationId,
+            "member_a" to memberAId,
+            "member_b" to memberBId,
+            "sender" to senderPbId,
+            "body" to body,
+        )
+        val json = postJson("$apiBase/collections/messages/records", payload, authToken = token)
+        val message = parseMessage(json)
+        runCatching {
+            patchJson(
+                "$apiBase/collections/conversations/records/$conversationId",
+                mapOf(
+                    "last_preview" to SocialChatUtils.previewText(body),
+                    "last_message_at" to message.createdAt,
+                ),
+                authToken = token,
+            )
+        }
+        return message
+    }
+
     // ── HTTP helpers ───────────────────────────────────────────────────
 
     private fun getJson(url: String, token: String): JsonObject {
@@ -297,6 +415,30 @@ class PocketBaseApiClient(private val context: Context) {
         }
     }
 
+    private fun parseConversation(obj: JsonObject): ConversationDto {
+        return ConversationDto(
+            id = obj.get("id").asString,
+            memberAId = relationId(obj.get("member_a")).orEmpty(),
+            memberBId = relationId(obj.get("member_b")).orEmpty(),
+            pairKey = obj.get("pair_key")?.asString.orEmpty(),
+            lastPreview = obj.get("last_preview")?.asString.orEmpty(),
+            lastMessageAt = obj.get("last_message_at")?.asLong ?: 0L,
+        )
+    }
+
+    private fun parseMessage(obj: JsonObject): MessageDto {
+        val createdRaw = obj.get("created")?.asString
+        val createdAt = SocialChatUtils.parseCreatedAt(createdRaw)
+            .takeIf { it > 0L } ?: System.currentTimeMillis()
+        return MessageDto(
+            id = obj.get("id").asString,
+            conversationId = relationId(obj.get("conversation")).orEmpty(),
+            senderPbId = relationId(obj.get("sender")).orEmpty(),
+            body = obj.get("body")?.asString.orEmpty(),
+            createdAt = createdAt,
+        )
+    }
+
     private fun fileUrlForRecord(collection: String, recordId: String, fileName: String): String {
         val base = PocketBaseConfig.baseUrl()
         return if (fileName.startsWith("http")) fileName else "$base/api/files/$collection/$recordId/$fileName"
@@ -316,3 +458,8 @@ class PocketBaseApiClient(private val context: Context) {
 }
 
 class PocketBaseApiException(val code: Int, message: String) : Exception(message)
+
+data class MessagePageResult(
+    val messages: List<MessageDto>,
+    val hasMore: Boolean,
+)

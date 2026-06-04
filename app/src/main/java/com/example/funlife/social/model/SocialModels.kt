@@ -58,3 +58,54 @@ sealed class FriendsUiState {
     ) : FriendsUiState()
     data class Error(val message: String) : FriendsUiState()
 }
+
+data class ConversationDto(
+    val id: String,
+    val memberAId: String,
+    val memberBId: String,
+    val pairKey: String,
+    val lastPreview: String,
+    val lastMessageAt: Long,
+)
+
+data class MessageDto(
+    val id: String,
+    val conversationId: String,
+    val senderPbId: String,
+    val body: String,
+    val createdAt: Long,
+)
+
+data class ChatMessageUiModel(
+    val id: String,
+    val body: String,
+    val isMine: Boolean,
+    val createdAt: Long,
+)
+
+data class ChatPeerProfile(
+    val pbId: String,
+    val funlifeUsername: String,
+    val displayName: String,
+    val avatarUrl: String?,
+)
+
+data class ConversationUiModel(
+    val conversationId: String,
+    val peerPbId: String,
+    val peerDisplayName: String,
+    val peerUsername: String,
+    val peerAvatarUrl: String?,
+    val lastPreview: String,
+    val lastMessageAt: Long,
+)
+
+sealed class ChatUiState {
+    data object Loading : ChatUiState()
+    data class Ready(
+        val conversationId: String,
+        val peer: ChatPeerProfile,
+        val messages: List<ChatMessageUiModel>,
+    ) : ChatUiState()
+    data class Error(val message: String) : ChatUiState()
+}

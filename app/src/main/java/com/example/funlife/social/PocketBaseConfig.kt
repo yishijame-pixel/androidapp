@@ -15,5 +15,8 @@ object PocketBaseConfig {
         return true
     }
 
+    /** 公网 HTTPS（经 Cloudflare 隧道）比局域网慢，需更长超时 */
+    fun isRemote(): Boolean = baseUrl().startsWith("https://")
+
     fun apiBase(): String = baseUrl() + "/api"
 }

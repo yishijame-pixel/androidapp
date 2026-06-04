@@ -37,7 +37,11 @@ class FriendsInteractor(
             SocialOperationGate.warmCredentials(appCtx, userId)
         }
         SocialSessionManager.warmStartAsync(appCtx)
-        return syncFriends(forceSession = false)
+        val friendsResult = syncFriends(forceSession = false)
+        friendsResult.onSuccess {
+            runCatching { ChatInteractor(appCtx, userId).syncConversations() }
+        }
+        return friendsResult
     }
 
     suspend fun peekCredentials(): SocialCredentials? =
@@ -113,4 +117,10 @@ class FriendsInteractor(
 
     suspend fun updateRemark(friendPbId: String, remark: String): Result<Unit> =
         friendsRepo.updateRemark(userId, friendPbId, remark)
+
+    fun observeConversations(): Flow<List<com.example.funlife.social.model.ConversationUiModel>> =
+        ChatInteractor(appCtx, userId).observeConversations()
+
+    suspend fun syncConversations(): Result<Unit> =
+        ChatInteractor(appCtx, userId).syncConversations()
 }

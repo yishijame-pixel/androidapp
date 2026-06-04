@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.UserSession
+import com.example.funlife.notifications.FcmPushBootstrap
 import com.example.funlife.notifications.FriendRequestExpeditedWorker
 import com.example.funlife.repository.SocialLinkRepository
 import com.example.funlife.social.model.SocialLinkState
@@ -85,7 +86,10 @@ object SocialSessionManager {
 
     fun warmStartAsync(ctx: Context) {
         if (!PocketBaseConfig.isEnabled()) return
-        scope.launch { warmStart(ctx) }
+        scope.launch {
+            runCatching { warmStart(ctx) }
+                .onFailure { Log.w(TAG, "warmStart failed: ${it.message}") }
+        }
     }
 
     /** 登录 / 冷启动：优先本地缓存，再启动推送栈 */
@@ -98,9 +102,9 @@ object SocialSessionManager {
 
         if (isLinked(appCtx, userId)) {
             hydrateFromDisk(appCtx, userId)
-            startPushStack(appCtx)
+            startPushStackAndSync(appCtx, userId)
             SocialInboxSync.syncNow(appCtx, force = true)
-            SocialPushTokenRegistry.syncToServerAsync(appCtx, userId)
+            scope.launch { SocialChatInbound.syncActiveConversations(appCtx, userId) }
             return
         }
 
@@ -120,7 +124,7 @@ object SocialSessionManager {
 
         if (isLinked(appCtx, session.userId)) {
             hydrateFromDisk(appCtx, session.userId)
-            startPushStack(appCtx)
+            startPushStackAndSync(appCtx, session.userId)
             return true
         }
 
@@ -137,7 +141,8 @@ object SocialSessionManager {
         if (linked) {
             hydrateFromDisk(appCtx, session.userId)
             startPushStack(appCtx)
-            SocialInboxSync.syncNow(appCtx, force = true)
+            runCatching { SocialInboxSync.syncNow(appCtx, force = true) }
+                .onFailure { Log.w(TAG, "inbox sync failed: ${it.message}") }
             SocialPushTokenRegistry.syncToServerAsync(appCtx, session.userId)
             cancelLinkRetry()
             return true
@@ -192,9 +197,17 @@ object SocialSessionManager {
         if (!PocketBaseConfig.isEnabled()) return
         val appCtx = ctx.applicationContext
         scope.launch {
-            Log.d(TAG, "network restored — restart realtime + force sync")
-            FriendRealtimeHub.restart(appCtx)
-            SocialInboxSync.syncNow(appCtx, force = true)
+            delay(1_500L)
+            Log.d(TAG, "network restored — sync + ensure realtime")
+            if (SocialSessionManager.snapshot.value.realtime != RealtimePhase.LIVE) {
+                FriendRealtimeHub.restart(appCtx)
+            }
+            runCatching { SocialInboxSync.syncNow(appCtx, force = true) }
+                .onFailure { Log.w(TAG, "inbox sync failed: ${it.message}") }
+            runCatching {
+                val userId = UserSessionManager(appCtx).getCurrentUserId()
+                if (userId > 0L) SocialChatInbound.syncActiveConversations(appCtx, userId)
+            }.onFailure { Log.w(TAG, "chat sync failed: ${it.message}") }
             FriendRequestExpeditedWorker.enqueue(appCtx)
         }
     }
@@ -249,9 +262,15 @@ object SocialSessionManager {
 
     private fun startPushStack(ctx: Context) {
         val appCtx = ctx.applicationContext
+        FcmPushBootstrap.initAsync(appCtx)
         FriendRealtimeHub.restart(appCtx)
         SocialNetworkMonitor.register(appCtx)
         FriendRequestExpeditedWorker.enqueue(appCtx)
+    }
+
+    private fun startPushStackAndSync(ctx: Context, userId: Long) {
+        startPushStack(ctx)
+        SocialPushTokenRegistry.syncToServerAsync(ctx, userId)
     }
 
     private fun stopPushStack(ctx: Context) {

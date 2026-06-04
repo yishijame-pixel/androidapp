@@ -19,6 +19,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.repository.CoinRepository
 import com.example.funlife.repository.PetRepository
@@ -153,6 +155,9 @@ sealed class Screen(val route: String, val title: String) {
     object ReaderDna : Screen("reader_dna", "读者 DNA")
     object PostcardDrift : Screen("postcard_drift", "明信片漂流")
     object Friends : Screen("friends", "好友")
+    object FriendChat : Screen("friend_chat/{peerPbId}", "私聊") {
+        fun routeWith(peerPbId: String) = "friend_chat/$peerPbId"
+    }
     // 🆕 v55 古籍日记本
     object DiaryBook : Screen("diary_book", "日记本")
     object DiaryBookFull : Screen("diary_book_full", "日记本")
@@ -423,7 +428,7 @@ fun NavGraph(
                         return com.example.funlife.viewmodel.FriendsViewModel(
                             application = context.applicationContext as android.app.Application,
                             currentUserId = userSession.userId,
-                            funlifeUsername = userSession.username,
+                            myFunlifeUsername = userSession.username,
                             displayName = userSession.nickname.ifBlank { userSession.username },
                         ) as T
                     }
@@ -431,6 +436,49 @@ fun NavGraph(
             )
             FriendsScreen(
                 viewModel = friendsViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToChat = { peerPbId ->
+                    navController.safeNavigate(Screen.FriendChat.routeWith(peerPbId), context)
+                },
+            )
+        }
+
+        composable(
+            route = Screen.FriendChat.route,
+            arguments = listOf(navArgument("peerPbId") { type = NavType.StringType }),
+        ) {
+            val context = LocalContext.current
+            val userSession = authViewModel.getCurrentSession()
+            val peerPbId = it.arguments?.getString("peerPbId").orEmpty()
+            if (peerPbId.isBlank()) {
+                LoadingFallback("无效的会话")
+                LaunchedEffect(Unit) { navController.popBackStack() }
+                return@composable
+            }
+            if (userSession == null) {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+                return@composable
+            }
+            val chatViewModel: com.example.funlife.viewmodel.FriendChatViewModel = viewModel(
+                key = "friend_chat_${userSession.userId}_$peerPbId",
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        @Suppress("UNCHECKED_CAST")
+                        return com.example.funlife.viewmodel.FriendChatViewModel(
+                            application = context.applicationContext as android.app.Application,
+                            currentUserId = userSession.userId,
+                            peerPbId = peerPbId,
+                        ) as T
+                    }
+                },
+            )
+            FriendChatScreen(
+                viewModel = chatViewModel,
                 onNavigateBack = { navController.popBackStack() },
             )
         }

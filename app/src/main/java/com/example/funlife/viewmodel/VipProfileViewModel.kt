@@ -11,6 +11,8 @@ import com.example.funlife.utils.AvatarStorageHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class VipProfileViewModel(
@@ -51,9 +53,12 @@ class VipProfileViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
     
+    private val avatarUpdateMutex = Mutex()
+
     init {
         loadUserStatistics()
         loadAvailableItems()
+        repairStaleAvatarIfNeeded()
     }
     
     /**
@@ -90,45 +95,70 @@ class VipProfileViewModel(
         }
     }
     
+    private fun repairStaleAvatarIfNeeded() {
+        viewModelScope.launch {
+            try {
+                val current = profileRepository.getUserAvatar(userId).first() ?: return@launch
+                val uri = current.avatarUri ?: return@launch
+                if (AvatarStorageHelper.isLocalAvatarUri(uri) &&
+                    !AvatarStorageHelper.isAvatarExists(context, uri)
+                ) {
+                    profileRepository.updateAvatarUri(userId, null)
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("VipProfileViewModel", "头像记录修复跳过", e)
+            }
+        }
+    }
+
     /**
      * 更新头像URI
      * 将外部URI的图片复制到内部存储
      */
     fun updateAvatarUri(uri: Uri?) {
         viewModelScope.launch {
-            try {
-                if (uri == null) {
-                    // 清除头像
-                    profileRepository.updateAvatarUri(userId, null)
-                    _message.value = "头像已清除"
-                    return@launch
-                }
-                
-                // 在IO线程中保存头像到内部存储
-                val internalUri = withContext(Dispatchers.IO) {
-                    AvatarStorageHelper.saveAvatarToInternalStorage(
-                        context = context,
-                        sourceUri = uri,
-                        userId = userId
-                    )
-                }
-                
-                if (internalUri != null) {
-                    // 更新数据库中的URI
-                    profileRepository.updateAvatarUri(userId, internalUri)
-                    runCatching {
-                        com.example.funlife.repository.SocialLinkRepository(
-                            context.applicationContext,
-                            (context.applicationContext as com.example.funlife.FunLifeApplication).database.socialDao(),
-                        ).syncAvatarToPocketBase(userId)
+            avatarUpdateMutex.withLock {
+                try {
+                    if (uri == null) {
+                        val oldUri = profileRepository.getUserAvatar(userId).first()?.avatarUri
+                        profileRepository.updateAvatarUri(userId, null)
+                        withContext(Dispatchers.IO) {
+                            AvatarStorageHelper.deleteAvatarFile(context, oldUri)
+                        }
+                        _message.value = "头像已清除"
+                        return@withLock
                     }
-                    _message.value = "头像更新成功"
-                } else {
-                    _message.value = "头像保存失败，请重试"
+
+                    val oldUri = profileRepository.getUserAvatar(userId).first()?.avatarUri
+                    val internalUri = withContext(Dispatchers.IO) {
+                        AvatarStorageHelper.saveAvatarToInternalStorage(
+                            context = context,
+                            sourceUri = uri,
+                            userId = userId,
+                        )
+                    }
+
+                    if (internalUri != null) {
+                        profileRepository.updateAvatarUri(userId, internalUri)
+                        withContext(Dispatchers.IO) {
+                            if (!oldUri.isNullOrBlank() && oldUri != internalUri) {
+                                AvatarStorageHelper.deleteAvatarFile(context, oldUri)
+                            }
+                        }
+                        runCatching {
+                            com.example.funlife.repository.SocialLinkRepository(
+                                context.applicationContext,
+                                (context.applicationContext as com.example.funlife.FunLifeApplication).database.socialDao(),
+                            ).syncAvatarToPocketBase(userId)
+                        }
+                        _message.value = "头像更新成功"
+                    } else {
+                        _message.value = "头像保存失败，请重试"
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("VipProfileViewModel", "头像更新失败", e)
+                    _message.value = "头像更新失败，请重试"
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("VipProfileViewModel", "头像更新失败", e)
-                _message.value = "头像更新失败，请重试"
             }
         }
     }

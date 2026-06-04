@@ -16,11 +16,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.math.min
 
 /**
- * 应用级 PocketBase Realtime：好友申请秒级感知（App 进程存活时）。
- * 指数退避重连 + 连接态上报 [SocialSessionManager]。
+ * 应用级 PocketBase Realtime：好友申请 + 私聊消息即时感知。
  */
 object FriendRealtimeHub {
 
@@ -29,45 +30,19 @@ object FriendRealtimeHub {
     private const val BACKOFF_MAX_MS = 30_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val restartMutex = Mutex()
     private var listenJob: Job? = null
     private var backoffMs = BACKOFF_INITIAL_MS
 
     fun restart(ctx: Context) {
         if (!PocketBaseConfig.isEnabled()) return
-        stop()
-        listenJob = scope.launch {
-            val appCtx = ctx.applicationContext
-            backoffMs = BACKOFF_INITIAL_MS
-            while (isActive) {
-                val userId = runCatching { UserSessionManager(appCtx).getCurrentUserId() }
-                    .getOrDefault(0L)
-                if (userId <= 0L) {
-                    SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.OFF)
-                    delay(BACKOFF_INITIAL_MS)
-                    continue
+        scope.launch {
+            restartMutex.withLock {
+                if (listenJob?.isActive == true) {
+                    Log.d(TAG, "restart skipped: session already active")
+                    return@launch
                 }
-                if (!SocialSessionManager.isLinked(appCtx, userId)) {
-                    SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.OFF)
-                    SocialSessionManager.warmStartAsync(appCtx)
-                    delay(BACKOFF_INITIAL_MS)
-                    continue
-                }
-                SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.CONNECTING)
-                try {
-                    runSession(appCtx, userId)
-                    backoffMs = BACKOFF_INITIAL_MS
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Realtime session ended: ${e.message}")
-                    SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.BACKOFF)
-                    delay(backoffMs)
-                    backoffMs = min(backoffMs * 2, BACKOFF_MAX_MS)
-                    continue
-                }
-                SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.BACKOFF)
-                delay(backoffMs)
-                backoffMs = min(backoffMs * 2, BACKOFF_MAX_MS)
+                listenJob = scope.launch { listenLoop(ctx.applicationContext) }
             }
         }
     }
@@ -76,6 +51,41 @@ object FriendRealtimeHub {
         listenJob?.cancel()
         listenJob = null
         SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.OFF)
+    }
+
+    private suspend fun listenLoop(appCtx: Context) {
+        backoffMs = BACKOFF_INITIAL_MS
+        while (scope.isActive) {
+            val userId = runCatching { UserSessionManager(appCtx).getCurrentUserId() }
+                .getOrDefault(0L)
+            if (userId <= 0L) {
+                SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.OFF)
+                delay(BACKOFF_INITIAL_MS)
+                continue
+            }
+            if (!SocialSessionManager.isLinked(appCtx, userId)) {
+                SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.OFF)
+                SocialSessionManager.warmStartAsync(appCtx)
+                delay(BACKOFF_INITIAL_MS)
+                continue
+            }
+            SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.CONNECTING)
+            try {
+                runSession(appCtx, userId)
+                backoffMs = BACKOFF_INITIAL_MS
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Realtime session ended: ${e.message}")
+                SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.BACKOFF)
+                delay(backoffMs)
+                backoffMs = min(backoffMs * 2, BACKOFF_MAX_MS)
+                continue
+            }
+            SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.BACKOFF)
+            delay(backoffMs)
+            backoffMs = min(backoffMs * 2, BACKOFF_MAX_MS)
+        }
     }
 
     private suspend fun runSession(ctx: Context, userId: Long) {
@@ -88,7 +98,7 @@ object FriendRealtimeHub {
         val realtime = PocketBaseRealtimeClient()
 
         SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.LIVE)
-        realtime.listenFriendships(
+        realtime.listenSocial(
             authToken = token,
             myPbId = myPbId,
             onIncomingRequest = { incoming ->
@@ -100,6 +110,14 @@ object FriendRealtimeHub {
                     SocialInboxSync.syncNowAsync(ctx, force = true)
                     SocialSessionManager.onSyncCompleted()
                 }
+            },
+            onIncomingMessage = { dto, senderName, senderUsername ->
+                runCatching {
+                    SocialChatInbound.onIncomingMessage(
+                        ctx, userId, myPbId, dto, senderName, senderUsername,
+                    )
+                }
+                SocialSessionManager.onSyncCompleted()
             },
         )
     }

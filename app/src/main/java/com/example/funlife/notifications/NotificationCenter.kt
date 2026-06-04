@@ -26,6 +26,7 @@ import com.example.funlife.R
  * @param bypassQuietHours 强制不被静默时段拦截
  * @param onlyIfChannelEnabled 当前渠道关闭时是否拦截（默认 true）
  * @param alwaysDeliverInbox 为 true 时：无论总开关/渠道/静默，都写入收件箱（首页铃铛红点）
+ * @param skipInbox 为 true 时：不写首页铃铛收件箱（私聊等仅系统栏 + 应用内横幅）
  * @param inboxDedupeKey 收件箱去重键（同一 key 只保留一条，如 friend_req_xxx）
  */
 data class NotificationSpec(
@@ -39,6 +40,7 @@ data class NotificationSpec(
     val bypassQuietHours: Boolean = false,
     val onlyIfChannelEnabled: Boolean = true,
     val alwaysDeliverInbox: Boolean = false,
+    val skipInbox: Boolean = false,
     val inboxDedupeKey: String? = null,
 )
 
@@ -54,7 +56,7 @@ object NotificationCenter {
         return try {
             NotificationChannels.ensureAll(context)
 
-            if (spec.alwaysDeliverInbox) {
+            if (spec.alwaysDeliverInbox && !spec.skipInbox) {
                 runCatching {
                     InboxStore.add(
                         context, spec.channel, spec.title, spec.body, spec.deepLinkRoute,
@@ -102,7 +104,7 @@ object NotificationCenter {
             )
 
             val title = if (spec.emojiPrefix) "${spec.channel.emoji} ${spec.title}" else spec.title
-            if (!spec.alwaysDeliverInbox) {
+            if (!spec.alwaysDeliverInbox && !spec.skipInbox) {
                 runCatching {
                     InboxStore.add(
                         context, spec.channel, spec.title, spec.body, spec.deepLinkRoute,

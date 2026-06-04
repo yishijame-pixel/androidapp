@@ -1,0 +1,11 @@
+# FunLife 生产环境 PocketBase（域名 yishi.site）
+# 复制需要的行到 local.properties（勿提交 local.properties）
+
+# 公网 HTTPS（Cloudflare Named Tunnel 配置完成后启用）
+POCKETBASE_URL=https://pb.yishi.site
+
+# 证书固定（Release 推荐；获取见 app/build.gradle.kts 注释）
+# POCKETBASE_PIN=sha256/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=
+
+# 开发期仍用局域网时可保留：
+# POCKETBASE_URL=http://192.168.0.104:8090

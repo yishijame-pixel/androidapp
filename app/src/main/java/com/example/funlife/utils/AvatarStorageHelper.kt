@@ -59,16 +59,13 @@ object AvatarStorageHelper {
             // 4. 保存到内部存储
             val savedFile = saveToInternalStorage(context, scaledBitmap, fileName)
             
-            // 5. 清理旧头像（可选）
-            cleanOldAvatars(context, userId, fileName)
-            
-            // 6. 回收Bitmap
+            // 5. 回收Bitmap
             if (scaledBitmap != originalBitmap) {
                 scaledBitmap.recycle()
             }
             originalBitmap.recycle()
             
-            // 7. 返回内部存储URI
+            // 6. 返回内部存储URI
             savedFile?.let { "file://${it.absolutePath}" }
             
         } catch (e: Exception) {
@@ -135,30 +132,40 @@ object AvatarStorageHelper {
         }
     }
     
+    fun isLocalAvatarUri(avatarUri: String?): Boolean {
+        if (avatarUri.isNullOrBlank()) return false
+        return avatarUri.startsWith("file://") || avatarUri.startsWith("/")
+    }
+
     /**
-     * 清理用户的旧头像（保留最新的）
+     * 返回可用于 Coil 加载的 URI；本地文件不存在或 content URI 不可读时返回 null。
      */
-    private fun cleanOldAvatars(context: Context, userId: Long, currentFileName: String) {
-        try {
-            val avatarDir = File(context.filesDir, AVATAR_DIR)
-            if (!avatarDir.exists()) return
-            
-            // 查找该用户的所有头像文件
-            val userAvatars = avatarDir.listFiles { file ->
-                file.name.startsWith("avatar_${userId}_") && file.name != currentFileName
+    fun resolveLoadableAvatarUri(context: Context, avatarUri: String?): String? {
+        val trimmed = avatarUri?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return when {
+            trimmed.startsWith("http://", ignoreCase = true) ||
+                trimmed.startsWith("https://", ignoreCase = true) -> trimmed
+            isLocalAvatarUri(trimmed) -> trimmed.takeIf { isAvatarExists(context, trimmed) }
+            else -> {
+                val readable = runCatching {
+                    context.contentResolver.openInputStream(Uri.parse(trimmed))?.use { true } == true
+                }.getOrDefault(false)
+                trimmed.takeIf { readable }
             }
-            
-            // 删除旧头像
-            userAvatars?.forEach { file ->
-                if (file.delete()) {
-                    Log.d(TAG, "删除旧头像: ${file.name}")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "清理旧头像失败", e)
         }
     }
-    
+
+    fun deleteAvatarFile(context: Context, avatarUri: String?): Boolean {
+        if (!isLocalAvatarUri(avatarUri)) return false
+        return try {
+            val file = File(Uri.parse(avatarUri).path ?: return false)
+            if (file.exists()) file.delete() else false
+        } catch (e: Exception) {
+            Log.e(TAG, "删除头像文件失败", e)
+            false
+        }
+    }
+
     /**
      * 删除用户的所有头像
      */

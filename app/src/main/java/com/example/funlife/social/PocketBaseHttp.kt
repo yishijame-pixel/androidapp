@@ -21,10 +21,12 @@ object PocketBaseHttp {
     fun client(): OkHttpClient = newBuilder().build()
 
     fun newBuilder(): OkHttpClient.Builder {
+        val readSec = if (PocketBaseConfig.isRemote()) 45L else 20L
+        val connectSec = if (PocketBaseConfig.isRemote()) 20L else 12L
         val builder = OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(connectSec, TimeUnit.SECONDS)
+            .readTimeout(readSec, TimeUnit.SECONDS)
+            .writeTimeout(readSec, TimeUnit.SECONDS)
 
         applyPinning(builder)
 

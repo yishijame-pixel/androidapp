@@ -12,12 +12,14 @@
 #   .\scripts\run-all-tests.ps1                  # 跑全部
 #   .\scripts\run-all-tests.ps1 -SkipNode        # 跳过 Node 测试
 #   .\scripts\run-all-tests.ps1 -SkipKotlin      # 跳过 Kotlin 测试
+#   .\scripts\run-all-tests.ps1 -SkipSocial      # 跳过 PocketBase 社交 E2E
 #   .\scripts\run-all-tests.ps1 -CI              # CI 模式（无颜色，纯日志）
 
 [CmdletBinding()]
 param(
     [switch]$SkipNode,
     [switch]$SkipKotlin,
+    [switch]$SkipSocial,
     [switch]$CI
 )
 
@@ -121,7 +123,23 @@ if (-not $SkipKotlin) {
 }
 
 # ════════════════════════════════════════════════════════════
-# Phase 3: 汇总
+# Phase 3: PocketBase 社交 E2E（需本地 PocketBase 运行）
+# ════════════════════════════════════════════════════════════
+if (-not $SkipSocial) {
+    Header "Phase 3: PocketBase 社交 E2E"
+    $socialScript = Join-Path $root "scripts\run-social-tests.ps1"
+    if (Test-Path $socialScript) {
+        $socialArgs = @("-SkipKotlin")
+        if ($CI) { $socialArgs += "-CI" }
+        & $socialScript @socialArgs 2>&1 | Out-Null
+        Track "社交 E2E（run-social-tests.ps1）" $LASTEXITCODE
+    } else {
+        Track "run-social-tests.ps1 存在" 1 "file missing"
+    }
+}
+
+# ════════════════════════════════════════════════════════════
+# 汇总
 # ════════════════════════════════════════════════════════════
 $elapsed = ((Get-Date) - $startTime).TotalSeconds
 $failed = ($results | Where-Object { -not $_.Pass }).Count

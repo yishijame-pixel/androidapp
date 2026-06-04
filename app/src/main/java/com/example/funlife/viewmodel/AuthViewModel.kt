@@ -427,19 +427,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         val uid = sessionManager.getCurrentUserId()
+        com.example.funlife.social.SocialSessionManager.shutdown(getApplication())
+        sessionManager.clearSession()
+        _isLoggedIn.value = false
+        _authState.value = AuthState.Idle
         if (uid > 0L) {
-            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO) {
                 runCatching {
                     val app = getApplication<FunLifeApplication>()
                     SocialLinkRepository(app, app.database.socialDao()).clearLocal(uid)
                     com.example.funlife.social.SocialPushTokenRegistry.clearToken(app, uid)
                 }
             }
-            com.example.funlife.social.SocialSessionManager.shutdown(getApplication())
         }
-        sessionManager.clearSession()
-        _isLoggedIn.value = false
-        _authState.value = AuthState.Idle
     }
     
     fun getCurrentSession(): UserSession? {

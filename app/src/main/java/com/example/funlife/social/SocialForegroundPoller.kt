@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.example.funlife.utils.UserSessionManager
 
 /**
  * 前台自适应兜底：Realtime 正常时不轮询；SSE 断线/退避时才低频补拉。
@@ -18,8 +19,8 @@ import kotlinx.coroutines.launch
 object SocialForegroundPoller {
 
     private const val TAG = "SocialForegroundPoll"
-    /** Realtime 不健康时的补拉间隔（60s 对企业 IM/社交后台可接受） */
-    private const val DEGRADED_POLL_MS = 60_000L
+    /** Realtime 不健康时的补拉间隔（30s，接近微信后台降级体验） */
+    private const val DEGRADED_POLL_MS = 30_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollJob: Job? = null
@@ -30,6 +31,12 @@ object SocialForegroundPoller {
         pollJob?.cancel()
         // 回前台：事件驱动，立即补拉一次
         SocialInboxSync.syncNowAsync(appCtx, force = true)
+        scope.launch {
+            runCatching {
+                val userId = UserSessionManager(appCtx).getCurrentUserId()
+                if (userId > 0L) SocialChatInbound.syncActiveConversations(appCtx, userId)
+            }.onFailure { Log.w(TAG, "foreground chat sync failed: ${it.message}") }
+        }
         pollJob = scope.launch {
             while (isActive) {
                 delay(DEGRADED_POLL_MS)
@@ -38,7 +45,11 @@ object SocialForegroundPoller {
                     continue
                 }
                 Log.d(TAG, "degraded poll: realtime=${SocialSessionManager.snapshot.value.realtime}")
-                runCatching { SocialInboxSync.syncNow(appCtx) }
+                runCatching {
+                    SocialInboxSync.syncNow(appCtx)
+                    val userId = UserSessionManager(appCtx).getCurrentUserId()
+                    if (userId > 0L) SocialChatInbound.syncActiveConversations(appCtx, userId)
+                }
             }
         }
     }

@@ -133,12 +133,6 @@ fun HomeScreen(
         .collectAsState(initial = null)
     
     val scope = rememberCoroutineScope()
-    
-    // 动画状态
-    var isVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        isVisible = true
-    }
 
     // 🔒 token 健康度一次性提示：当前 session 有效但本地无 device_token 时，
     //    提示用户重新登录一次以补领（多见于服务端旧版漏配 IDENTITY_SECRET 的老账号）
@@ -218,120 +212,89 @@ fun HomeScreen(
         ) {
         // 置顶纪念日展示区域
         item {
-            AnimatedVisibility(
-                visible = isVisible,
-                enter = fadeIn() + slideInVertically()
-            ) {
-                if (pinnedAnniversary != null) {
-                    PinnedAnniversaryHeader(
-                        anniversary = pinnedAnniversary!!,
-                        onUnpin = { anniversaryViewModel.unpinAnniversary(pinnedAnniversary!!) },
-                        onClick = { navController.navigate("anniversary") },
-                        userSession = userSession,  // 🔥 传递用户会话
-                        avatarUri = userAvatar?.avatarUri,  // 🔥 传递头像URI
-                        vipLevel = vipLevel  // 🔥 传递VIP等级
-                    )
-                } else {
-                    WelcomeHeader(
-                        userSession = userSession,
-                        avatarUri = userAvatar?.avatarUri,
-                        vipLevel = vipLevel,
-                        showFirstEntryEffect = showFirstEntryEffect,
-                        onFirstEntryComplete = {
-                            showFirstEntryEffect = false
-                        },
-                        onLogout = {
-                            // 🔒 退出登录：先清 session，再完全重启 Activity 清掉所有 ViewModel 状态
-                            authViewModel.logout()
-                            com.example.funlife.navigation.restartAppForLogout(context)
-                        },
-                        onOpenInbox = {
-                            navController.navigate(com.example.funlife.navigation.Screen.Inbox.route)
-                        }
-                    )
-                }
-            }
-        }
-        
-        // 装饰性波浪元素
-        item {
-            AnimatedVisibility(
-                visible = isVisible,
-                enter = fadeIn() + slideInVertically()
-            ) {
-                DecorativeWaves(
-                    userPreferences = userPreferences,
-                    userId = userSession?.userId ?: 0L,
-                    onTextEdit = { newText ->
-                        scope.launch {
-                            userSession?.userId?.let { userId ->
-                                userPreferencesRepository.updateHomePanelText(userId, newText)
-                            }
-                        }
+            if (pinnedAnniversary != null) {
+                PinnedAnniversaryHeader(
+                    anniversary = pinnedAnniversary!!,
+                    onUnpin = { anniversaryViewModel.unpinAnniversary(pinnedAnniversary!!) },
+                    onClick = { navController.navigate("anniversary") },
+                    userSession = userSession,
+                    avatarUri = userAvatar?.avatarUri,
+                    vipLevel = vipLevel,
+                )
+            } else {
+                WelcomeHeader(
+                    userSession = userSession,
+                    avatarUri = userAvatar?.avatarUri,
+                    vipLevel = vipLevel,
+                    showFirstEntryEffect = showFirstEntryEffect,
+                    onFirstEntryComplete = {
+                        showFirstEntryEffect = false
                     },
-                    onStyleChange = { newStyle ->
-                        scope.launch {
-                            userSession?.userId?.let { userId ->
-                                userPreferencesRepository.updateHomePanelTextStyle(userId, newStyle)
-                            }
-                        }
-                    }
+                    onLogout = {
+                        authViewModel.logout()
+                        com.example.funlife.navigation.restartAppForLogout(context)
+                    },
+                    onOpenInbox = {
+                        navController.navigate(com.example.funlife.navigation.Screen.Inbox.route)
+                    },
                 )
             }
         }
-        
+
+        // 装饰性波浪元素
+        item {
+            DecorativeWaves(
+                userPreferences = userPreferences,
+                userId = userSession?.userId ?: 0L,
+                onTextEdit = { newText ->
+                    scope.launch {
+                        userSession?.userId?.let { userId ->
+                            userPreferencesRepository.updateHomePanelText(userId, newText)
+                        }
+                    }
+                },
+                onStyleChange = { newStyle ->
+                    scope.launch {
+                        userSession?.userId?.let { userId ->
+                            userPreferencesRepository.updateHomePanelTextStyle(userId, newStyle)
+                        }
+                    }
+                },
+            )
+        }
+
         // 功能卡片网格
         item {
-            AnimatedVisibility(
-                visible = isVisible,
-                enter = fadeIn() + slideInVertically()
-            ) {
-                FunctionCardsSection(navController)
-            }
+            FunctionCardsSection(navController)
         }
-        
+
         // 目标小组件
         if (countdowns.isNotEmpty()) {
             item {
-                AnimatedVisibility(
-                    visible = isVisible,
-                    enter = fadeIn() + slideInVertically()
-                ) {
-                    GoalWidgetSection(
-                        countdowns = countdowns.take(3),
-                        onViewAll = { navController.navigate("goal") }
-                    )
-                }
+                GoalWidgetSection(
+                    countdowns = countdowns.take(3),
+                    onViewAll = { navController.navigate("goal") },
+                )
             }
         }
-        
+
         // 最近纪念日预览
         if (anniversaries.isNotEmpty()) {
             item {
-                AnimatedVisibility(
-                    visible = isVisible,
-                    enter = fadeIn() + slideInVertically()
-                ) {
-                    RecentAnniversariesSection(
-                        anniversaries = anniversaries.take(3),
-                        onViewAll = { navController.navigate("anniversary") }
-                    )
-                }
+                RecentAnniversariesSection(
+                    anniversaries = anniversaries.take(3),
+                    onViewAll = { navController.navigate("anniversary") },
+                )
             }
         }
-        
+
         // 游戏排行榜预览
         if (players.isNotEmpty()) {
             item {
-                AnimatedVisibility(
-                    visible = isVisible,
-                    enter = fadeIn() + slideInVertically()
-                ) {
-                    LeaderboardSection(
-                        players = players.take(3),
-                        onViewAll = { navController.navigate("score_counter") }
-                    )
-                }
+                LeaderboardSection(
+                    players = players.take(3),
+                    onViewAll = { navController.navigate("score_counter") },
+                )
             }
         }
     }

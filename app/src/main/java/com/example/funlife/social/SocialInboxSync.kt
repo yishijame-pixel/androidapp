@@ -51,7 +51,8 @@ object SocialInboxSync {
             if (!SocialSessionManager.isLinked(appCtx, userId)) {
                 withTimeoutOrNull(15_000) { SocialSessionManager.ensureSession(appCtx) }
             }
-            FriendRequestNotifier.pollOnce(appCtx)
+            runCatching { FriendRequestNotifier.pollOnce(appCtx) }
+                .onFailure { Log.w(TAG, "pollOnce failed: ${it.message}") }
             withContext(Dispatchers.Main) {
                 InboxStore.refreshUnread(appCtx)
             }

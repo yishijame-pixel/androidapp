@@ -28,6 +28,15 @@ object SocialOperationGate {
     const val TIMEOUT_MUTATION_MS = 30_000L
     const val TIMEOUT_SYNC_MS = 30_000L
 
+    private fun bindTimeoutMs(): Long =
+        if (PocketBaseConfig.isRemote()) 35_000L else TIMEOUT_BIND_MS
+
+    private fun mutationTimeoutMs(): Long =
+        if (PocketBaseConfig.isRemote()) 45_000L else TIMEOUT_MUTATION_MS
+
+    private fun syncTimeoutMs(): Long =
+        if (PocketBaseConfig.isRemote()) 45_000L else TIMEOUT_SYNC_MS
+
     private val userLocks = ConcurrentHashMap<Long, Mutex>()
 
     /** 规范化 FunLife 用户名（去 @、trim、小写用于比较） */
@@ -50,13 +59,21 @@ object SocialOperationGate {
         ctx: Context,
         userId: Long,
         forceSession: Boolean = true,
-        bindTimeoutMs: Long = TIMEOUT_BIND_MS,
+        bindTimeoutMs: Long = bindTimeoutMs(),
     ): Result<SocialCredentials> = withContext(Dispatchers.IO) {
         if (!PocketBaseConfig.isEnabled()) {
             return@withContext Result.failure(SocialFailureException(SocialFailure.NotConfigured))
         }
         if (userId <= 0L) {
             return@withContext Result.failure(SocialFailureException(SocialFailure.NotLoggedIn))
+        }
+
+        val sessionUserId = runCatching { UserSessionManager(ctx.applicationContext).getCurrentUserId() }
+            .getOrDefault(0L)
+        if (sessionUserId > 0L && sessionUserId != userId) {
+            return@withContext Result.failure(
+                SocialFailureException(SocialFailure.NotLoggedIn),
+            )
         }
 
         lockFor(userId).withLock {
@@ -94,24 +111,45 @@ object SocialOperationGate {
         ctx: Context,
         userId: Long,
         operation: String,
-        timeoutMs: Long = TIMEOUT_MUTATION_MS,
+        timeoutMs: Long = mutationTimeoutMs(),
         forceSession: Boolean = true,
         block: suspend (SocialCredentials) -> Result<T>,
     ): Result<T> = withContext(Dispatchers.IO) {
-        val credResult = acquire(ctx, userId, forceSession)
-        val cred = credResult.getOrElse { return@withContext Result.failure(it) }
-
-        try {
-            withTimeoutOrNull(timeoutMs) {
-                block(cred)
-            } ?: Result.failure(
-                SocialFailureException(SocialFailure.Timeout(operation)),
-            )
-        } catch (e: SocialFailureException) {
-            Result.failure(e)
-        } catch (e: Throwable) {
-            Result.failure(mapToSocialFailure(e))
+        suspend fun executeWith(cred: SocialCredentials): Result<T> {
+            return try {
+                withTimeoutOrNull(timeoutMs) {
+                    block(cred)
+                } ?: Result.failure(
+                    SocialFailureException(SocialFailure.Timeout(operation)),
+                )
+            } catch (e: SocialFailureException) {
+                Result.failure(e)
+            } catch (e: Throwable) {
+                Result.failure(mapToSocialFailure(e))
+            }
         }
+
+        fun isUnauthorized(result: Result<T>): Boolean {
+            val t = result.exceptionOrNull() ?: return false
+            if (t is PocketBaseApiException && t.code == 401) return true
+            if (t is SocialFailureException && t.failure is SocialFailure.Api) {
+                val msg = t.failure.userMessage
+                if (msg.contains("401") || msg.contains("Unauthorized", ignoreCase = true)) return true
+            }
+            return false
+        }
+
+        val credResult = acquire(ctx, userId, forceSession)
+        var cred = credResult.getOrElse { return@withContext Result.failure(it) }
+
+        var result = executeWith(cred)
+        if (isUnauthorized(result)) {
+            Log.w(TAG, "401 on $operation — refresh credentials userId=$userId")
+            SocialTokenCache.clear(userId)
+            cred = acquire(ctx, userId, forceSession = true).getOrElse { return@withContext Result.failure(it) }
+            result = executeWith(cred)
+        }
+        result
     }
 
     suspend fun warmCredentials(ctx: Context, userId: Long) {
@@ -122,10 +160,15 @@ object SocialOperationGate {
         val db = (appCtx as? FunLifeApplication)?.database ?: AppDatabase.getDatabase(appCtx)
         val link = db.socialDao().getLink(userId) ?: return null
         if (link.pbRecordId.isBlank()) return null
-        val linkRepo = SocialLinkRepository(appCtx, db.socialDao())
-        val token = runCatching { linkRepo.getValidToken(userId) }.getOrNull() ?: return null
-        if (token.isBlank()) return null
-        return SocialCredentials(userId, link.pbRecordId, token)
+        SocialTokenCache.get(userId)?.let {
+            return SocialCredentials(userId, link.pbRecordId, it)
+        }
+        val stored = SocialSecureStore.getToken(appCtx, userId)
+        if (!stored.isNullOrBlank()) {
+            SocialTokenCache.put(userId, stored)
+            return SocialCredentials(userId, link.pbRecordId, stored)
+        }
+        return null
     }
 
     private fun lockFor(userId: Long): Mutex = userLocks.getOrPut(userId) { Mutex() }

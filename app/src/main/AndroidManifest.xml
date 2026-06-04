@@ -92,6 +92,15 @@
             android:name=".utils.OverlayBannerService"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- FCM 杀进程推送（需 google-services.json） -->
+        <service
+            android:name=".notifications.FunLifeFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         
         <!-- FileProvider for sharing images -->
         <provider

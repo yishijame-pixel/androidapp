@@ -127,7 +127,7 @@ object NotificationChannels {
 
     /** 一次性迁移版本号；提升后会重建受影响的 channel */
     private const val BADGE_MIGRATION_VERSION = 2
-    private const val SOCIAL_CHANNEL_MIGRATION_VERSION = 4
+    private const val SOCIAL_CHANNEL_MIGRATION_VERSION = 5
     private const val PREFS = "fun_channels_meta"
     private const val KEY_BADGE_MIGRATION = "badge_migration_v"
     private const val KEY_SOCIAL_CHANNEL_MIGRATION = "social_channel_v"
