@@ -19,6 +19,8 @@ data class PbUserProfile(
     val displayName: String,
     val avatarUrl: String?,
     val online: Boolean,
+    /** PocketBase users.updated，用于心跳过期判定 */
+    val updatedAtMs: Long = 0L,
 )
 
 data class FriendshipDto(
@@ -40,6 +42,7 @@ data class FriendUiModel(
     val status: FriendshipStatus,
     val isIncomingRequest: Boolean,
     val remark: String,
+    val online: Boolean = false,
 )
 
 sealed class SocialLinkState {

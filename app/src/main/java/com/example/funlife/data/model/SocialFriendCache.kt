@@ -19,5 +19,6 @@ data class SocialFriendCache(
     /** accepted | pending_in | pending_out */
     val status: String,
     val remark: String,
+    val online: Boolean = false,
     val updatedAt: Long,
 )

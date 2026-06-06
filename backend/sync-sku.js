@@ -15,7 +15,10 @@ const HEADER_TPL = (src) =>
 const SYNC_MAP = {
   "sku.js": [
     "functions/redeem", "functions/migrate", "functions/beta_validate",
-    "functions/vip_config",
+    "functions/vip_config", "functions/chat_ai",
+  ],
+  "chat_ai_limits.js": [
+    "functions/redeem", "functions/chat_ai",
   ],
   "rate-limit.js": [
     "functions/redeem", "functions/migrate", "functions/verify",

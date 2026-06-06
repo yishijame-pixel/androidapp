@@ -158,6 +158,21 @@ sealed class Screen(val route: String, val title: String) {
     object FriendChat : Screen("friend_chat/{peerPbId}", "私聊") {
         fun routeWith(peerPbId: String) = "friend_chat/$peerPbId"
     }
+    object SocialGameCenter : Screen("social_game_center", "趣玩中心") {
+        fun route(tab: String = "online", peerPbId: String? = null): String {
+            val peer = peerPbId?.takeIf { it.isNotBlank() } ?: ""
+            return "social_game_center?tab=$tab&peerPbId=$peer"
+        }
+    }
+    object SocialGameDetail : Screen("social_game_detail/{gameId}", "游戏详情") {
+        fun route(gameId: String, peerPbId: String? = null): String {
+            val peer = peerPbId?.takeIf { it.isNotBlank() } ?: ""
+            return "social_game_detail/$gameId?peerPbId=$peer"
+        }
+    }
+    object SocialGameLobby : Screen("social_game_lobby/{roomId}", "游戏房间") {
+        fun route(roomId: String) = "social_game_lobby/$roomId"
+    }
     // 🆕 v55 古籍日记本
     object DiaryBook : Screen("diary_book", "日记本")
     object DiaryBookFull : Screen("diary_book_full", "日记本")
@@ -480,6 +495,127 @@ fun NavGraph(
             FriendChatScreen(
                 viewModel = chatViewModel,
                 onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = "social_game_center?tab={tab}&peerPbId={peerPbId}",
+            arguments = listOf(
+                navArgument("tab") { type = NavType.StringType; defaultValue = "online" },
+                navArgument("peerPbId") { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) {
+            val context = LocalContext.current
+            val userSession = authViewModel.getCurrentSession()
+            if (userSession == null) {
+                LoadingFallback("正在跳转登录…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+                return@composable
+            }
+            val tabArg = it.arguments?.getString("tab").orEmpty()
+            val initialTab = when (tabArg) {
+                "local" -> com.example.funlife.social.game.model.GameCenterTab.LOCAL
+                "my" -> com.example.funlife.social.game.model.GameCenterTab.MY_GAMES
+                else -> com.example.funlife.social.game.model.GameCenterTab.ONLINE
+            }
+            val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
+            com.example.funlife.ui.screens.socialgame.SocialGameCenterScreen(
+                viewModel = gameCenterVm,
+                initialTab = initialTab,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { gameId ->
+                    navController.safeNavigate(Screen.SocialGameDetail.route(gameId), context)
+                },
+                onNavigateToLocalGame = { route ->
+                    navController.safeNavigate(route, context)
+                },
+                onNavigateToLobby = { roomId ->
+                    navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
+                },
+            )
+        }
+
+        composable(
+            route = "social_game_detail/{gameId}?peerPbId={peerPbId}",
+            arguments = listOf(
+                navArgument("gameId") { type = NavType.StringType },
+                navArgument("peerPbId") { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) {
+            val context = LocalContext.current
+            val userSession = authViewModel.getCurrentSession()
+            val gameId = it.arguments?.getString("gameId").orEmpty()
+            val peerPbId = it.arguments?.getString("peerPbId").orEmpty().ifBlank { null }
+            if (gameId.isBlank() || userSession == null) {
+                LoadingFallback(if (userSession == null) "正在跳转登录…" else "无效的游戏")
+                if (userSession == null) {
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    }
+                } else {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                }
+                return@composable
+            }
+            val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
+            com.example.funlife.ui.screens.socialgame.GameDetailScreen(
+                gameId = gameId,
+                viewModel = gameCenterVm,
+                preselectedPeerPbId = peerPbId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToLobby = { roomId ->
+                    navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
+                },
+                onNavigateToLocalGame = { route ->
+                    navController.safeNavigate(route, context)
+                },
+            )
+        }
+
+        composable(
+            route = Screen.SocialGameLobby.route,
+            arguments = listOf(navArgument("roomId") { type = NavType.StringType }),
+        ) {
+            val context = LocalContext.current
+            val userSession = authViewModel.getCurrentSession()
+            val roomId = it.arguments?.getString("roomId").orEmpty()
+            if (roomId.isBlank() || userSession == null) {
+                LoadingFallback(if (userSession == null) "正在跳转登录…" else "无效的房间")
+                if (userSession == null) {
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    }
+                } else {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                }
+                return@composable
+            }
+            val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
+            val navigateToGameCenter: () -> Unit = {
+                navController.navigate(Screen.SocialGameCenter.route()) {
+                    popUpTo(Screen.SocialGameLobby.route(roomId)) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            com.example.funlife.ui.screens.socialgame.GameLobbyScreen(
+                roomId = roomId,
+                viewModel = gameCenterVm,
+                myDisplayName = userSession.nickname.ifBlank { userSession.username },
+                onNavigateBack = {
+                    if (!navController.popBackStack()) {
+                        navigateToGameCenter()
+                    }
+                },
+                onNavigateToGameCenter = navigateToGameCenter,
+                onNavigateToRoom = { newRoomId ->
+                    navController.navigate(Screen.SocialGameLobby.route(newRoomId)) {
+                        popUpTo(Screen.SocialGameLobby.route(roomId)) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onStartGame = { /* P1: navigate to game room */ },
             )
         }
         

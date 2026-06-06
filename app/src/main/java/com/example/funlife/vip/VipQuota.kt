@@ -20,14 +20,13 @@ object VipQuota {
 
     /* =====================  聊天记账 · AI 对话日额度  ===================== */
 
-    /** 聊天记账每日 AI 对话回复条数（账单回复 + 闲聊回复合并计数；账单识别 detectBill 不计） */
-    fun chatAiDailyLimit(vipLevel: Int): Int = when (mapLevel(vipLevel)) {
-        VipLevel.NORMAL    -> 20
-        VipLevel.VIP1      -> 80
-        VipLevel.VIP2      -> 200
-        VipLevel.VIP3,
-        VipLevel.PERMANENT -> UNLIMITED
-    }
+    /**
+     * 聊天记账每日 AI 对话回复条数（v2：参数为 effectiveChatAiTier 0~4）
+     * @see ChatAiLimits
+     */
+    fun chatAiDailyLimit(chatAiTier: Int): Int = ChatAiLimits.dailyLimit(chatAiTier)
+
+    fun chatAiMonthlyLimit(chatAiTier: Int): Int = ChatAiLimits.monthlyLimit(chatAiTier)
 
     /* =====================  时光信箱 · 月度寄信额度  ===================== */
 

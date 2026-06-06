@@ -13,15 +13,29 @@ import com.google.gson.annotations.SerializedName
  * ⚠️ 千万不要在客户端修改字段名 / 顺序，否则与云端签名不匹配。
  */
 data class VipCertificate(
+    @SerializedName("bonusCoins") val bonusCoins: Int,
     @SerializedName("deviceId") val deviceId: String,
+    @SerializedName("expireDate") val expireDate: String?,  // null = 永久
+    @SerializedName("exp") val exp: Long,
+    @SerializedName("issuedAt") val issuedAt: Long,
+    @SerializedName("productType") val productType: String? = null, // "chat_ai" | "vip" | null
     @SerializedName("skuCode") val skuCode: String,
     @SerializedName("vipLevel") val vipLevel: Int,
-    @SerializedName("expireDate") val expireDate: String?,  // null = 永久
-    @SerializedName("bonusCoins") val bonusCoins: Int,
-    @SerializedName("issuedAt") val issuedAt: Long,
-    @SerializedName("exp") val exp: Long
 ) {
-    fun toCanonicalJson(): String = GSON.toJson(this)
+    /** 与云端 canonicalJson 一致：字段名按字母序序列化 */
+    fun toCanonicalJson(): String {
+        val sorted = sortedMapOf(
+            "bonusCoins" to bonusCoins,
+            "deviceId" to deviceId,
+            "expireDate" to expireDate,
+            "exp" to exp,
+            "issuedAt" to issuedAt,
+            "productType" to productType,
+            "skuCode" to skuCode,
+            "vipLevel" to vipLevel,
+        )
+        return GSON.toJson(sorted)
+    }
 
     fun isValidNow(nowSec: Long = System.currentTimeMillis() / 1000): Boolean {
         return nowSec < exp

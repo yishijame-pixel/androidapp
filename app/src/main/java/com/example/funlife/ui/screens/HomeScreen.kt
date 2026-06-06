@@ -1879,6 +1879,7 @@ fun FunctionCardsSection(navController: NavController) {
         FuncItem("聊天记账", "💬", listOf(Color(0xFFFF8A80), Color(0xFFFF5252)), "chat_bill"),
         FuncItem("时光信箱", "✉️", listOf(Color(0xFFB39DDB), Color(0xFF7E57C2)), "letter_mailbox"),
         FuncItem("好友", "👥", listOf(Color(0xFF8B6CF7), Color(0xFF6B4CE6)), "friends"),
+        FuncItem("趣玩中心", "🎮", listOf(Color(0xFF7C4DFF), Color(0xFF536DFE)), "social_game_center?tab=online&peerPbId="),
         FuncItem("阅光书房", "📖", listOf(Color(0xFFFFB74D), Color(0xFFFF8A65)), "reading_room"),
         FuncItem("日记本", "📔", listOf(Color(0xFF8E6E53), Color(0xFFB23A48)), "diary_book"),
         FuncItem("头像框", "🖼️", listOf(Color(0xFF9C27B0), Color(0xFFE91E63)), "avatar_frame_shop"),

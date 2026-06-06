@@ -258,17 +258,33 @@
             <tbody id="sku-table"></tbody>
           </table>
         </div>
+
+        <div class="card overflow-hidden">
+          <div class="px-6 py-5 border-b border-ink-100">
+            <h2 class="font-semibold text-ink-900">💬 聊天 AI 额度卡</h2>
+            <p class="text-xs text-ink-400 mt-1">CHAT_AI_* 批次库存与已售（P3 运营看板）</p>
+          </div>
+          <table>
+            <thead><tr>
+              <th>SKU</th><th>名称</th><th>单价</th><th>总数</th><th>待售</th><th>已售</th><th>禁用</th><th class="text-right">销售额</th>
+            </tr></thead>
+            <tbody id="chat-ai-stats-table"><tr><td colspan="8" class="text-center py-8 text-ink-400">加载中…</td></tr></tbody>
+          </table>
+        </div>
       </section>
 
       <!-- ─── 卡密管理 ──────────────────────────────────── -->
       <section id="page-codes" class="hidden space-y-5">
         <div class="card p-5">
           <div class="grid grid-cols-12 gap-4">
-            <div class="col-span-3"><label class="label">SKU</label><select id="f-sku" class="select"><option value="">全部</option></select></div>
+            <div class="col-span-2"><label class="label">SKU</label><select id="f-sku" class="select"><option value="">全部</option></select></div>
+            <div class="col-span-2"><label class="label">商品类型</label><select id="f-productType" class="select">
+              <option value="">全部</option><option value="vip">VIP 卡</option><option value="chat_ai">聊天 AI 卡</option>
+            </select></div>
             <div class="col-span-2"><label class="label">状态</label><select id="f-status" class="select">
               <option value="">全部</option><option value="unused">未使用</option><option value="used">已使用</option><option value="disabled">已禁用</option>
             </select></div>
-            <div class="col-span-3"><label class="label">批次名</label><input id="f-batch" class="input" placeholder="如 sale_2026_001"></div>
+            <div class="col-span-2"><label class="label">批次名</label><input id="f-batch" class="input" placeholder="如 sale_2026_001"></div>
             <div class="col-span-2"><label class="label">兑换码搜索</label><input id="f-q" class="input" placeholder="部分字符"></div>
             <div class="col-span-2 flex items-end gap-2">
               <button class="btn btn-primary flex-1" onclick="loadCodes(1)">筛选</button>
@@ -886,6 +902,32 @@ async function loadDashboard() {
       <td class="text-right font-semibold text-amber-600">¥${s.revenue.toLocaleString()}</td>
     </tr>`).join("") || `<tr><td colspan="8" class="empty-state">暂无 SKU 数据</td></tr>`;
   loadTrend(7);
+  loadChatAiProductStats();
+}
+
+async function loadChatAiProductStats() {
+  const tbody = document.getElementById("chat-ai-stats-table");
+  const r = await api("/api/stats/chat_ai_products");
+  if (!r.ok) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${r.error || "加载失败"}</td></tr>`;
+    return;
+  }
+  const { rows, sum } = r.data;
+  const tr = (x) => `<tr>
+    <td><code class="mono text-xs">${x.skuCode}</code></td>
+    <td>${x.name}</td>
+    <td>¥${x.price}</td>
+    <td>${x.total}</td>
+    <td class="text-brand-600 font-semibold">${x.unused}</td>
+    <td>${x.used}</td>
+    <td class="text-ink-400">${x.disabled}</td>
+    <td class="text-right font-semibold text-amber-600">¥${(x.revenue || 0).toLocaleString()}</td>
+  </tr>`;
+  tbody.innerHTML = rows.map(tr).join("") +
+    `<tr class="bg-ink-50 font-semibold">
+      <td colspan="3">合计</td><td>${sum.total}</td><td>${sum.unused}</td><td>${sum.used}</td>
+      <td>${sum.disabled}</td><td class="text-right text-amber-600">¥${sum.revenue.toLocaleString()}</td>
+    </tr>`;
 }
 
 // ───────────── 7 日激活趋势（纯 SVG 折线 + 柱状叠加） ─────────────
@@ -962,7 +1004,7 @@ async function loadCodes(page = 1) {
   const tbody = document.getElementById("codes-body");
   tbody.innerHTML = `<tr><td colspan="8" class="text-center py-12"><span class="spinner"></span></td></tr>`;
   const params = new URLSearchParams({ page, limit: 20 });
-  ['sku', 'status', 'batch', 'q'].forEach(k => {
+  ['sku', 'status', 'batch', 'q', 'productType'].forEach(k => {
     const v = document.getElementById('f-' + k).value.trim();
     if (v) params.set(k, v);
   });
@@ -1011,7 +1053,7 @@ async function toggleCode(code) {
   else toast(r.error, false);
 }
 function resetFilter() {
-  ['f-sku','f-status','f-batch','f-q'].forEach(id => document.getElementById(id).value = '');
+  ['f-sku','f-status','f-batch','f-q','f-productType'].forEach(id => document.getElementById(id).value = '');
   loadCodes(1);
 }
 

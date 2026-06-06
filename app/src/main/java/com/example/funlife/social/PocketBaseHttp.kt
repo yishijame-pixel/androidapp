@@ -88,6 +88,16 @@ object SocialSecureStore {
         prefs(context).edit().putString(tokenKey(userId), token).apply()
     }
 
+    /** 同一 FunLife 账号在所有设备上使用相同 PB 密码（避免换机/重装后 auth 失败）。 */
+    fun pocketBasePassword(userId: Long, funlifeUsername: String): String {
+        val safe = funlifeUsername.lowercase().replace(Regex("[^a-z0-9_]"), "")
+        val seed = "funlife_pb_v1:$userId:$safe"
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(seed.toByteArray(java.nio.charset.StandardCharsets.UTF_8))
+        return android.util.Base64.encodeToString(digest, android.util.Base64.NO_WRAP).take(43)
+    }
+
+    @Deprecated("Use pocketBasePassword(userId, funlifeUsername) for cross-device consistency")
     fun getOrCreatePassword(context: Context, userId: Long): String {
         val p = prefs(context)
         p.getString(pwdKey(userId), null)?.let { if (it.isNotBlank()) return it }
@@ -111,6 +121,11 @@ object SocialSecureStore {
             .apply()
     }
 
+    /** 仅清除 Token（保留派生密码，便于同一 FunLife 账号重新 auth/register）。 */
+    fun clearToken(context: Context, userId: Long) {
+        prefs(context).edit().remove(tokenKey(userId)).apply()
+    }
+
     private fun generatePassword(): String {
         val bytes = ByteArray(32)
         java.security.SecureRandom().nextBytes(bytes)
@@ -122,4 +137,8 @@ object SocialSecureStore {
         val safe = funlifeUsername.lowercase().replace(Regex("[^a-z0-9_]"), "")
         return "u${localUserId}_${safe}@funlife.social.invalid"
     }
+
+    fun funlifeUsernameFromIdentity(identity: String): String? =
+        Regex("^u\\d+_([^@]+)@funlife\\.social\\.invalid$")
+            .find(identity)?.groupValues?.getOrNull(1)
 }

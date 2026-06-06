@@ -21,6 +21,13 @@ import com.example.funlife.utils.AiResult
 import com.example.funlife.utils.AiService
 import com.example.funlife.utils.RuleEngine
 import com.example.funlife.utils.parseBillInput
+import com.example.funlife.vip.VipManager
+import com.example.funlife.vip.ChatAiSku
+import com.example.funlife.vip.ChatAiEntitlementUi
+import com.example.funlife.vip.ChatAiBarState
+import com.example.funlife.vip.ChatAiLimits
+import com.example.funlife.vip.VipCertificateStore
+import com.example.funlife.vip.VipQuota
 import android.content.Context
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
@@ -53,6 +60,27 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
     private val ruleEngine = RuleEngine()
     // 🔒 安全修复：把 userId 传给 AiService，让 API Key 按账号加密隔离存储
     private val aiService = AiService(application, userId)
+    private val vipManager = VipManager(application)
+    private val certStore = VipCertificateStore(application)
+
+    private val _chatAiEntitlement = MutableStateFlow(defaultEntitlement())
+    val chatAiEntitlement: StateFlow<ChatAiEntitlementUi> = _chatAiEntitlement.asStateFlow()
+
+    private val _isRedeemingChatAi = MutableStateFlow(false)
+    val isRedeemingChatAi: StateFlow<Boolean> = _isRedeemingChatAi.asStateFlow()
+
+    /** 菜单绿点：有云端权益且额度未用尽 */
+    val isAiEntitledForMenu: Boolean
+        get() {
+            val e = _chatAiEntitlement.value
+            if (!e.hasCloudEntitlement) return false
+            return when (e.state) {
+                ChatAiBarState.EXHAUSTED_DAY, ChatAiBarState.EXHAUSTED_MONTH,
+                ChatAiBarState.EXPIRED, ChatAiBarState.INACTIVE -> false
+                ChatAiBarState.TRIAL -> (e.trialRemaining ?: 0) > 0
+                else -> e.dailyLimit <= 0 || e.usedToday < e.dailyLimit
+            }
+        }
 
     // 内置人格
     private val builtinPersonas = listOf(
@@ -249,6 +277,7 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
     }
 
     init {
+        viewModelScope.launch { refreshChatAiEntitlement() }
         initializePersonas()
         initializeAccounts()
         initializeBudgets()
@@ -477,19 +506,24 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
 
         _isTyping.value = true
 
-        // 策略：先校验日额度（按 VIP 等级），再尝试 AI，失败则用本地关键词回复
-        val aiResult = if (consumeChatAiQuota())
-            aiService.getChatReply(_currentPersona.value, text)
-        else
-            AiResult.Error("今日额度已用完")
-        val reply = when (aiResult) {
-            is AiResult.Success -> aiResult.reply
-            is AiResult.Error -> {
-                android.util.Log.w("ChatVM", "AI聊天失败: ${aiResult.reason}")
-                _toastMessage.value = "⚠️ AI: ${aiResult.reason}，使用本地回复"
-                delay(600 + Random.nextLong(800))
-                getLocalChatReply(text)
+        val reply = if (canUseCloudAi()) {
+            val aiResult = if (consumeChatAiQuota()) {
+                aiService.getChatReply(_currentPersona.value, text)
+            } else {
+                AiResult.Error("今日额度已用完")
             }
+            when (aiResult) {
+                is AiResult.Success -> aiResult.reply
+                is AiResult.Error -> {
+                    android.util.Log.w("ChatVM", "AI聊天失败: ${aiResult.reason}")
+                    _toastMessage.value = "⚠️ ${aiResult.reason}，使用本地回复"
+                    delay(600 + Random.nextLong(800))
+                    getLocalChatReply(text)
+                }
+            }
+        } else {
+            delay(400 + Random.nextLong(500))
+            getLocalChatReply(text)
         }
 
         repository.insertMessage(
@@ -499,6 +533,7 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
             )
         )
         _isTyping.value = false
+        refreshChatAiEntitlement()
 
         // 更新互动
         repository.incrementInteraction(_currentPersonaId.value, userId)
@@ -658,34 +693,24 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         val monthTotal = repository.getTotalAmount(userId, monthStart, System.currentTimeMillis())
         val categoryCount = repository.getCategoryCount(userId, bill.category, monthStart)
 
-        // 策略：先校验日额度（按 VIP 等级），再尝试 AI，失败则用规则引擎
-        val aiResult = if (consumeChatAiQuota())
-            aiService.getReply(_currentPersona.value, bill, monthTotal, categoryCount)
-        else
-            AiResult.Error("今日额度已用完")
-        var reply = when (aiResult) {
-            is AiResult.Success -> aiResult.reply
-            is AiResult.Error -> {
-                android.util.Log.w("ChatVM", "AI记账失败: ${aiResult.reason}")
-                _toastMessage.value = "⚠️ AI: ${aiResult.reason}，使用本地回复"
-                delay(800 + Random.nextLong(1200))
-                var r = ruleEngine.getReply(bill, personaId)
-                if (categoryCount > 3 && Random.nextFloat() < 0.5f) {
-                    val extra = when (personaId) {
-                        "dad" -> "，这个月${bill.category}都${categoryCount}次了！"
-                        "girlfriend" -> "～这个月${bill.category}已经${categoryCount}次啦"
-                        "roast" -> "，本月第${categoryCount}次了，有瘾？"
-                        "gentle" -> "～这个月${bill.category}已经${categoryCount}次了呢"
-                        "eunuch" -> "，皇上本月${bill.category}已${categoryCount}次了，奴才得提醒您！"
-                        "buddha" -> "，施主本月${bill.category}已${categoryCount}次，执念深矣。"
-                        "cat" -> "，铲屎官本月${bill.category}第${categoryCount}次了喵！"
-                        "grandma" -> "，这个月${bill.category}都${categoryCount}次了！太浪费了！"
-                        else -> ""
-                    }
-                    r += extra
-                }
-                r
+        var reply = if (canUseCloudAi()) {
+            val aiResult = if (consumeChatAiQuota()) {
+                aiService.getReply(_currentPersona.value, bill, monthTotal, categoryCount)
+            } else {
+                AiResult.Error("今日额度已用完")
             }
+            when (aiResult) {
+                is AiResult.Success -> aiResult.reply
+                is AiResult.Error -> {
+                    android.util.Log.w("ChatVM", "AI记账失败: ${aiResult.reason}")
+                    _toastMessage.value = "⚠️ ${aiResult.reason}，使用本地回复"
+                    delay(800 + Random.nextLong(1200))
+                    ruleEngineFallbackReply(bill, personaId, categoryCount)
+                }
+            }
+        } else {
+            delay(500 + Random.nextLong(600))
+            ruleEngineFallbackReply(bill, personaId, categoryCount)
         }
 
         repository.insertMessage(
@@ -696,6 +721,7 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         )
 
         _isTyping.value = false
+        refreshChatAiEntitlement()
 
         // 更新好感度
         updateAffection(bill, personaId)
@@ -1091,30 +1117,61 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         return sb.toString()
     }
 
-    // ===== AI设置 =====
-    val isAiAvailable: Boolean get() = aiService.isAvailable
+    // ===== AI 额度 · 卡密激活 =====
+    @Deprecated("Release 使用 isAiEntitledForMenu", ReplaceWith("isAiEntitledForMenu"))
+    val isAiAvailable: Boolean get() = isAiEntitledForMenu
 
-    fun getAiApiKey(): String = aiService.getApiKey()
-
-    fun setAiApiKey(key: String) {
-        aiService.setApiKey(key)
+    fun refreshChatAiEntitlement() {
+        viewModelScope.launch {
+            _chatAiEntitlement.value = buildEntitlementUi()
+        }
     }
 
-    // ─────────── 🆕 v51 聊天 AI 日额度门禁（按 VIP 等级） ───────────
-    // - 只统计 role='ai' 的回复（账单识别 detectBill 不计入，避免冤枉额度）
-    // - 超额时返回 false：调用方走规则引擎兜底，并发出一次性提示
-    // - 触发频控：同一日内最多提示 1 次升级文案，避免反复打扰
+    fun redeemChatAiCard(code: String, onResult: (success: Boolean, message: String) -> Unit) {
+        if (code.isBlank()) {
+            onResult(false, "请输入卡密")
+            return
+        }
+        viewModelScope.launch {
+            _isRedeemingChatAi.value = true
+            try {
+                when (val outcome = vipManager.redeemChatAi(userId, code.trim())) {
+                    is VipManager.Outcome.Success -> {
+                        refreshChatAiEntitlement()
+                        val name = ChatAiSku.displayName(outcome.cert.skuCode)
+                        val limitText = VipQuota.formatChatLimit(ChatAiSku.tierFromCert(outcome.cert))
+                        val exp = outcome.cert.expireDate ?: "永久"
+                        val msg = "已激活「$name」· $limitText · 有效期至 $exp"
+                        _toastMessage.value = msg
+                        onResult(true, msg)
+                    }
+                    is VipManager.Outcome.Failure ->
+                        onResult(false, ChatAiSku.friendlyRedeemError(outcome.code, outcome.msg))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "redeemChatAiCard failed", e)
+                onResult(false, "网络异常，请稍后重试")
+            } finally {
+                _isRedeemingChatAi.value = false
+            }
+        }
+    }
+
+    // ─────────── 聊天 AI 日额度门禁（VIP + AI 卡取较高档） ───────────
     private suspend fun consumeChatAiQuota(): Boolean {
-        val vip = runCatching {
-            database.userVipDao().getUserVipSync(userId)?.vipLevel ?: 0
-        }.getOrDefault(0)
-        val limit = com.example.funlife.vip.VipQuota.chatAiDailyLimit(vip)
-        if (limit == com.example.funlife.vip.VipQuota.UNLIMITED) return true
+        if (!canUseCloudAi()) return false
+        val tier = effectiveChatAiTier()
+        if (ChatAiSku.isTrialSku(certStore.loadChatAi(userId)?.first?.skuCode ?: "")) {
+            val used = runCatching { database.chatMessageDao().countAiBetween(userId, todayRangeMs().first, todayRangeMs().second) }
+                .getOrDefault(0)
+            return used < ChatAiLimits.TRIAL_TOTAL
+        }
+        val limit = VipQuota.chatAiDailyLimit(tier)
+        if (limit <= 0) return false
         val (start, end) = todayRangeMs()
         val used = runCatching { database.chatMessageDao().countAiBetween(userId, start, end) }
             .getOrDefault(0)
         if (used < limit) return true
-        // 超额 → 一日只提示一次
         val prefs = getApplication<android.app.Application>()
             .getSharedPreferences("chat_quota_prefs", android.content.Context.MODE_PRIVATE)
         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
@@ -1122,14 +1179,159 @@ class ChatViewModel(application: Application, val userId: Long) : AndroidViewMod
         val key = "toast_${userId}_$today"
         if (!prefs.getBoolean(key, false)) {
             prefs.edit().putBoolean(key, true).apply()
-            val tease = com.example.funlife.vip.VipQuota.nextTierTeaser(vip)
-            _toastMessage.value = if (tease != null)
-                "今日 AI 对话已用完（$used/$limit）。$tease"
-            else
-                "今日 AI 对话已达上限（$used/$limit），明天再来吧～"
+            _toastMessage.value = "今日 AI 对话已用完（$used/$limit）· 更多 → AI 额度 激活卡密"
         }
+        refreshChatAiEntitlement()
         return false
     }
+
+    private suspend fun canUseCloudAi(): Boolean {
+        if (userId <= 0L) return false
+        if (certStore.loadForChatAi(userId) == null) return false
+        return ChatAiLimits.hasCloudEntitlement(effectiveChatAiTier())
+    }
+
+    private suspend fun effectiveChatAiTier(): Int {
+        val vipRow = runCatching { database.userVipDao().getUserVipSync(userId) }.getOrNull()
+        val vipTier = if (vipRow != null && vipRow.vipLevel > 0 && isVipRowActive(vipRow)) {
+            ChatAiLimits.vipLevelToChatTier(vipRow.vipLevel)
+        } else 0
+        val chatCert = certStore.loadChatAi(userId)?.first
+        val chatTier = if (chatCert != null && ChatAiSku.isActive(chatCert)) {
+            ChatAiSku.tierFromCert(chatCert)
+        } else 0
+        return maxOf(vipTier, chatTier, 0)
+    }
+
+    private fun ruleEngineFallbackReply(
+        bill: Bill,
+        personaId: String,
+        categoryCount: Int,
+    ): String {
+        var r = ruleEngine.getReply(bill, personaId)
+        if (categoryCount > 3 && Random.nextFloat() < 0.5f) {
+            val extra = when (personaId) {
+                "dad" -> "，这个月${bill.category}都${categoryCount}次了！"
+                "girlfriend" -> "～这个月${bill.category}已经${categoryCount}次啦"
+                "roast" -> "，本月第${categoryCount}次了，有瘾？"
+                "gentle" -> "～这个月${bill.category}已经${categoryCount}次了呢"
+                "eunuch" -> "，皇上本月${bill.category}已${categoryCount}次了，奴才得提醒您！"
+                "buddha" -> "，施主本月${bill.category}已${categoryCount}次，执念深矣。"
+                "cat" -> "，铲屎官本月${bill.category}第${categoryCount}次了喵！"
+                "grandma" -> "，这个月${bill.category}都${categoryCount}次了！太浪费了！"
+                else -> ""
+            }
+            r += extra
+        }
+        return r
+    }
+
+    private fun isVipRowActive(vip: com.example.funlife.data.model.UserVip): Boolean {
+        if (vip.vipLevel <= 0) return false
+        val exp = vip.expireDate ?: return true
+        return try { java.time.LocalDate.now().toString() <= exp } catch (_: Exception) { false }
+    }
+
+    private suspend fun buildEntitlementUi(): ChatAiEntitlementUi {
+        val tier = effectiveChatAiTier()
+        val limit = VipQuota.chatAiDailyLimit(tier)
+        val monthLimit = VipQuota.chatAiMonthlyLimit(tier)
+        val (start, end) = todayRangeMs()
+        val used = runCatching { database.chatMessageDao().countAiBetween(userId, start, end) }
+            .getOrDefault(0)
+        val monthStart = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.DAY_OF_MONTH, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val usedMonth = runCatching {
+            database.chatMessageDao().countAiBetween(userId, monthStart, System.currentTimeMillis())
+        }.getOrDefault(0)
+
+        val chatCert = certStore.loadChatAi(userId)?.first
+        val chatActive = chatCert != null && ChatAiSku.isActive(chatCert)
+        val isTrial = chatActive && chatCert != null && ChatAiSku.isTrialSku(chatCert.skuCode)
+        val vipRow = runCatching { database.userVipDao().getUserVipSync(userId) }.getOrNull()
+        val vipActive = vipRow != null && isVipRowActive(vipRow)
+        val chatExpired = chatCert != null && !ChatAiSku.isActive(chatCert) &&
+            ChatAiSku.isChatAiCert(chatCert)
+        val hasCloud = ChatAiLimits.hasCloudEntitlement(tier) &&
+            certStore.loadForChatAi(userId) != null
+
+        val state = when {
+            !hasCloud && chatExpired -> ChatAiBarState.EXPIRED
+            !hasCloud -> ChatAiBarState.INACTIVE
+            isTrial && used >= ChatAiLimits.TRIAL_TOTAL -> ChatAiBarState.EXHAUSTED_DAY
+            isTrial -> ChatAiBarState.TRIAL
+            monthLimit > 0 && usedMonth >= monthLimit -> ChatAiBarState.EXHAUSTED_MONTH
+            limit > 0 && used >= limit -> ChatAiBarState.EXHAUSTED_DAY
+            chatExpired && !vipActive -> ChatAiBarState.EXPIRED
+            vipActive && chatActive && ChatAiLimits.vipLevelToChatTier(vipRow!!.vipLevel) >= ChatAiSku.tierFromCert(chatCert!!) ->
+                ChatAiBarState.ACTIVE_BOTH
+            vipActive && tier > 0 -> ChatAiBarState.ACTIVE_VIP
+            chatActive -> ChatAiBarState.ACTIVE_CARD
+            else -> ChatAiBarState.INACTIVE
+        }
+
+        val packageName = when (state) {
+            ChatAiBarState.ACTIVE_CARD, ChatAiBarState.TRIAL ->
+                chatCert?.let { ChatAiSku.displayName(it.skuCode) }
+            ChatAiBarState.ACTIVE_VIP, ChatAiBarState.ACTIVE_BOTH ->
+                "VIP${vipRow?.vipLevel ?: tier}"
+            else -> null
+        }
+
+        val expireDate = when {
+            chatActive -> chatCert?.expireDate
+            vipActive -> vipRow?.expireDate
+            else -> null
+        }
+
+        val progress = if (isTrial) {
+            (used.toFloat() / ChatAiLimits.TRIAL_TOTAL).coerceIn(0f, 1f)
+        } else if (limit > 0) {
+            (used.toFloat() / limit).coerceIn(0f, 1f)
+        } else null
+
+        val trialRemaining = if (isTrial) (ChatAiLimits.TRIAL_TOTAL - used).coerceAtLeast(0) else null
+
+        val sourceLabel = when (state) {
+            ChatAiBarState.ACTIVE_VIP, ChatAiBarState.ACTIVE_BOTH -> "VIP 权益"
+            ChatAiBarState.ACTIVE_CARD -> "AI 卡"
+            ChatAiBarState.TRIAL -> "体验"
+            ChatAiBarState.INACTIVE -> "本地"
+            else -> null
+        }
+
+        return ChatAiEntitlementUi(
+            state = state,
+            packageName = packageName,
+            usedToday = used,
+            dailyLimit = if (isTrial) ChatAiLimits.TRIAL_TOTAL else limit,
+            usedMonth = usedMonth,
+            monthlyLimit = monthLimit,
+            trialRemaining = trialRemaining,
+            expireDate = expireDate,
+            progress = progress,
+            sourceLabel = sourceLabel,
+            effectiveTier = tier,
+            hasCloudEntitlement = hasCloud,
+        )
+    }
+
+    private fun defaultEntitlement() = ChatAiEntitlementUi(
+        state = ChatAiBarState.INACTIVE,
+        packageName = null,
+        usedToday = 0,
+        dailyLimit = 0,
+        usedMonth = 0,
+        monthlyLimit = 0,
+        expireDate = null,
+        progress = null,
+        sourceLabel = "本地",
+        effectiveTier = 0,
+        hasCloudEntitlement = false,
+    )
 
     private fun todayRangeMs(): Pair<Long, Long> {
         val cal = java.util.Calendar.getInstance().apply {

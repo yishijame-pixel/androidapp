@@ -364,6 +364,9 @@ fun MainScreen(soundManager: SoundEffectManager) {
     
     // 创建 AuthViewModel
     val authViewModel: com.example.funlife.viewmodel.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val userSession = authViewModel.getCurrentSession()
+    val suppressGameInviteRoomId = navBackStackEntry?.arguments?.getString("roomId")
+        ?.takeIf { currentDestination?.route?.startsWith("social_game_lobby") == true }
 
     // ─── Deep Link：通知点击 → 自动跳到对应页面 ───
     // 仅在已登录（非欢迎/登录/注册）状态消费，避免打断认证流程
@@ -371,7 +374,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
     LaunchedEffect(pendingDeepLink, currentDestination?.route) {
         val target = pendingDeepLink ?: return@LaunchedEffect
         val current = currentDestination?.route ?: return@LaunchedEffect
-        val authPages = setOf(
+    val authPages = setOf(
             Screen.Welcome.route, Screen.Login.route, Screen.Register.route
         )
         if (current in authPages) return@LaunchedEffect
@@ -494,10 +497,17 @@ fun MainScreen(soundManager: SoundEffectManager) {
         Screen.Friends.route,
         // Phase 2 私聊详情：全屏沉浸，隐藏主 Tab 底栏
         Screen.FriendChat.route,
+        // 趣玩中心 · 全链路沉浸（无底部导航栏）
+        Screen.SocialGameCenter.route,
+        "social_game_center?tab={tab}&peerPbId={peerPbId}",
+        Screen.SocialGameLobby.route,
     )
     val immersiveRoute = currentDestination?.route
     val showBottomBar = immersiveRoute !in hideBottomBarRoutes &&
-        immersiveRoute?.startsWith("friend_chat/") != true
+        immersiveRoute?.startsWith("friend_chat/") != true &&
+        immersiveRoute?.startsWith("social_game_detail/") != true &&
+        immersiveRoute?.startsWith("social_game_lobby/") != true &&
+        immersiveRoute?.startsWith("social_game_center") != true
 
     com.example.funlife.ui.components.topdrawer.TopDrawerHost(
         state = topDrawerState,
@@ -692,6 +702,16 @@ fun MainScreen(soundManager: SoundEffectManager) {
                     .fillMaxWidth()
             ) {
                 com.example.funlife.ui.components.SocialHeadsUpBanner()
+            }
+
+            // 🎮 趣玩邀请：全 App 弹层（首页/任意 Tab 均可接受或拒绝）
+            if (userSession != null && com.example.funlife.social.PocketBaseConfig.isEnabled()) {
+                val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
+                com.example.funlife.ui.screens.socialgame.GlobalGameInviteLayer(
+                    viewModel = gameCenterVm,
+                    navController = navController,
+                    suppressRoomId = suppressGameInviteRoomId,
+                )
             }
 
             // 底部导航栏 - 波浪延伸到屏幕真正底部，覆盖系统手势/3键区

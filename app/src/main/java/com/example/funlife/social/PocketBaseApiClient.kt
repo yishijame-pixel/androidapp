@@ -1,6 +1,10 @@
 package com.example.funlife.social
 
 import android.content.Context
+import com.example.funlife.social.game.model.GameRoomDto
+import com.example.funlife.social.game.model.GameRoomStateCodec
+import com.example.funlife.social.game.model.GameRoomStatus
+import com.example.funlife.social.game.model.InviteMode
 import com.example.funlife.social.model.FriendshipDto
 import com.example.funlife.social.model.FriendshipStatus
 import com.example.funlife.social.model.ConversationDto
@@ -65,10 +69,24 @@ class PocketBaseApiClient(private val context: Context) {
         return authWithPassword(identity, password)
     }
 
+    companion object {
+        /** JWT 内的 PocketBase 用户 id，与 createRule 的 @request.auth.id 一致。 */
+        fun recordIdFromToken(token: String): String {
+            val parts = token.split('.')
+            if (parts.size < 2) throw PocketBaseApiException(0, "无效 token")
+            val payload = String(
+                android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP),
+                StandardCharsets.UTF_8,
+            )
+            val obj = JsonParser.parseString(payload).asJsonObject
+            return obj.get("id")?.asString ?: throw PocketBaseApiException(0, "token 无 id")
+        }
+    }
+
     fun updateOnline(token: String, online: Boolean) {
         runCatching {
             patchJson(
-                "$apiBase/collections/users/records/${authRecordId(token)}",
+                "$apiBase/collections/users/records/${recordIdFromToken(token)}",
                 mapOf("online" to online),
                 authToken = token,
             )
@@ -126,6 +144,17 @@ class PocketBaseApiClient(private val context: Context) {
         }.getOrNull()
     }
 
+    /** 服务端用户是否仍存在；仅 404 视为已失效（换服/删库后本地缓存过期）。 */
+    fun userRecordExists(token: String, recordId: String): Boolean {
+        if (recordId.isBlank()) return false
+        return runCatching {
+            getJson("$apiBase/collections/users/records/$recordId", token)
+            true
+        }.getOrElse { e ->
+            if (e is PocketBaseApiException && e.code == 404) false else true
+        }
+    }
+
     // ── Friendships ──────────────────────────────────────────────────────
 
     fun listFriendships(token: String, myPbId: String): List<FriendshipDto> {
@@ -181,6 +210,77 @@ class PocketBaseApiClient(private val context: Context) {
 
     fun deleteFriendship(token: String, friendshipId: String) {
         delete("$apiBase/collections/friendships/records/$friendshipId", token)
+    }
+
+    // ── Game rooms ───────────────────────────────────────────────────────
+
+    fun listMyGameRooms(token: String, myPbId: String): List<GameRoomDto> {
+        val filter = URLEncoder.encode(
+            "((host = '$myPbId' || guest = '$myPbId' || game_state ~ '$myPbId') && " +
+                "(status != 'cancelled' && status != 'expired' || host = '$myPbId'))",
+            StandardCharsets.UTF_8.name(),
+        )
+        val expand = URLEncoder.encode("host,guest", StandardCharsets.UTF_8.name())
+        val url = "$apiBase/collections/game_rooms/records?filter=$filter&expand=$expand&perPage=50&sort=-updated"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return emptyList()
+        return items.map { parseGameRoom(it.asJsonObject) }
+    }
+
+    /** 受邀方专用：排除自己为 host 的房间，避免 outbound 邀请误命中。 */
+    fun listIncomingGameInvites(token: String, myPbId: String): List<GameRoomDto> {
+        val filter = URLEncoder.encode(
+            "status = 'waiting' && host != '$myPbId' && (guest = '$myPbId' || game_state ~ '$myPbId')",
+            StandardCharsets.UTF_8.name(),
+        )
+        val expand = URLEncoder.encode("host,guest", StandardCharsets.UTF_8.name())
+        val url = "$apiBase/collections/game_rooms/records?filter=$filter&expand=$expand&perPage=20&sort=-updated"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return emptyList()
+        return items.map { parseGameRoom(it.asJsonObject) }
+    }
+
+    fun findGameRoomByCode(token: String, roomCode: String): GameRoomDto? {
+        val filter = URLEncoder.encode(
+            "room_code = '${escapeFilter(roomCode.uppercase())}' && status = 'waiting' && invite_mode = 'open'",
+            StandardCharsets.UTF_8.name(),
+        )
+        val expand = URLEncoder.encode("host,guest", StandardCharsets.UTF_8.name())
+        val url = "$apiBase/collections/game_rooms/records?filter=$filter&expand=$expand&perPage=1"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return null
+        if (items.size() == 0) return null
+        return parseGameRoom(items[0].asJsonObject)
+    }
+
+    fun getGameRoom(token: String, roomId: String): GameRoomDto {
+        val expand = URLEncoder.encode("host,guest", StandardCharsets.UTF_8.name())
+        val url = "$apiBase/collections/game_rooms/records/$roomId?expand=$expand"
+        return parseGameRoom(getJson(url, token))
+    }
+
+    fun createGameRoom(token: String, body: Map<String, Any?>): GameRoomDto {
+        val json = postJson("$apiBase/collections/game_rooms/records", body, authToken = token)
+        val id = json.get("id").asString
+        return runCatching { getGameRoom(token, id) }
+            .getOrElse { parseGameRoom(json) }
+    }
+
+    fun updateGameRoom(token: String, roomId: String, patch: Map<String, Any?>): GameRoomDto {
+        val json = patchJson("$apiBase/collections/game_rooms/records/$roomId", patch, authToken = token)
+        return parseGameRoom(json)
+    }
+
+    fun listActiveRoomsForUser(token: String, myPbId: String): List<GameRoomDto> {
+        val statusClause = GameRoomStatus.ACTIVE.joinToString(" || ") { "status = '${it.wire}'" }
+        val filter = URLEncoder.encode(
+            "(host = '$myPbId' || guest = '$myPbId' || game_state ~ '$myPbId') && ($statusClause)",
+            StandardCharsets.UTF_8.name(),
+        )
+        val url = "$apiBase/collections/game_rooms/records?filter=$filter&perPage=20&sort=-updated"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return emptyList()
+        return items.map { parseGameRoom(it.asJsonObject) }
     }
 
     // ── Phase 2: Conversations / Messages ───────────────────────────────
@@ -359,17 +459,7 @@ class PocketBaseApiClient(private val context: Context) {
         return AuthResult(token, id)
     }
 
-    private fun authRecordId(token: String): String {
-        // JWT payload 中间段 base64 — 仅取 id 字段；失败则抛出让上层 refresh
-        val parts = token.split('.')
-        if (parts.size < 2) throw PocketBaseApiException(0, "无效 token")
-        val payload = String(
-            android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP),
-            StandardCharsets.UTF_8,
-        )
-        val obj = JsonParser.parseString(payload).asJsonObject
-        return obj.get("id")?.asString ?: throw PocketBaseApiException(0, "token 无 id")
-    }
+    private fun authRecordId(token: String): String = recordIdFromToken(token)
 
     private fun parseUser(obj: JsonObject): PbUserProfile {
         val id = obj.get("id").asString
@@ -381,6 +471,7 @@ class PocketBaseApiClient(private val context: Context) {
             displayName = obj.get("name")?.asString ?: obj.get("funlife_username")?.asString.orEmpty(),
             avatarUrl = avatarUrl,
             online = obj.get("online")?.asBoolean ?: false,
+            updatedAtMs = SocialChatUtils.parseCreatedAt(obj.get("updated")?.asString),
         )
     }
 
@@ -413,6 +504,38 @@ class PocketBaseApiClient(private val context: Context) {
             el.isJsonObject -> el.asJsonObject.get("id")?.asString
             else -> null
         }
+    }
+
+    private fun parseGameRoom(obj: JsonObject): GameRoomDto {
+        val expand = obj.getAsJsonObject("expand")
+        val hostId = relationId(obj.get("host")).orEmpty()
+        val guestId = relationId(obj.get("guest"))
+        val hostProfile = expand?.getAsJsonObject("host")?.let { parseUser(it) }
+        val guestProfile = expand?.getAsJsonObject("guest")?.let { parseUser(it) }
+        val gameState = GameRoomStateCodec.parse(obj.get("game_state"))
+        val legacyDeclined = obj.get("game_state")?.takeIf { it.isJsonObject }?.asJsonObject
+            ?.get("declined_by")?.asString == "guest"
+        val declinedByPbId = gameState?.declinedByPbId
+        val declinedByGuest = !declinedByPbId.isNullOrBlank() || legacyDeclined
+        return GameRoomDto(
+            id = obj.get("id").asString,
+            gameType = obj.get("game_type")?.asString.orEmpty(),
+            inviteMode = InviteMode.fromWire(obj.get("invite_mode")?.asString),
+            roomCode = obj.get("room_code")?.asString.orEmpty(),
+            hostPbId = hostId,
+            guestPbId = guestId,
+            status = GameRoomStatus.fromWire(obj.get("status")?.asString),
+            hostReady = obj.get("host_ready")?.asBoolean ?: false,
+            guestReady = obj.get("guest_ready")?.asBoolean ?: false,
+            inviteMessage = obj.get("invite_message")?.asString.orEmpty(),
+            declinedByGuest = !declinedByPbId.isNullOrBlank() || legacyDeclined,
+            declinedByPbId = declinedByPbId,
+            gameState = gameState,
+            hostProfile = hostProfile,
+            guestProfile = guestProfile,
+            updatedAtMs = SocialChatUtils.parseCreatedAt(obj.get("updated")?.asString),
+            createdAtMs = SocialChatUtils.parseCreatedAt(obj.get("created")?.asString),
+        )
     }
 
     private fun parseConversation(obj: JsonObject): ConversationDto {
@@ -457,7 +580,15 @@ class PocketBaseApiClient(private val context: Context) {
     }
 }
 
-class PocketBaseApiException(val code: Int, message: String) : Exception(message)
+class PocketBaseApiException(val code: Int, message: String) : Exception(message) {
+    fun toUserMessage(fallback: String = "请求失败"): String = when (code) {
+        404 -> "房间不存在或无权访问，可能已结束"
+        403 -> "无权执行此操作"
+        401 -> "登录已过期，请重新进入好友页同步"
+        0 -> (message ?: fallback).ifBlank { fallback }
+        else -> (message ?: fallback).ifBlank { fallback }
+    }
+}
 
 data class MessagePageResult(
     val messages: List<MessageDto>,

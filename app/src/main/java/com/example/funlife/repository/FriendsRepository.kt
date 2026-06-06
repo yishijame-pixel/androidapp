@@ -5,6 +5,7 @@ import com.example.funlife.data.dao.SocialDao
 import com.example.funlife.data.model.SocialFriendCache
 import com.example.funlife.social.PocketBaseApiClient
 import com.example.funlife.social.PocketBaseApiException
+import com.example.funlife.social.SocialPresencePolicy
 import com.example.funlife.social.model.FriendUiModel
 import com.example.funlife.social.model.FriendshipDto
 import com.example.funlife.social.model.FriendshipStatus
@@ -46,6 +47,7 @@ class FriendsRepository(
                             funlifeUsername = u.funlifeUsername,
                             displayName = u.displayName.ifBlank { u.funlifeUsername },
                             avatarUrl = u.avatarUrl,
+                            online = SocialPresencePolicy.isEffectivelyOnline(u.online, u.updatedAtMs),
                         )
                     }
                 }
@@ -189,6 +191,31 @@ class FriendsRepository(
             Result.success(Unit)
         }
 
+    suspend fun refreshAcceptedFriendsPresence(userId: Long, token: String) =
+        withContext(Dispatchers.IO) {
+            socialDao.getFriends(userId)
+                .filter { it.status == "accepted" }
+                .forEach { friend ->
+                    api.getUserById(token, friend.friendPbId)?.let { profile ->
+                        val effective = SocialPresencePolicy.isEffectivelyOnline(
+                            profile.online,
+                            profile.updatedAtMs,
+                        )
+                        socialDao.updateFriendOnline(
+                            userId,
+                            friend.friendPbId,
+                            effective,
+                            System.currentTimeMillis(),
+                        )
+                    }
+                }
+        }
+
+    suspend fun updateFriendOnline(userId: Long, friendPbId: String, online: Boolean) =
+        withContext(Dispatchers.IO) {
+            socialDao.updateFriendOnline(userId, friendPbId, online, System.currentTimeMillis())
+        }
+
     private fun buildPendingOutCache(
         userId: Long,
         dto: FriendshipDto,
@@ -202,6 +229,7 @@ class FriendsRepository(
         friendshipId = dto.id,
         status = "pending_out",
         remark = "",
+        online = SocialPresencePolicy.isEffectivelyOnline(target.online, target.updatedAtMs),
         updatedAt = System.currentTimeMillis(),
     )
 
@@ -239,6 +267,7 @@ class FriendsRepository(
             friendshipId = dto.id,
             status = statusWire,
             remark = old?.remark.orEmpty(),
+            online = SocialPresencePolicy.isEffectivelyOnline(profile.online, profile.updatedAtMs),
             updatedAt = System.currentTimeMillis(),
         )
     }
@@ -260,6 +289,7 @@ class FriendsRepository(
             status = fs,
             isIncomingRequest = status == "pending_in",
             remark = remark,
+            online = online,
         )
     }
 }

@@ -38,6 +38,11 @@ class ChatAiCloudRepository(
         val reply: String? = null,
         val used: Int? = null,
         val limit: Int? = null,
+        val usedMonth: Int? = null,
+        val limitMonth: Int? = null,
+        val tier: Int? = null,
+        val source: String? = null,
+        val poolType: String? = null,
         val vipLevel: Int? = null
     )
 
@@ -52,8 +57,8 @@ class ChatAiCloudRepository(
         if (baseUrl.isBlank() || !baseUrl.startsWith("http")) {
             return@withContext CallResult.Recoverable("NO_BACKEND", "云端地址未配置")
         }
-        val pair = store.load(userId)
-        if (pair == null) return@withContext CallResult.Recoverable("NO_CERT", "未登录或无 VIP 凭证")
+        val pair = store.loadForChatAi(userId)
+        if (pair == null) return@withContext CallResult.Recoverable("NO_CERT", "未激活 AI 额度卡")
         val (cert, sig) = pair
         val req = mapOf(
             "certificate" to cert,
@@ -78,10 +83,10 @@ class ChatAiCloudRepository(
                     )
                 }
                 when (r.code) {
-                    "QUOTA_EXCEEDED" -> CallResult.QuotaExceeded(
-                        used = r.used ?: -1, limit = r.limit ?: -1, vipLevel = r.vipLevel ?: 0
+                    "QUOTA_EXCEEDED", "MONTHLY_CAP", "TRIAL_EXHAUSTED" -> CallResult.QuotaExceeded(
+                        used = r.used ?: -1, limit = r.limit ?: -1, vipLevel = r.tier ?: r.vipLevel ?: 0
                     )
-                    "BAD_SIGNATURE", "CERT_EXPIRED", "DISABLED", "REVOKED",
+                    "NO_ENTITLEMENT", "BAD_SIGNATURE", "CERT_EXPIRED", "DISABLED", "REVOKED",
                     "RATE_LIMITED", "INVALID", "BAD_REQUEST" ->
                         CallResult.Rejected(r.code, r.msg ?: "请求被拒绝")
                     else -> CallResult.Recoverable(r.code ?: "UNKNOWN", r.msg ?: "云端异常")

@@ -58,6 +58,18 @@ class FriendsInteractor(
             friendsRepo.refreshFriends(userId, cred.pbRecordId, cred.token, notifyNewRequests = false)
         }
 
+    suspend fun syncFriendsPresenceForLobby(): Result<Unit> =
+        SocialOperationGate.run(
+            ctx = appCtx,
+            userId = userId,
+            operation = "同步好友在线",
+            timeoutMs = SocialOperationGate.TIMEOUT_SYNC_MS,
+            forceSession = false,
+        ) { cred ->
+            friendsRepo.refreshAcceptedFriendsPresence(userId, cred.token)
+            Result.success(Unit)
+        }
+
     suspend fun searchUser(rawQuery: String): Result<PbUserProfile?> {
         val query = SocialOperationGate.validateSearchQuery(rawQuery).getOrElse { return Result.failure(it) }
         return SocialOperationGate.run(

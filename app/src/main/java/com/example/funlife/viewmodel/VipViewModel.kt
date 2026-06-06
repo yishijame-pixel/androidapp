@@ -11,6 +11,11 @@ import com.example.funlife.BuildConfig
 import com.example.funlife.repository.VipRepository
 import com.example.funlife.security.SecurityManager
 import com.example.funlife.vip.VipManager
+import com.example.funlife.vip.ChatAiSku
+import com.example.funlife.vip.ChatAiEntitlementUi
+import com.example.funlife.vip.ChatAiBarState
+import com.example.funlife.vip.VipCertificateStore
+import com.example.funlife.vip.VipQuota
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -165,11 +170,16 @@ class VipViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun redeemViaCloud(code: String): String {
         return when (val r = cloudVip.redeem(_userId.value, code)) {
             is VipManager.Outcome.Success -> {
-                val name = VipLevel.fromLevel(r.cert.vipLevel).displayName
-                if (r.isReissue) {
-                    "已重新激活 $name|0"
+                if (ChatAiSku.isChatAiCert(r.cert)) {
+                    val name = ChatAiSku.displayName(r.cert.skuCode)
+                    "已激活 $name · 请前往聊天记账 → AI 额度查看|0"
                 } else {
-                    "成功激活 $name|${r.coinsGranted}"
+                    val name = VipLevel.fromLevel(r.cert.vipLevel).displayName
+                    if (r.isReissue) {
+                        "已重新激活 $name|0"
+                    } else {
+                        "成功激活 $name|${r.coinsGranted}"
+                    }
                 }
             }
             is VipManager.Outcome.Failure -> friendlyError(r.code, r.msg)

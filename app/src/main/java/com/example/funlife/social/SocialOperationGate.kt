@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.data.database.AppDatabase
+import com.example.funlife.data.model.SocialPocketBaseLink
 import com.example.funlife.repository.SocialLinkRepository
 import com.example.funlife.utils.UserSessionManager
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,20 @@ object SocialOperationGate {
         if (PocketBaseConfig.isRemote()) 45_000L else TIMEOUT_SYNC_MS
 
     private val userLocks = ConcurrentHashMap<Long, Mutex>()
+    private val pbUserVerifiedUntil = ConcurrentHashMap<Long, Long>()
+
+    private const val PB_USER_VERIFY_TTL_MS = 5 * 60_000L
+
+    fun invalidateUserVerification(userId: Long) {
+        pbUserVerifiedUntil.remove(userId)
+    }
+
+    fun isUserRecentlyVerified(userId: Long): Boolean =
+        System.currentTimeMillis() < (pbUserVerifiedUntil[userId] ?: 0L)
+
+    fun markUserVerified(userId: Long) {
+        pbUserVerifiedUntil[userId] = System.currentTimeMillis() + PB_USER_VERIFY_TTL_MS
+    }
 
     /** 规范化 FunLife 用户名（去 @、trim、小写用于比较） */
     fun normalizeUsername(raw: String): String =
@@ -145,6 +160,7 @@ object SocialOperationGate {
         var result = executeWith(cred)
         if (isUnauthorized(result)) {
             Log.w(TAG, "401 on $operation — refresh credentials userId=$userId")
+            invalidateUserVerification(userId)
             SocialTokenCache.clear(userId)
             cred = acquire(ctx, userId, forceSession = true).getOrElse { return@withContext Result.failure(it) }
             result = executeWith(cred)
@@ -160,15 +176,49 @@ object SocialOperationGate {
         val db = (appCtx as? FunLifeApplication)?.database ?: AppDatabase.getDatabase(appCtx)
         val link = db.socialDao().getLink(userId) ?: return null
         if (link.pbRecordId.isBlank()) return null
-        SocialTokenCache.get(userId)?.let {
-            return SocialCredentials(userId, link.pbRecordId, it)
+        SocialTokenCache.get(userId)?.let { token ->
+            return credentialsFromToken(appCtx, userId, link, token)
         }
         val stored = SocialSecureStore.getToken(appCtx, userId)
         if (!stored.isNullOrBlank()) {
             SocialTokenCache.put(userId, stored)
-            return SocialCredentials(userId, link.pbRecordId, stored)
+            return credentialsFromToken(appCtx, userId, link, stored)
         }
         return null
+    }
+
+    /**
+     * host 字段必须与 JWT 内 @request.auth.id 一致，否则 createRule 403。
+     * 本地 link.pbRecordId 若过期（重装 PB / 换服）则自动修复。
+     */
+    private suspend fun credentialsFromToken(
+        appCtx: Context,
+        userId: Long,
+        link: SocialPocketBaseLink,
+        token: String,
+    ): SocialCredentials? {
+        val tokenRecordId = runCatching { PocketBaseApiClient.recordIdFromToken(token) }
+            .getOrDefault(link.pbRecordId)
+        val pbId = tokenRecordId.ifBlank { link.pbRecordId }
+        val api = PocketBaseApiClient(appCtx)
+        if (!isUserRecentlyVerified(userId)) {
+            if (!api.userRecordExists(token, pbId)) {
+                Log.w(TAG, "PB user $pbId gone — clearing stale link userId=$userId")
+                invalidateUserVerification(userId)
+                SocialSecureStore.clearToken(appCtx, userId)
+                SocialTokenCache.clear(userId)
+                val db = (appCtx as? FunLifeApplication)?.database ?: AppDatabase.getDatabase(appCtx)
+                db.socialDao().deleteLink(userId)
+                return null
+            }
+            markUserVerified(userId)
+        }
+        if (tokenRecordId.isNotBlank() && tokenRecordId != link.pbRecordId) {
+            Log.w(TAG, "pbRecordId mismatch userId=$userId db=${link.pbRecordId} jwt=$tokenRecordId — repairing")
+            val db = (appCtx as? FunLifeApplication)?.database ?: AppDatabase.getDatabase(appCtx)
+            db.socialDao().upsertLink(link.copy(pbRecordId = tokenRecordId))
+        }
+        return SocialCredentials(userId, pbId, token)
     }
 
     private fun lockFor(userId: Long): Mutex = userLocks.getOrPut(userId) { Mutex() }

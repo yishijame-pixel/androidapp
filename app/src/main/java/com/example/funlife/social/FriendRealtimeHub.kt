@@ -6,6 +6,9 @@ import com.example.funlife.FunLifeApplication
 import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.notifications.FriendRequestNotifier
 import com.example.funlife.repository.FriendsRepository
+import com.example.funlife.repository.GameRoomRepository
+import com.example.funlife.social.game.GameInviteNotifier
+import com.example.funlife.social.game.GameRoomSyncCoordinator
 import com.example.funlife.repository.SocialLinkRepository
 import com.example.funlife.utils.UserSessionManager
 import kotlinx.coroutines.CancellationException
@@ -95,6 +98,7 @@ object FriendRealtimeHub {
         val token = linkRepo.getValidToken(userId) ?: return
         val myPbId = link.pbRecordId
         val friendsRepo = FriendsRepository(ctx, db.socialDao(), linkRepo)
+        val gameRoomRepo = GameRoomRepository(ctx, db.socialDao(), linkRepo)
         val realtime = PocketBaseRealtimeClient()
 
         SocialSessionManager.onRealtimePhase(SocialSessionManager.RealtimePhase.LIVE)
@@ -118,6 +122,24 @@ object FriendRealtimeHub {
                     )
                 }
                 SocialSessionManager.onSyncCompleted()
+            },
+            onIncomingGameRoom = { roomId ->
+                scope.launch {
+                    GameRoomSyncCoordinator.requestRoomRefreshImmediate(roomId) {
+                        gameRoomRepo.refreshRoomById(userId, myPbId, token, roomId)
+                    }
+                    if (!GameInviteNotifier.isHandled(userId, roomId)) {
+                        runCatching { GameInviteNotifier.publishNewInvites(ctx, userId) }
+                    }
+                    SocialSessionManager.onSyncCompleted()
+                }
+            },
+            onUserPresenceChanged = { friendPbId, online ->
+                scope.launch {
+                    runCatching {
+                        friendsRepo.updateFriendOnline(userId, friendPbId, online)
+                    }.onFailure { Log.w(TAG, "presence cache update failed: ${it.message}") }
+                }
             },
         )
     }

@@ -21,7 +21,7 @@ sealed class SocialFailure(val userMessage: String) {
     companion object {
         fun fromThrowable(t: Throwable, fallback: String = "操作失败"): SocialFailure = when (t) {
             is SocialFailureException -> t.failure
-            is PocketBaseApiException -> Api(t.message ?: fallback)
+            is PocketBaseApiException -> Api(t.toUserMessage(fallback))
             is java.io.IOException -> Network(
                 "无法连接社交服务器\n请确认 PocketBase 已启动且手机能访问\n(${PocketBaseConfig.baseUrl()})",
             )

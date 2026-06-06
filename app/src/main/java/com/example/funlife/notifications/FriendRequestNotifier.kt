@@ -116,6 +116,7 @@ object FriendRequestNotifier {
             funlifeUsername = profile.funlifeUsername,
             displayName = profile.displayName.ifBlank { profile.funlifeUsername },
             avatarUrl = profile.avatarUrl,
+            online = profile.online,
         )
     }
 
@@ -195,6 +196,7 @@ object FriendRequestNotifier {
             status = FriendshipStatus.PENDING,
             isIncomingRequest = true,
             remark = "",
+            online = requester?.online ?: false,
         )
     }
 }

@@ -58,6 +58,43 @@ class VipCertificateStore(context: Context) {
             .apply()
     }
 
+    // ── 聊天 AI 额度卡凭证（与 VIP 凭证分 key 存储，互不覆盖） ──
+
+    fun saveChatAi(userId: Long, cert: VipCertificate, signature: String, redeemCode: String? = null) {
+        val editor = prefs.edit()
+            .putString(keyChatAiCert(userId), gson.toJson(cert))
+            .putString(keyChatAiSig(userId), signature)
+        if (!redeemCode.isNullOrBlank()) {
+            editor.putString(keyChatAiCode(userId), redeemCode)
+        }
+        editor.apply()
+    }
+
+    fun loadChatAi(userId: Long): Pair<VipCertificate, String>? {
+        val certJson = prefs.getString(keyChatAiCert(userId), null) ?: return null
+        val sig = prefs.getString(keyChatAiSig(userId), null) ?: return null
+        return try {
+            gson.fromJson(certJson, VipCertificate::class.java) to sig
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun loadChatAiRedeemCode(userId: Long): String? =
+        prefs.getString(keyChatAiCode(userId), null)
+
+    fun clearChatAi(userId: Long) {
+        prefs.edit()
+            .remove(keyChatAiCert(userId))
+            .remove(keyChatAiSig(userId))
+            .remove(keyChatAiCode(userId))
+            .apply()
+    }
+
+    /** 云端 /chat_ai 调用：优先 VIP 凭证，其次 AI 卡凭证 */
+    fun loadForChatAi(userId: Long): Pair<VipCertificate, String>? =
+        load(userId) ?: loadChatAi(userId)
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }
@@ -65,4 +102,7 @@ class VipCertificateStore(context: Context) {
     private fun keyCert(userId: Long) = "cert_$userId"
     private fun keySig(userId: Long) = "sig_$userId"
     private fun keyCode(userId: Long) = "code_$userId"
+    private fun keyChatAiCert(userId: Long) = "chat_ai_cert_$userId"
+    private fun keyChatAiSig(userId: Long) = "chat_ai_sig_$userId"
+    private fun keyChatAiCode(userId: Long) = "chat_ai_code_$userId"
 }

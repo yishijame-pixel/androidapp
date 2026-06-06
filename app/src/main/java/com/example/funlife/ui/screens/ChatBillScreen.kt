@@ -57,6 +57,7 @@ import com.example.funlife.data.model.ChatMessage
 import com.example.funlife.data.model.ChatPersona
 import com.example.funlife.ui.components.AccountSwitcher
 import com.example.funlife.ui.components.BudgetRingStrip
+import com.example.funlife.ui.components.ChatAiQuotaDialog
 import com.example.funlife.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -146,7 +147,8 @@ fun ChatBillScreen(
     var showAiDialog by remember { mutableStateOf(false) }
     // 🆕 v50：极简模式快速设置月度预算
     var showBudgetDialog by remember { mutableStateOf(false) }
-    val isAiAvailable by remember { derivedStateOf { viewModel.isAiAvailable } }
+    val isAiEntitled by remember { derivedStateOf { viewModel.isAiEntitledForMenu } }
+    val chatAiEntitlement by viewModel.chatAiEntitlement.collectAsState()
     // Toast 消息监听
     val toastMessage by viewModel.toastMessage.collectAsState()
     LaunchedEffect(toastMessage) {
@@ -225,7 +227,8 @@ fun ChatBillScreen(
                     }
                 },
                 onAiSettings = { showAiDialog = true },
-                isAiAvailable = isAiAvailable
+                isAiEntitled = isAiEntitled,
+                chatAiEntitlement = chatAiEntitlement
             )
 
             // ===== 人格选择栏 =====
@@ -360,6 +363,13 @@ fun ChatBillScreen(
                     )
                 }
             }
+
+            // ===== P2 · AI 额度即将用完 / 已用尽提示 =====
+            com.example.funlife.ui.components.ChatAiQuotaBanner(
+                entitlement = chatAiEntitlement,
+                themeColor = themeColor,
+                onOpenQuota = { showAiDialog = true }
+            )
 
             // ===== 底部输入栏 =====
             BillInputBar(themeColor = themeColor, onSubmit = { viewModel.handleInput(it) })
@@ -552,84 +562,13 @@ fun ChatBillScreen(
         )
     }
 
-    // AI设置弹窗
-    if (showAiDialog) {
-        var apiKeyText by remember { mutableStateOf(viewModel.getAiApiKey()) }
-        AlertDialog(
-            onDismissRequest = { showAiDialog = false },
-            containerColor = Color.White,
-            shape = RoundedCornerShape(20.dp),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🤖", fontSize = 20.sp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("AI 智能设置", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-            },
-            text = {
-                Column {
-                    // 状态指示
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isAiAvailable) Color(0xFF4CAF50).copy(alpha = 0.1f)
-                                else Color(0xFFFF9800).copy(alpha = 0.1f)
-                            )
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (isAiAvailable) Color(0xFF4CAF50) else Color(0xFFFF9800))
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (isAiAvailable) "✅ 已连接 灵犀 AI" else "⚠️ 未配置 API Key",
-                            fontSize = 13.sp,
-                            color = if (isAiAvailable) Color(0xFF2E7D32) else Color(0xFFE65100)
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "输入 API Key 启用灵犀 AI 智能回复。\n不填则使用本地规则引擎。",
-                        fontSize = 12.sp, color = Color(0xFF999999), lineHeight = 18.sp
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = apiKeyText,
-                        onValueChange = { apiKeyText = it.trim() },
-                        label = { Text("API Key") },
-                        placeholder = { Text("sk-...", color = Color(0xFFCCCCCC)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = themeColor)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "未配置时使用本地规则引擎回复，配置后人格回复更智能",
-                        fontSize = 11.sp, color = Color(0xFFBBBBBB)
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.setAiApiKey(apiKeyText)
-                        showAiDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = themeColor),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("保存") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAiDialog = false }) { Text("取消", color = Color(0xFF999999)) }
-            }
-        )
-    }
+    // AI 额度 · 卡密激活弹窗
+    ChatAiQuotaDialog(
+        visible = showAiDialog,
+        viewModel = viewModel,
+        themeColor = themeColor,
+        onDismiss = { showAiDialog = false }
+    )
 
     // 🔒 分享今日账单卡（数据按 viewModel.userId 严格隔离）
     if (showShareCardDialog) {
@@ -786,7 +725,8 @@ private fun ChatTopBar(
     onShareCard: () -> Unit = {},
     onExport: () -> Unit = {},
     onAiSettings: () -> Unit = {},
-    isAiAvailable: Boolean = false
+    isAiEntitled: Boolean = false,
+    chatAiEntitlement: com.example.funlife.vip.ChatAiEntitlementUi? = null,
 ) {
     val breathe = rememberInfiniteTransition(label = "breathe")
     val glowAlpha by breathe.animateFloat(
@@ -886,7 +826,7 @@ private fun ChatTopBar(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (isAiAvailable) {
+                    if (isAiEntitled) {
                         Spacer(Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
@@ -898,13 +838,30 @@ private fun ChatTopBar(
                         }
                     }
                 }
+                val ent = chatAiEntitlement
+                val quotaLine = when {
+                    ent == null || !ent.hasCloudEntitlement -> null
+                    ent.state == com.example.funlife.vip.ChatAiBarState.TRIAL ->
+                        "体验 剩 ${ent.trialRemaining ?: 0} 条"
+                    ent.dailyLimit > 0 ->
+                        "AI ${ent.usedToday}/${ent.dailyLimit} 条/天"
+                    else -> null
+                }
                 Text(
-                    getPersonaSubtitle(persona.id),
+                    text = quotaLine ?: getPersonaSubtitle(persona.id),
                     fontSize = 11.sp,
                     color = Color.White.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 1.dp)
+                    modifier = Modifier
+                        .padding(top = 1.dp)
+                        .then(
+                            if (quotaLine != null) Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onAiSettings() }
+                            else Modifier
+                        )
                 )
             }
 
@@ -927,10 +884,10 @@ private fun ChatTopBar(
                     DropdownMenuItem(
                         text = { Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.SmartToy, null, modifier = Modifier.size(18.dp),
-                                tint = if (isAiAvailable) Color(0xFF4CAF50) else Color(0xFFFF9800))
+                                tint = if (isAiEntitled) Color(0xFF4CAF50) else Color(0xFFFF9800))
                             Spacer(Modifier.width(8.dp))
-                            Text("AI 设置", fontSize = 14.sp)
-                            if (isAiAvailable) {
+                            Text("AI 额度", fontSize = 14.sp)
+                            if (isAiEntitled) {
                                 Spacer(Modifier.width(6.dp))
                                 Box(
                                     modifier = Modifier.size(6.dp).clip(CircleShape)

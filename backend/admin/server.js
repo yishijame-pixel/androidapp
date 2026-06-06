@@ -105,12 +105,56 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
+const CHAT_AI_SKU_CODES = Object.keys(SKU).filter((k) => SKU[k].type === "chat_ai");
+const VIP_SKU_CODES = Object.keys(SKU).filter((k) => SKU[k].type === "vip");
+
+/** 聊天 AI 卡密运营统计（P3） */
+app.get("/api/stats/chat_ai_products", async (req, res) => {
+  try {
+    const rows = [];
+    for (const skuCode of CHAT_AI_SKU_CODES) {
+      const def = SKU[skuCode];
+      const total = (await CODES.where({ skuCode }).count()).total;
+      const unused = (await CODES.where({ skuCode, status: "unused", disabled: _.neq(true) }).count()).total;
+      const used = (await CODES.where({ skuCode, status: "used" }).count()).total;
+      const disabled = (await CODES.where({ skuCode, disabled: true }).count()).total;
+      rows.push({
+        skuCode,
+        name: def.name,
+        price: def.price,
+        chatAiTier: def.chatAiTier,
+        durationDays: def.durationDays,
+        total,
+        unused,
+        used,
+        disabled,
+        revenue: used * (def.price || 0),
+      });
+    }
+    const sum = rows.reduce(
+      (a, x) => ({
+        total: a.total + x.total,
+        unused: a.unused + x.unused,
+        used: a.used + x.used,
+        disabled: a.disabled + x.disabled,
+        revenue: a.revenue + x.revenue,
+      }),
+      { total: 0, unused: 0, used: 0, disabled: 0, revenue: 0 }
+    );
+    res.json({ ok: true, data: { rows, sum } });
+  } catch (e) {
+    sendError(res, 500, "INTERNAL", "AI 卡统计失败", e);
+  }
+});
+
 /** 卡密列表（分页 + 筛选） */
 app.get("/api/codes", async (req, res) => {
   try {
-    const { sku, status, batch, q, page = "1", limit = "20" } = req.query;
+    const { sku, status, batch, q, productType, page = "1", limit = "20" } = req.query;
     const where = {};
     if (sku) where.skuCode = sku;
+    else if (productType === "chat_ai") where.skuCode = _.in(CHAT_AI_SKU_CODES);
+    else if (productType === "vip") where.skuCode = _.in(VIP_SKU_CODES);
     if (status === "unused") { where.status = "unused"; where.disabled = _.neq(true); }
     else if (status === "used") where.status = "used";
     else if (status === "disabled") where.disabled = true;
@@ -161,7 +205,8 @@ app.post("/api/codes/generate", async (req, res) => {
     let success = 0;
     for (const it of items) {
       try {
-        await CODES.doc(it.code).set({
+        const skuDef = SKU[skuCode];
+        const doc = {
           code: it.code,
           skuCode,
           status: "unused",
@@ -169,7 +214,16 @@ app.post("/api/codes/generate", async (req, res) => {
           createdAt: db.serverDate(),
           disabled: false,
           migrateCount: 0,
-        });
+        };
+        if (skuDef && skuDef.type === "chat_ai") {
+          doc.productType = "chat_ai";
+          doc.chatAiTier = skuDef.chatAiTier || 0;
+          doc.vipLevel = skuDef.chatAiTier || 0;
+        } else if (skuDef && skuDef.type === "vip") {
+          doc.productType = "vip";
+          doc.vipLevel = skuDef.vipLevel || 0;
+        }
+        await CODES.doc(it.code).set(doc);
         success++;
       } catch (e) {
         console.error("写入失败", it.display, e.message);

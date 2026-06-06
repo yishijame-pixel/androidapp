@@ -332,10 +332,105 @@ if (-not $hasMessages) {
     Write-Host "   messages exists, rules synced"
 }
 
+Write-Host ">> game_rooms collection..."
+$collections = Invoke-PbApi GET "/api/collections" $token
+$hasGameRooms = @($collections.items | Where-Object { $_.name -eq "game_rooms" }).Count -gt 0
+
+$roomRules = @{
+    listRule   = "@request.auth.id = host || @request.auth.id = guest || (status = 'waiting' && invite_mode = 'open')"
+    viewRule   = "@request.auth.id = host || @request.auth.id = guest || (status = 'waiting' && invite_mode = 'open')"
+    createRule = "@request.auth.id = host && @request.auth.id != ''"
+    # open 房：好友凭房间号加入时需 guest 写入自己
+    updateRule = "@request.auth.id = host || @request.auth.id = guest || (status = 'waiting' && invite_mode = 'open')"
+    deleteRule = "@request.auth.id = host"
+    indexes    = @(
+        'CREATE INDEX `idx_game_room_host_status` ON `game_rooms` (`host`, `status`)',
+        'CREATE INDEX `idx_game_room_guest_status` ON `game_rooms` (`guest`, `status`)',
+        'CREATE INDEX `idx_game_room_code` ON `game_rooms` (`room_code`)'
+    )
+}
+
+$roomFields = @(
+    @{ autogeneratePattern = "[a-z0-9]{15}"; hidden = $false; id = "text3208210256"; max = 15; min = 15; name = "id"; pattern = "^[a-z0-9]+$"; presentable = $false; primaryKey = $true; required = $true; system = $true; type = "text" },
+    @{ hidden = $false; id = "select_game_type"; maxSelect = 1; name = "game_type"; presentable = $false; required = $true; system = $false; type = "select"; values = @("gomoku", "draw_guess", "dice_duel", "truth_relay") },
+    @{ hidden = $false; id = "select_invite_mode"; maxSelect = 1; name = "invite_mode"; presentable = $false; required = $true; system = $false; type = "select"; values = @("direct", "open") },
+    @{ autogeneratePattern = ""; hidden = $false; id = "text_room_code"; max = 6; min = 0; name = "room_code"; pattern = ""; presentable = $false; primaryKey = $false; required = $false; system = $false; type = "text" },
+    @{ cascadeDelete = $false; collectionId = "_pb_users_auth_"; hidden = $false; id = "relation_host"; maxSelect = 1; minSelect = 0; name = "host"; presentable = $false; required = $true; system = $false; type = "relation" },
+    @{ cascadeDelete = $false; collectionId = "_pb_users_auth_"; hidden = $false; id = "relation_guest"; maxSelect = 1; minSelect = 0; name = "guest"; presentable = $false; required = $false; system = $false; type = "relation" },
+    @{ hidden = $false; id = "select_status"; maxSelect = 1; name = "status"; presentable = $false; required = $true; system = $false; type = "select"; values = @("waiting", "accepted", "playing", "finished", "cancelled", "expired", "abandoned") },
+    @{ hidden = $false; id = "bool_host_ready"; name = "host_ready"; presentable = $false; required = $false; system = $false; type = "bool" },
+    @{ hidden = $false; id = "bool_guest_ready"; name = "guest_ready"; presentable = $false; required = $false; system = $false; type = "bool" },
+    @{ cascadeDelete = $false; collectionId = "_pb_users_auth_"; hidden = $false; id = "relation_current_turn"; maxSelect = 1; minSelect = 0; name = "current_turn"; presentable = $false; required = $false; system = $false; type = "relation" },
+    @{ cascadeDelete = $false; collectionId = "_pb_users_auth_"; hidden = $false; id = "relation_winner"; maxSelect = 1; minSelect = 0; name = "winner"; presentable = $false; required = $false; system = $false; type = "relation" },
+    @{ hidden = $false; id = "json_game_state"; maxSize = 2000000; name = "game_state"; presentable = $false; required = $false; system = $false; type = "json" },
+    @{ autogeneratePattern = ""; hidden = $false; id = "text_invite_message"; max = 50; min = 0; name = "invite_message"; pattern = ""; presentable = $false; primaryKey = $false; required = $false; system = $false; type = "text" },
+    @{ hidden = $false; id = "date_expires_at"; max = ""; min = ""; name = "expires_at"; presentable = $false; required = $false; system = $false; type = "date" },
+    @{ hidden = $false; id = "date_finished_at"; max = ""; min = ""; name = "finished_at"; presentable = $false; required = $false; system = $false; type = "date" },
+    @{ hidden = $false; id = "autodate2990389176"; name = "created"; onCreate = $true; onUpdate = $false; presentable = $false; system = $false; type = "autodate" },
+    @{ hidden = $false; id = "autodate3332085495"; name = "updated"; onCreate = $true; onUpdate = $true; presentable = $false; system = $false; type = "autodate" }
+)
+
+if (-not $hasGameRooms) {
+    $roomBody = @{
+        name = "game_rooms"; type = "base"
+        listRule = $roomRules.listRule; viewRule = $roomRules.viewRule
+        createRule = $roomRules.createRule; updateRule = $roomRules.updateRule; deleteRule = $roomRules.deleteRule
+        fields = $roomFields; indexes = $roomRules.indexes
+    }
+    Invoke-PbApi POST "/api/collections" $token $roomBody | Out-Null
+    Write-Host "   game_rooms created"
+} else {
+    Invoke-PbApi PATCH "/api/collections/game_rooms" $token $roomRules | Out-Null
+    Write-Host "   game_rooms exists, rules synced"
+}
+
+Write-Host ">> game_moves collection..."
+$collections = Invoke-PbApi GET "/api/collections" $token
+$hasGameMoves = @($collections.items | Where-Object { $_.name -eq "game_moves" }).Count -gt 0
+$gameRoomsMeta = Invoke-PbApi GET "/api/collections/game_rooms" $token
+$gameRoomsColId = $gameRoomsMeta.id
+
+$moveRules = @{
+    listRule   = "@request.auth.id != ''"
+    viewRule   = "@request.auth.id != ''"
+    createRule = "@request.auth.id = player"
+    updateRule = $null
+    deleteRule = "@request.auth.id = player"
+    indexes    = @(
+        'CREATE INDEX `idx_game_move_room` ON `game_moves` (`room`, `move_index`)'
+    )
+}
+
+$moveFields = @(
+    @{ autogeneratePattern = "[a-z0-9]{15}"; hidden = $false; id = "text3208210256"; max = 15; min = 15; name = "id"; pattern = "^[a-z0-9]+$"; presentable = $false; primaryKey = $true; required = $true; system = $true; type = "text" },
+    @{ cascadeDelete = $true; collectionId = $gameRoomsColId; hidden = $false; id = "relation_room"; maxSelect = 1; minSelect = 0; name = "room"; presentable = $false; required = $true; system = $false; type = "relation" },
+    @{ cascadeDelete = $false; collectionId = "_pb_users_auth_"; hidden = $false; id = "relation_player"; maxSelect = 1; minSelect = 0; name = "player"; presentable = $false; required = $true; system = $false; type = "relation" },
+    @{ hidden = $false; id = "number_move_index"; max = $null; min = 0; name = "move_index"; onlyInt = $true; presentable = $false; required = $true; system = $false; type = "number" },
+    @{ hidden = $false; id = "json_payload"; maxSize = 2000000; name = "payload"; presentable = $false; required = $false; system = $false; type = "json" },
+    @{ hidden = $false; id = "autodate2990389176"; name = "created"; onCreate = $true; onUpdate = $false; presentable = $false; system = $false; type = "autodate" },
+    @{ hidden = $false; id = "autodate3332085495"; name = "updated"; onCreate = $true; onUpdate = $true; presentable = $false; system = $false; type = "autodate" }
+)
+
+if (-not $hasGameMoves) {
+    $moveBody = @{
+        name = "game_moves"; type = "base"
+        listRule = $moveRules.listRule; viewRule = $moveRules.viewRule
+        createRule = $moveRules.createRule; updateRule = $moveRules.updateRule; deleteRule = $moveRules.deleteRule
+        fields = $moveFields; indexes = $moveRules.indexes
+    }
+    Invoke-PbApi POST "/api/collections" $token $moveBody | Out-Null
+    Write-Host "   game_moves created"
+} else {
+    Invoke-PbApi PATCH "/api/collections/game_moves" $token $moveRules | Out-Null
+    Write-Host "   game_moves exists, rules synced"
+}
+
 Write-Host ""
-Write-Host "=== Phase 1 + Phase 2 schema ready ==="
+Write-Host "=== Phase 1 + Phase 2 + game_rooms schema ready ==="
 Write-Host "Dashboard: $BaseUrl/_/"
 Write-Host "users: funlife_local_id, funlife_username (unique), online"
 Write-Host "friendships: requester, addressee, status"
 Write-Host "conversations: member_a, member_b, pair_key (unique), last_preview, last_message_at"
 Write-Host "messages: conversation, sender, body"
+Write-Host "game_rooms: game_type, invite_mode, room_code, host, guest, status, game_state"
+Write-Host "game_moves: room, player, move_index, payload"

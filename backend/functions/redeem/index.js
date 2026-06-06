@@ -27,6 +27,7 @@
 const tcb = require("@cloudbase/node-sdk");
 const crypto = require("crypto");
 const SKU = require("./sku");
+const LIMITS = require("./chat_ai_limits");
 const { rateLimit } = require("./rate-limit");
 
 const app = tcb.init({ env: tcb.SYMBOL_CURRENT_ENV });
@@ -59,6 +60,7 @@ async function getSkuConfig(skuCode) {
     name: override.name ?? def.name,
     price: override.price ?? def.price,
     vipLevel: def.vipLevel,                                  // vipLevel 永远以代码为准
+    chatAiTier: def.chatAiTier ?? 0,
     durationDays: (override.durationDays !== undefined && override.durationDays !== null)
       ? Number(override.durationDays) : def.durationDays,
     bonusCoins: (override.bonusCoins !== undefined && override.bonusCoins !== null)
@@ -123,6 +125,87 @@ function calcExpireDate(durationDays) {
   const d = new Date();
   d.setDate(d.getDate() + durationDays);
   return d.toISOString().slice(0, 10);
+}
+
+function addDaysToIso(isoDate, days) {
+  const d = new Date(isoDate + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** 读设备上已激活卡的最高 chat_ai / vip AI 档位 */
+async function maxActiveTierForDevice(deviceId) {
+  let maxTier = 0;
+  let maxChatAiExpire = null;
+  try {
+    const r = await CODES.where({ usedByDevice: deviceId, status: "used" }).limit(30).get();
+    const today = todayIso();
+    for (const doc of (r.data || [])) {
+      if (doc.disabled) continue;
+      if (doc.expireDate && doc.expireDate < today) continue;
+      const sku = SKU[doc.skuCode];
+      if (!sku) continue;
+      let tier = 0;
+      if (sku.type === "chat_ai") {
+        tier = sku.chatAiTier || doc.chatAiTier || doc.vipLevel || 0;
+        if (doc.expireDate && (!maxChatAiExpire || doc.expireDate > maxChatAiExpire)) {
+          maxChatAiExpire = doc.expireDate;
+        }
+      } else if (sku.type === "vip") {
+        tier = sku.vipLevel || doc.vipLevel || 0;
+      }
+      if (tier > maxTier) maxTier = tier;
+    }
+  } catch (e) {
+    console.warn("maxActiveTierForDevice failed", e.message);
+  }
+  return { maxTier, maxChatAiExpire };
+}
+
+/** 体验卡：每设备 + 每账号终身仅 1 次 */
+async function checkTrialRedeem(deviceId, userId, sku) {
+  const isTrial = sku.skuCode === LIMITS.TRIAL_SKU || sku.trialPool === true;
+  if (!isTrial) return { ok: true };
+  try {
+    const dev = await CODES.where({
+      usedByDevice: deviceId, skuCode: LIMITS.TRIAL_SKU, status: "used",
+    }).limit(1).get();
+    if (dev.data && dev.data.length) {
+      return { ok: false, code: "TRIAL_ALREADY_USED", msg: "本设备已使用过体验卡" };
+    }
+    if (userId > 0) {
+      const usr = await CODES.where({
+        usedByUser: userId, skuCode: LIMITS.TRIAL_SKU, status: "used",
+      }).limit(1).get();
+      if (usr.data && usr.data.length) {
+        return { ok: false, code: "TRIAL_ALREADY_USED", msg: "本账号已使用过体验卡" };
+      }
+    }
+  } catch (e) {
+    console.warn("checkTrialRedeem failed", e.message);
+  }
+  return { ok: true };
+}
+
+/** chat_ai 卡兑换前的 tier / 续期校验 */
+async function resolveChatAiRedeem(deviceId, sku) {
+  const newTier = sku.chatAiTier || 0;
+  const { maxTier, maxChatAiExpire } = await maxActiveTierForDevice(deviceId);
+  if (maxTier > newTier) {
+    return { ok: false, code: "TIER_TOO_LOW", msg: "你当前的 AI 额度已更高，无需更换" };
+  }
+  let expireDate = calcExpireDate(sku.durationDays);
+  if (maxTier === newTier && maxChatAiExpire && sku.durationDays > 0) {
+    // 同档续期：在现有到期日上叠加
+    const extended = addDaysToIso(maxChatAiExpire, sku.durationDays);
+    const fresh = calcExpireDate(sku.durationDays);
+    expireDate = extended > fresh ? extended : fresh;
+  }
+  return { ok: true, expireDate };
 }
 
 // ─────────────────────────────────────────────
@@ -210,22 +293,44 @@ exports.main = async (event /* , context */) => {
   // 4) SKU 校验（运行时配置：优先 vip_sku_config，回退 sku.js）
   const sku = await getSkuConfig(codeDoc.skuCode);
   if (!sku) return await failL("UNKNOWN_SKU", "未知商品类型，请联系客服", ctx);
-  if (sku.type && sku.type !== "vip") {
-    return await failL("WRONG_TYPE", "此卡密不可在 VIP 兑换处使用", ctx);
+  if (sku.type === "beta") {
+    return await failL("WRONG_TYPE", "此为内测邀请码，请在注册页使用", ctx);
+  }
+  if (sku.type !== "vip" && sku.type !== "chat_ai") {
+    return await failL("WRONG_TYPE", "未知商品类型，请联系客服", ctx);
+  }
+
+  // chat_ai：叠加策略 — 高替低；同档续期；低档拒绝
+  let lockedExpireDate = calcExpireDate(sku.durationDays);
+  if (sku.type === "chat_ai") {
+    const trialCheck = await checkTrialRedeem(deviceId, userId, sku);
+    if (!trialCheck.ok) return await failL(trialCheck.code, trialCheck.msg, ctx);
+    const tierCheck = await resolveChatAiRedeem(deviceId, sku);
+    if (!tierCheck.ok) return await failL(tierCheck.code, tierCheck.msg, ctx);
+    lockedExpireDate = tierCheck.expireDate;
   }
 
   // 5) 原子标记 used（防并发关键步骤）
   //    🔒 同时锁定 expireDate（首次兑换时计算并存库），避免重装/迁移续命
-  const lockedExpireDate = calcExpireDate(sku.durationDays);
   let updated = 0;
   try {
-    const r = await CODES.where({ code, status: "unused" }).update({
+    const patch = {
       status: "used",
       usedByDevice: deviceId,
       usedByUser: userId, // 🔒 0=未登录（兼容游客），>0=绑定账号
       usedAt: db.serverDate(),
       expireDate: lockedExpireDate, // null = 永久
-    });
+    };
+    if (sku.type === "chat_ai") {
+      patch.productType = "chat_ai";
+      patch.chatAiTier = sku.chatAiTier || 0;
+      patch.vipLevel = sku.chatAiTier || 0;
+      patch.entitlementSchema = "v2";
+    } else if (sku.type === "vip") {
+      patch.productType = "vip";
+      patch.vipLevel = sku.vipLevel || 0;
+    }
+    const r = await CODES.where({ code, status: "unused" }).update(patch);
     updated = r.updated || 0;
   } catch (e) {
     console.error("原子更新失败", e);
@@ -283,14 +388,19 @@ async function buildCertResponse(codeDoc, deviceId, secret, isReissue, preloaded
   const expireDate = (codeDoc.expireDate !== undefined)
     ? codeDoc.expireDate
     : calcExpireDate(sku.durationDays);
+  const certVipLevel = sku.type === "chat_ai"
+    ? (sku.chatAiTier || 0)
+    : (sku.vipLevel || 0);
+  const productType = (sku.type === "chat_ai" || sku.type === "vip") ? sku.type : null;
   const cert = {
     deviceId,
     skuCode: codeDoc.skuCode,
-    vipLevel: sku.vipLevel,
+    vipLevel: certVipLevel,
     expireDate,
-    bonusCoins,
+    bonusCoins: sku.type === "chat_ai" ? 0 : bonusCoins,
     issuedAt: nowSec(),
     exp: nowSec() + 365 * 86400, // 凭证本身一年有效，到期后需联网重新 verify
+    productType, // P4：与客户端 VipCertificate 验签字段对齐
   };
 
   const payloadJson = canonicalJson(cert);

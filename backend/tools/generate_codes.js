@@ -83,7 +83,7 @@ async function main() {
     const it = items[i];
     try {
       // 用 code 当文档 _id，避免 add({data:{}}) 在某些 SDK 版本下被嵌套
-      await CODES.doc(it.code).set({
+      const patch = {
         code: it.code,
         skuCode,
         status: "unused",
@@ -91,7 +91,16 @@ async function main() {
         createdAt: db.serverDate(),
         disabled: false,
         migrateCount: 0,
-      });
+      };
+      if (sku.type === "chat_ai") {
+        patch.productType = "chat_ai";
+        patch.chatAiTier = sku.chatAiTier || 0;
+        patch.vipLevel = sku.chatAiTier || 0;
+      } else if (sku.type === "vip") {
+        patch.productType = "vip";
+        patch.vipLevel = sku.vipLevel || 0;
+      }
+      await CODES.doc(it.code).set(patch);
       success++;
       process.stdout.write(`\r已写入 ${success}/${count}`);
     } catch (e) {

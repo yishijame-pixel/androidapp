@@ -124,8 +124,9 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.SocialFriendCache::class,     // 🆕 v57：好友本地缓存
         com.example.funlife.data.model.SocialConversationCache::class, // 🆕 v58：私聊会话缓存
         com.example.funlife.data.model.SocialMessageCache::class,      // 🆕 v58：私聊消息缓存
+        com.example.funlife.data.model.SocialGameRoomCache::class,     // 🆕 v59：趣玩中心房间缓存
     ],
-    version = 58,  // 🆕 v58 - PocketBase 社交 Phase2（私聊）
+    version = 63,  // 🆕 v63 - social_friend_cache 在线状态
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -1684,6 +1685,90 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_62_63 = object : Migration(62, 63) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `social_friend_cache` ADD COLUMN `online` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        private val MIGRATION_61_62 = object : Migration(61, 62) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `declinedByPbId` TEXT NOT NULL DEFAULT ''",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `membersJson` TEXT NOT NULL DEFAULT '[]'",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `maxPlayers` INTEGER NOT NULL DEFAULT 2",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `minPlayers` INTEGER NOT NULL DEFAULT 2",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `pendingInvitePbId` TEXT NOT NULL DEFAULT ''",
+                )
+            }
+        }
+
+        private val MIGRATION_60_61 = object : Migration(60, 61) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `hostDisplayName` TEXT NOT NULL DEFAULT ''",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `hostAvatarUrl` TEXT NOT NULL DEFAULT ''",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `guestProfileName` TEXT NOT NULL DEFAULT ''",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `guestProfileAvatar` TEXT NOT NULL DEFAULT ''",
+                )
+            }
+        }
+
+        private val MIGRATION_59_60 = object : Migration(59, 60) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `peerAvatarUrl` TEXT NOT NULL DEFAULT ''",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `declinedByGuest` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        private val MIGRATION_58_59 = object : Migration(58, 59) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `social_game_room_cache` (
+                        `userId` INTEGER NOT NULL,
+                        `roomId` TEXT NOT NULL,
+                        `gameType` TEXT NOT NULL,
+                        `inviteMode` TEXT NOT NULL,
+                        `roomCode` TEXT NOT NULL,
+                        `hostPbId` TEXT NOT NULL,
+                        `guestPbId` TEXT,
+                        `guestDisplayName` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `inviteMessage` TEXT NOT NULL,
+                        `createdAtMs` INTEGER NOT NULL,
+                        `updatedAtMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`userId`, `roomId`)
+                    )
+                """.trimIndent())
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_game_room_cache_userId` ON `social_game_room_cache` (`userId`)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_social_game_room_cache_userId_updatedAtMs` ON `social_game_room_cache` (`userId`, `updatedAtMs`)",
+                )
+            }
+        }
+
         private val MIGRATION_57_58 = object : Migration(57, 58) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""
@@ -1908,6 +1993,11 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56,
                 MIGRATION_56_57,
                 MIGRATION_57_58,
+                MIGRATION_58_59,
+                MIGRATION_59_60,
+                MIGRATION_60_61,
+                MIGRATION_61_62,
+                MIGRATION_62_63,
             )
             // Release 禁止 destructive migration，避免升级误删全库
             if (BuildConfig.DEBUG) {

@@ -83,11 +83,15 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
                     override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
                         com.example.funlife.vip.VipRuntimeConfig.refreshAsync(applicationContext)
                         com.example.funlife.social.SocialSessionManager.warmStartAsync(applicationContext)
+                        com.example.funlife.social.SocialPresenceManager.onAppForeground(applicationContext)
                         com.example.funlife.social.SocialForegroundPoller.onAppForeground(applicationContext)
+                        com.example.funlife.social.game.GameRoomForegroundSync.onAppForeground(applicationContext)
                     }
 
                     override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                        com.example.funlife.social.SocialPresenceManager.onAppBackground(applicationContext)
                         com.example.funlife.social.SocialForegroundPoller.onAppBackground()
+                        com.example.funlife.social.game.GameRoomForegroundSync.onAppBackground()
                     }
                 }
             )

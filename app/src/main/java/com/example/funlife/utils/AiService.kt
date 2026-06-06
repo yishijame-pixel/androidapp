@@ -569,6 +569,7 @@ note 不超过8个字，例如「车票」「奶茶」「打车」。
                 }
                 is com.example.funlife.vip.ChatAiCloudRepository.CallResult.Rejected -> {
                     android.util.Log.w("AiService", "cloud chat rejected: ${r.code}")
+                    if (r.code == "NO_ENTITLEMENT") return null
                     AiResult.Error(r.msg)
                 }
                 is com.example.funlife.vip.ChatAiCloudRepository.CallResult.Recoverable -> {

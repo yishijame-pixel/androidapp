@@ -6,6 +6,7 @@ import com.example.funlife.social.model.FriendshipStatus
 import com.example.funlife.social.model.MessageDto
 import com.google.gson.Gson
 import com.google.gson.JsonElement
+import com.example.funlife.social.game.model.GameRoomStateCodec
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.isActive
@@ -34,6 +35,8 @@ class PocketBaseRealtimeClient {
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
         onIncomingMessage: suspend (MessageDto, String?, String?) -> Unit,
+        onIncomingGameRoom: suspend (String) -> Unit = {},
+        onUserPresenceChanged: suspend (String, Boolean) -> Unit = { _, _ -> },
     ) {
         val url = "${PocketBaseConfig.apiBase()}/realtime"
         val request = Request.Builder()
@@ -76,6 +79,8 @@ class PocketBaseRealtimeClient {
                                 myPbId = myPbId,
                                 onIncomingRequest = onIncomingRequest,
                                 onIncomingMessage = onIncomingMessage,
+                                onIncomingGameRoom = onIncomingGameRoom,
+                                onUserPresenceChanged = onUserPresenceChanged,
                             )
                             dataLines.clear()
                             eventName = ""
@@ -94,7 +99,12 @@ class PocketBaseRealtimeClient {
         authToken: String,
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
-    ) = listenSocial(authToken, myPbId, onIncomingRequest) { _, _, _ -> }
+    ) = listenSocial(
+        authToken = authToken,
+        myPbId = myPbId,
+        onIncomingRequest = onIncomingRequest,
+        onIncomingMessage = { _, _, _ -> },
+    )
 
     private fun inferEventName(data: String): String =
         if (data.contains("clientId")) "PB_CONNECT" else "PB_EVENT"
@@ -106,6 +116,8 @@ class PocketBaseRealtimeClient {
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
         onIncomingMessage: suspend (MessageDto, String?, String?) -> Unit,
+        onIncomingGameRoom: suspend (String) -> Unit,
+        onUserPresenceChanged: suspend (String, Boolean) -> Unit,
     ) {
         when {
             eventName == "PB_CONNECT" || data.contains("clientId") -> {
@@ -123,6 +135,16 @@ class PocketBaseRealtimeClient {
                 parseIncomingMessage(data)?.let { (dto, name, username) ->
                     Log.d(TAG, "incoming message ${dto.id} conv=${dto.conversationId}")
                     onIncomingMessage(dto, name, username)
+                    return
+                }
+                parseIncomingGameRoom(data, myPbId)?.let { roomId ->
+                    Log.d(TAG, "incoming game room $roomId")
+                    onIncomingGameRoom(roomId)
+                    return
+                }
+                parseUserPresenceUpdate(data, myPbId)?.let { (friendPbId, online) ->
+                    Log.d(TAG, "user presence $friendPbId online=$online")
+                    onUserPresenceChanged(friendPbId, online)
                 }
             }
         }
@@ -131,7 +153,7 @@ class PocketBaseRealtimeClient {
     private fun subscribeSocial(clientId: String, authToken: String): Boolean {
         val body = mapOf(
             "clientId" to clientId,
-            "subscriptions" to listOf("friendships", "messages"),
+            "subscriptions" to listOf("friendships", "messages", "game_rooms", "users"),
         )
         val req = Request.Builder()
             .url("${PocketBaseConfig.apiBase()}/realtime")
@@ -183,10 +205,47 @@ class PocketBaseRealtimeClient {
                 status = FriendshipStatus.PENDING,
                 isIncomingRequest = true,
                 remark = "",
+                online = profile?.online ?: false,
             )
         }.onFailure { Log.w(TAG, "parse friend PB_EVENT failed: ${it.message}") }
             .getOrNull()
     }
+
+    private fun parseIncomingGameRoom(data: String, myPbId: String): String? {
+        return runCatching {
+            val root = JsonParser.parseString(data).asJsonObject
+            val action = root.get("action")?.asString ?: return null
+            if (action != "create" && action != "update") return null
+            val record = root.getAsJsonObject("record") ?: return null
+            if (record.get("game_type") == null) return null
+            val roomId = record.get("id")?.asString ?: return null
+            val hostId = relationId(record.get("host"))
+            val guestId = relationId(record.get("guest"))
+            val gameState = GameRoomStateCodec.parse(record.get("game_state"))
+            // 房主：宾客离座只改 game_state / 清空 guest，必须仍命中推送
+            if (hostId == myPbId) return roomId
+            if (guestId == myPbId) return roomId
+            if (gameState?.pendingInvitePbId == myPbId) return roomId
+            if (gameState != null && GameRoomStateCodec.isMember(gameState, myPbId)) return roomId
+            if (gameState != null && gameState.memberIds.contains(myPbId)) return roomId
+            null
+        }.onFailure { Log.w(TAG, "parse game room PB_EVENT failed: ${it.message}") }
+            .getOrNull()
+    }
+
+    private fun parseUserPresenceUpdate(data: String, myPbId: String): Pair<String, Boolean>? =
+        runCatching {
+            val root = JsonParser.parseString(data).asJsonObject
+            if (root.get("action")?.asString != "update") return null
+            val record = root.getAsJsonObject("record") ?: return null
+            if (record.get("requester") != null || record.get("conversation") != null) return null
+            if (record.get("game_type") != null) return null
+            val userId = record.get("id")?.asString ?: return null
+            if (userId.isBlank() || userId == myPbId) return null
+            if (!record.has("online")) return null
+            userId to (record.get("online")?.asBoolean ?: return null)
+        }.onFailure { Log.w(TAG, "parse user presence failed: ${it.message}") }
+            .getOrNull()
 
     private fun parseIncomingMessage(data: String): Triple<MessageDto, String?, String?>? {
         return runCatching {

@@ -57,30 +57,18 @@ function previewBody(text, maxLen) {
 
 // ── 好友申请 pending ─────────────────────────────────────────────
 onRecordAfterCreateSuccess((e) => {
-    if (e.record.collection().name !== "friendships") {
-        e.next()
-        return
-    }
-
-    var status = e.record.getString("status")
-    if (status !== "pending") {
-        e.next()
-        return
-    }
-
-    var addresseeId = e.record.getString("addressee")
-    var requesterId = e.record.getString("requester")
-    if (!addresseeId) {
-        e.next()
-        return
-    }
-
     try {
+        var status = e.record.getString("status")
+        if (status !== "pending") return
+
+        var addresseeId = e.record.getString("addressee")
+        var requesterId = e.record.getString("requester")
+        if (!addresseeId) return
+
         var addressee = $app.findRecordById("users", addresseeId)
         var fcmToken = addressee ? addressee.getString("fcm_token") : ""
         if (!fcmToken) {
             console.log("[push] friend_request skip: no fcm_token addressee=" + addresseeId)
-            e.next()
             return
         }
 
@@ -103,41 +91,29 @@ onRecordAfterCreateSuccess((e) => {
         console.log("[push] friend_request status=" + (result.status || result.reason) + " addressee=" + addresseeId)
     } catch (err) {
         console.log("[push] friend_request error: " + err)
+    } finally {
+        e.next()
     }
-
-    e.next()
 }, "friendships")
 
 // ── 私聊新消息 ───────────────────────────────────────────────────
 onRecordAfterCreateSuccess((e) => {
-    if (e.record.collection().name !== "messages") {
-        e.next()
-        return
-    }
-
-    var senderId = e.record.getString("sender")
-    var memberA = e.record.getString("member_a")
-    var memberB = e.record.getString("member_b")
-    var conversationId = e.record.getString("conversation")
-    var bodyText = e.record.getString("body") || ""
-
-    if (!senderId || !memberA || !memberB) {
-        e.next()
-        return
-    }
-
-    var recipientId = senderId === memberA ? memberB : memberA
-    if (!recipientId || recipientId === senderId) {
-        e.next()
-        return
-    }
-
     try {
+        var senderId = e.record.getString("sender")
+        var memberA = e.record.getString("member_a")
+        var memberB = e.record.getString("member_b")
+        var conversationId = e.record.getString("conversation")
+        var bodyText = e.record.getString("body") || ""
+
+        if (!senderId || !memberA || !memberB) return
+
+        var recipientId = senderId === memberA ? memberB : memberA
+        if (!recipientId || recipientId === senderId) return
+
         var recipient = $app.findRecordById("users", recipientId)
         var fcmToken = recipient ? recipient.getString("fcm_token") : ""
         if (!fcmToken) {
             console.log("[push] chat skip: no fcm_token recipient=" + recipientId)
-            e.next()
             return
         }
 
@@ -169,7 +145,67 @@ onRecordAfterCreateSuccess((e) => {
         console.log("[push] chat status=" + (result.status || result.reason) + " recipient=" + recipientId)
     } catch (err) {
         console.log("[push] chat error: " + err)
+    } finally {
+        e.next()
     }
-
-    e.next()
 }, "messages")
+
+// ── 游戏邀请（direct + waiting + 已指定 guest 时推 FCM）──
+function pushGameInviteIfDirectWaiting(record) {
+    if (record.collection().name !== "game_rooms") return
+    if (record.getString("invite_mode") !== "direct") return
+    if (record.getString("status") !== "waiting") return
+
+    var hostId = record.getString("host")
+    var guestId = record.getString("guest")
+    var roomId = record.getId()
+    if (!hostId || !guestId || !roomId) return
+
+    try {
+        var host = $app.findRecordById("users", hostId)
+        var hostName = userDisplayName(host, hostId)
+        var guest = $app.findRecordById("users", guestId)
+        var fcmToken = guest ? guest.getString("fcm_token") : ""
+        if (!fcmToken) {
+            console.log("[push] game_invite skip: no fcm_token guest=" + guestId)
+            return
+        }
+        var gameType = record.getString("game_type") || "game"
+        var result = sendFcmPush(
+            fcmToken,
+            hostName + " 邀请你一起玩",
+            gameType + " · 点击接受",
+            {
+                type: "game_invite",
+                room_id: roomId,
+                room_code: record.getString("room_code") || "",
+                game_type: gameType,
+                host_pb_id: hostId,
+                deep_link: "social_game_lobby/" + roomId,
+            },
+        )
+        console.log("[push] game_invite status=" + (result.status || result.reason))
+    } catch (err) {
+        console.log("[push] game_invite error: " + err)
+    }
+}
+
+onRecordAfterCreateSuccess((e) => {
+    try {
+        pushGameInviteIfDirectWaiting(e.record)
+    } catch (err) {
+        console.log("[push] game_invite hook error: " + err)
+    } finally {
+        e.next()
+    }
+}, "game_rooms")
+
+onRecordAfterUpdateSuccess((e) => {
+    try {
+        pushGameInviteIfDirectWaiting(e.record)
+    } catch (err) {
+        console.log("[push] game_invite hook error: " + err)
+    } finally {
+        e.next()
+    }
+}, "game_rooms")

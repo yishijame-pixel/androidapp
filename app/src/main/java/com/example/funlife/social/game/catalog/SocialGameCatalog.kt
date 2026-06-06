@@ -1,0 +1,160 @@
+package com.example.funlife.social.game.catalog
+
+enum class GameCategory {
+    ONLINE_PVP,
+    LOCAL_PARTY,
+    ASYNC_SOCIAL,
+}
+
+enum class GameCatalogStatus {
+    LIVE,
+    BETA,
+    COMING_SOON,
+}
+
+data class SocialGameEntry(
+    val gameId: String,
+    val title: String,
+    val subtitle: String,
+    val iconEmoji: String,
+    val category: GameCategory,
+    val playersLabel: String,
+    val minPlayers: Int = 2,
+    val maxPlayers: Int = 2,
+    val status: GameCatalogStatus,
+    val localRoute: String? = null,
+    val minPocketBase: Boolean = false,
+    val sortOrder: Int = 0,
+    val tags: List<String> = emptyList(),
+    val accentColors: List<Long> = listOf(0xFF7C4DFF, 0xFF536DFE),
+    val durationLabel: String = "",
+)
+
+object SocialGameCatalog {
+
+    val all: List<SocialGameEntry> = listOf(
+        SocialGameEntry(
+            gameId = "gomoku",
+            title = "五子棋",
+            subtitle = "经典 15×15 连珠",
+            iconEmoji = "⚫",
+            category = GameCategory.ONLINE_PVP,
+            playersLabel = "2~4 人在线",
+            minPlayers = 2,
+            maxPlayers = 4,
+            status = GameCatalogStatus.LIVE,
+            minPocketBase = true,
+            sortOrder = 1,
+            tags = listOf("棋类"),
+            accentColors = listOf(0xFF4F46E5, 0xFF6366F1),
+            durationLabel = "约 5~15 分钟",
+        ),
+        SocialGameEntry(
+            gameId = "draw_guess",
+            title = "你画我猜",
+            subtitle = "画画猜词，默契大考验",
+            iconEmoji = "🎨",
+            category = GameCategory.ONLINE_PVP,
+            playersLabel = "2~4 人在线",
+            minPlayers = 2,
+            maxPlayers = 4,
+            status = GameCatalogStatus.LIVE,
+            minPocketBase = true,
+            sortOrder = 2,
+            tags = listOf("绘画", "派对"),
+            accentColors = listOf(0xFFF97316, 0xFFFB7185),
+            durationLabel = "约 8~12 分钟",
+        ),
+        SocialGameEntry(
+            gameId = "dice_duel",
+            title = "骰子对战",
+            subtitle = "比点数，一局定胜负",
+            iconEmoji = "🎲",
+            category = GameCategory.ONLINE_PVP,
+            playersLabel = "2~4 人在线",
+            minPlayers = 2,
+            maxPlayers = 4,
+            status = GameCatalogStatus.BETA,
+            minPocketBase = true,
+            sortOrder = 3,
+            tags = listOf("派对"),
+            accentColors = listOf(0xFFF59E0B, 0xFFFBBF24),
+            durationLabel = "约 1~3 分钟",
+        ),
+        SocialGameEntry(
+            gameId = "truth_relay",
+            title = "真心话接力",
+            subtitle = "异步问答，慢慢聊",
+            iconEmoji = "💬",
+            category = GameCategory.ASYNC_SOCIAL,
+            playersLabel = "2 人",
+            status = GameCatalogStatus.COMING_SOON,
+            sortOrder = 10,
+            tags = listOf("社交"),
+            accentColors = listOf(0xFF10B981, 0xFF34D399),
+        ),
+        SocialGameEntry(
+            gameId = "dice_game",
+            title = "骰子派对",
+            subtitle = "传手机，同桌同乐",
+            iconEmoji = "🎲",
+            category = GameCategory.LOCAL_PARTY,
+            playersLabel = "2~6 人",
+            status = GameCatalogStatus.LIVE,
+            localRoute = "dice_game",
+            sortOrder = 20,
+            tags = listOf("同屏"),
+            accentColors = listOf(0xFFEC407A, 0xFFFF80AB),
+            durationLabel = "随时开玩",
+        ),
+        SocialGameEntry(
+            gameId = "score_counter",
+            title = "游戏计分",
+            subtitle = "聚会必备计分板",
+            iconEmoji = "🎵",
+            category = GameCategory.LOCAL_PARTY,
+            playersLabel = "多人",
+            status = GameCatalogStatus.LIVE,
+            localRoute = "score_counter",
+            sortOrder = 21,
+            tags = listOf("同屏"),
+            accentColors = listOf(0xFFFFCA28, 0xFFFFD54F),
+        ),
+        SocialGameEntry(
+            gameId = "spin_wheel",
+            title = "幸运转盘",
+            subtitle = "转一转，命运安排",
+            iconEmoji = "🎡",
+            category = GameCategory.LOCAL_PARTY,
+            playersLabel = "多人",
+            status = GameCatalogStatus.LIVE,
+            localRoute = "spin_wheel",
+            sortOrder = 22,
+            tags = listOf("同屏"),
+            accentColors = listOf(0xFF42A5F5, 0xFF64B5F6),
+        ),
+        SocialGameEntry(
+            gameId = "riddle_game",
+            title = "猜谜游戏",
+            subtitle = "脑洞大开猜谜底",
+            iconEmoji = "🧩",
+            category = GameCategory.LOCAL_PARTY,
+            playersLabel = "1~4 人",
+            status = GameCatalogStatus.LIVE,
+            localRoute = "riddle_game",
+            sortOrder = 23,
+            tags = listOf("同屏"),
+            accentColors = listOf(0xFF8B5CF6, 0xFFFF6FAE),
+        ),
+    )
+
+    fun find(gameId: String): SocialGameEntry? = all.firstOrNull { it.gameId == gameId }
+
+    fun onlineGames(): List<SocialGameEntry> =
+        all.filter { it.category == GameCategory.ONLINE_PVP }
+            .sortedWith(compareBy({ it.status.ordinal }, { it.sortOrder }))
+
+    fun localPartyGames(): List<SocialGameEntry> =
+        all.filter { it.category == GameCategory.LOCAL_PARTY }
+            .sortedBy { it.sortOrder }
+}

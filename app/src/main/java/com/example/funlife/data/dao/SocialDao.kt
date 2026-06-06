@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.funlife.data.model.SocialConversationCache
 import com.example.funlife.data.model.SocialFriendCache
+import com.example.funlife.data.model.SocialGameRoomCache
 import com.example.funlife.data.model.SocialMessageCache
 import com.example.funlife.data.model.SocialPocketBaseLink
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +40,17 @@ interface SocialDao {
             "WHERE userId = :userId AND friendPbId = :friendPbId",
     )
     suspend fun updateRemark(userId: Long, friendPbId: String, remark: String, updatedAt: Long)
+
+    @Query(
+        "UPDATE social_friend_cache SET online = :online, updatedAt = :updatedAt " +
+            "WHERE userId = :userId AND friendPbId = :friendPbId",
+    )
+    suspend fun updateFriendOnline(
+        userId: Long,
+        friendPbId: String,
+        online: Boolean,
+        updatedAt: Long,
+    )
 
     @Query(
         "UPDATE social_friend_cache SET status = :status, updatedAt = :updatedAt " +
@@ -100,4 +112,32 @@ interface SocialDao {
 
     @Query("DELETE FROM social_message_cache WHERE userId = :userId AND conversationId = :conversationId")
     suspend fun clearMessagesForConversation(userId: Long, conversationId: String)
+
+    // ── 趣玩中心房间缓存 ──
+
+    @Query(
+        "SELECT * FROM social_game_room_cache WHERE userId = :userId " +
+            "AND (status NOT IN ('cancelled', 'expired') OR declinedByGuest = 1) " +
+            "ORDER BY updatedAtMs DESC",
+    )
+    fun observeGameRooms(userId: Long): Flow<List<SocialGameRoomCache>>
+
+    @Query(
+        "SELECT * FROM social_game_room_cache WHERE userId = :userId " +
+            "AND (status NOT IN ('cancelled', 'expired') OR declinedByGuest = 1) " +
+            "ORDER BY updatedAtMs DESC",
+    )
+    suspend fun getGameRooms(userId: Long): List<SocialGameRoomCache>
+
+    @Query("SELECT * FROM social_game_room_cache WHERE userId = :userId AND roomId = :roomId LIMIT 1")
+    suspend fun getGameRoom(userId: Long, roomId: String): SocialGameRoomCache?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGameRooms(items: List<SocialGameRoomCache>)
+
+    @Query("DELETE FROM social_game_room_cache WHERE userId = :userId")
+    suspend fun clearGameRooms(userId: Long)
+
+    @Query("DELETE FROM social_game_room_cache WHERE userId = :userId AND roomId = :roomId")
+    suspend fun deleteGameRoom(userId: Long, roomId: String)
 }

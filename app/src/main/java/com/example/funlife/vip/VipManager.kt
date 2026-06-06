@@ -35,11 +35,30 @@ class VipManager(private val context: Context) {
         data class Failure(val code: String, val msg: String) : Outcome()
     }
 
-    /** 兑换卡密 → 拉云端 → 验签 → 写本地 UserVip */
+    /** 兑换卡密 → 拉云端 → 验签 → 写本地 UserVip 或 AI 卡凭证 */
     suspend fun redeem(userId: Long, code: String): Outcome = withContext(Dispatchers.IO) {
         val res = cloud.redeem(code, userId)
         handleCertResponse(userId, res, isMigrate = false, redeemCode = code)
     }
+
+    /** 聊天页专用：激活 AI 额度卡（非 VIP 卡会返回失败） */
+    suspend fun redeemChatAi(userId: Long, code: String): Outcome = withContext(Dispatchers.IO) {
+        val res = cloud.redeem(code, userId)
+        if (!res.ok || res.certificate == null) {
+            return@withContext Outcome.Failure(res.code ?: "UNKNOWN", res.msg ?: "未知错误")
+        }
+        if (!ChatAiSku.isChatAiCert(res.certificate)) {
+            return@withContext Outcome.Failure(
+                "WRONG_TYPE",
+                "此为 VIP 专用卡，请前往会员页兑换"
+            )
+        }
+        handleCertResponse(userId, res, isMigrate = false, redeemCode = code)
+    }
+
+    /** 当前用户的 AI 卡凭证（不含 VIP 凭证） */
+    fun getChatAiCertOrNull(userId: Long): VipCertificate? =
+        store.loadChatAi(userId)?.first
 
     /** 设备迁移：用户在新设备上恢复 VIP
      *  @param oldDeviceId 原设备指纹（由用户从原设备「导出迁移凭证」拿到），必填
@@ -129,6 +148,12 @@ class VipManager(private val context: Context) {
         val validate = VipCertificateValidator.validate(context, cert, sig)
         if (validate != VipCertificateValidator.Result.VALID) {
             return Outcome.Failure("VALIDATE_FAILED", "凭证验签失败: $validate")
+        }
+
+        // chat_ai 卡：只存 AI 凭证，不写 UserVip、不赠金币
+        if (ChatAiSku.isChatAiCert(cert)) {
+            store.saveChatAi(userId, cert, sig, redeemCode)
+            return Outcome.Success(cert, res.isReissue == true, 0)
         }
 
         // 落本地 UserVip

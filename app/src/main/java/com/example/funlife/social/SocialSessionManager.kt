@@ -7,6 +7,7 @@ import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.UserSession
 import com.example.funlife.notifications.FcmPushBootstrap
 import com.example.funlife.notifications.FriendRequestExpeditedWorker
+import com.example.funlife.social.game.GameRoomForegroundSync
 import com.example.funlife.repository.SocialLinkRepository
 import com.example.funlife.social.model.SocialLinkState
 import com.example.funlife.utils.UserSessionManager
@@ -59,6 +60,9 @@ object SocialSessionManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val linkMutex = Mutex()
     private var linkRetryJob: Job? = null
+    private val linkOkAtMs = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
+    private const val LINK_REVALIDATE_MS = 120_000L
     private val _snapshot = MutableStateFlow(initialSnapshot())
     val snapshot: StateFlow<Snapshot> = _snapshot.asStateFlow()
 
@@ -101,10 +105,15 @@ object SocialSessionManager {
         if (userId <= 0L) return
 
         if (isLinked(appCtx, userId)) {
+            runCatching { ensureLinkOnly(appCtx, session) }
+                .onFailure { Log.w(TAG, "warmStart rebind failed: ${it.message}") }
             hydrateFromDisk(appCtx, userId)
-            startPushStackAndSync(appCtx, userId)
+            if (_snapshot.value.realtime == RealtimePhase.OFF) {
+                startPushStackAndSync(appCtx, userId)
+            }
             SocialInboxSync.syncNow(appCtx, force = true)
             scope.launch { SocialChatInbound.syncActiveConversations(appCtx, userId) }
+            GameRoomForegroundSync.refreshNowAsync(appCtx)
             return
         }
 
@@ -123,9 +132,15 @@ object SocialSessionManager {
         val session = UserSessionManager(appCtx).getSession() ?: return false
 
         if (isLinked(appCtx, session.userId)) {
-            hydrateFromDisk(appCtx, session.userId)
-            startPushStackAndSync(appCtx, session.userId)
-            return true
+            val repaired = ensureLinkOnly(appCtx, session)
+            if (repaired) {
+                hydrateFromDisk(appCtx, session.userId)
+                if (_snapshot.value.realtime == RealtimePhase.OFF) {
+                    startPushStackAndSync(appCtx, session.userId)
+                }
+                return true
+            }
+            Log.w(TAG, "local link stale, full rebind userId=${session.userId}")
         }
 
         updateSnapshot {
@@ -209,12 +224,14 @@ object SocialSessionManager {
                 if (userId > 0L) SocialChatInbound.syncActiveConversations(appCtx, userId)
             }.onFailure { Log.w(TAG, "chat sync failed: ${it.message}") }
             FriendRequestExpeditedWorker.enqueue(appCtx)
+            GameRoomForegroundSync.refreshNowAsync(appCtx)
         }
     }
 
     /** 登出：停止推送栈并重置内存态 */
     fun shutdown(ctx: Context) {
         cancelLinkRetry()
+        SocialPresenceManager.onAppBackground(ctx)
         stopPushStack(ctx)
         updateSnapshot {
             Snapshot(phase = if (PocketBaseConfig.isEnabled()) SessionPhase.IDLE else SessionPhase.NOT_CONFIGURED)
@@ -237,19 +254,21 @@ object SocialSessionManager {
     private suspend fun ensureLinkOnly(ctx: Context, session: UserSession): Boolean {
         val userId = session.userId
         if (userId <= 0L) return false
+        val now = System.currentTimeMillis()
+        if (isLinked(ctx, userId) && now - (linkOkAtMs[userId] ?: 0L) < LINK_REVALIDATE_MS) {
+            return true
+        }
         val displayName = session.nickname.ifBlank { session.username }
         if (displayName.isBlank() || session.username.isBlank()) {
             Log.w(TAG, "skip link: empty username")
             return false
         }
-        if (isLinked(ctx, userId)) {
-            Log.d(TAG, "already linked userId=$userId")
-            return true
-        }
         val db = (ctx as? FunLifeApplication)?.database ?: AppDatabase.getDatabase(ctx)
         val linkRepo = SocialLinkRepository(ctx, db.socialDao())
         return linkRepo.ensureLinked(userId, session.username, displayName).fold(
             onSuccess = {
+                linkOkAtMs[userId] = System.currentTimeMillis()
+                SocialOperationGate.markUserVerified(userId)
                 Log.d(TAG, "linked userId=$userId pb=${it.pbRecordId}")
                 true
             },
@@ -260,11 +279,16 @@ object SocialSessionManager {
         )
     }
 
+    @Volatile private var pushStackStarted = false
+
     private fun startPushStack(ctx: Context) {
         val appCtx = ctx.applicationContext
         FcmPushBootstrap.initAsync(appCtx)
-        FriendRealtimeHub.restart(appCtx)
-        SocialNetworkMonitor.register(appCtx)
+        if (!pushStackStarted) {
+            pushStackStarted = true
+            FriendRealtimeHub.restart(appCtx)
+            SocialNetworkMonitor.register(appCtx)
+        }
         FriendRequestExpeditedWorker.enqueue(appCtx)
     }
 
@@ -274,6 +298,7 @@ object SocialSessionManager {
     }
 
     private fun stopPushStack(ctx: Context) {
+        pushStackStarted = false
         FriendRealtimeHub.stop()
         SocialNetworkMonitor.unregister(ctx.applicationContext)
         SocialForegroundPoller.onAppBackground()
