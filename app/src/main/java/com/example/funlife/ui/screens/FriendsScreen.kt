@@ -10,6 +10,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1111,22 +1112,28 @@ private fun WeChatAvatar(
     }
 
     if (!url.isNullOrBlank()) {
-        val needsAuth = url.contains("/api/files/") && !pbAuthToken.isNullOrBlank()
-        val model = remember(url, pbAuthToken) {
-            ImageRequest.Builder(context)
-                .data(url)
-                .crossfade(true)
-                .apply {
-                    if (needsAuth) addHeader("Authorization", "Bearer $pbAuthToken")
-                }
-                .build()
+        val cachedBitmap = com.example.funlife.utils.AvatarImageLoader
+            .rememberCachedRemoteAvatarBitmap(url, pbAuthToken)
+        if (cachedBitmap != null) {
+            Image(
+                bitmap = cachedBitmap,
+                contentDescription = null,
+                modifier = boxModifier,
+                contentScale = ContentScale.Crop,
+            )
+            return
         }
-        SubcomposeAsyncImage(
+        val model = remember(url, pbAuthToken) {
+            com.example.funlife.utils.AvatarImageLoader.buildRequest(context, url, pbAuthToken)
+        }
+        androidx.compose.runtime.LaunchedEffect(url, pbAuthToken) {
+            com.example.funlife.utils.AvatarImageLoader.warm(context, url, pbAuthToken)
+        }
+        coil.compose.SubcomposeAsyncImage(
             model = model,
             contentDescription = null,
             modifier = boxModifier,
             contentScale = ContentScale.Crop,
-            loading = { InitialPlaceholder() },
             error = { InitialPlaceholder() },
         )
     } else {

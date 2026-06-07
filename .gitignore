@@ -111,6 +111,7 @@ pocketbase/DEV.local.md
 app/google-services.json
 **/firebase-adminsdk*.json
 pocketbase/tools/fcm_relay/node_modules/
+pocketbase/tools/draw_ws/node_modules/
 
 # ???????
 debug_screen.png

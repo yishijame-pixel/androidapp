@@ -33,13 +33,46 @@ if ((Test-Path $adminSdk) -and (Test-Path (Join-Path $relayDir 'server.js'))) {
         $env:FCM_RELAY_KEY = $relayKey
     }
     if ($relayKey) {
+        $portPid = (Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -First 1).OwningProcess
+        if ($portPid) {
+            Stop-Process -Id $portPid -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+        }
         $relayCmd = @"
 `$env:FCM_SERVICE_ACCOUNT='$adminSdk'; `$env:FCM_RELAY_KEY='$relayKey'; `$env:PORT='8787'; Set-Location '$relayDir'; node server.js
 "@
         Start-Process powershell -ArgumentList "-NoExit", "-Command", $relayCmd -WindowStyle Minimized
-        Start-Sleep -Seconds 2
-        Write-Host "Started FCM relay :8787" -ForegroundColor Green
+        $relayOk = $false
+        for ($i = 1; $i -le 8; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+                $h = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
+                if ($h.ok) { $relayOk = $true; break }
+            } catch { }
+        }
+        if ($relayOk) {
+            Write-Host "Started FCM relay :8787 (health OK)" -ForegroundColor Green
+        } else {
+            Write-Host "FCM relay :8787 started but health not ready (push may skip)" -ForegroundColor Yellow
+        }
     }
+}
+
+$drawWsDir = Join-Path $pbDir 'tools\draw_ws'
+if (Test-Path (Join-Path $drawWsDir 'server.js')) {
+    $portPid8790 = (Get-NetTCPConnection -LocalPort 8790 -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -First 1).OwningProcess
+    if ($portPid8790) {
+        Stop-Process -Id $portPid8790 -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+    }
+    $pbUrl = if ($env:PB_BASE_URL) { $env:PB_BASE_URL } else { "http://127.0.0.1:8090" }
+    $drawWsCmd = @"
+`$env:PB_BASE_URL='$pbUrl'; `$env:PORT='8790'; Set-Location '$drawWsDir'; node server.js
+"@
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", $drawWsCmd -WindowStyle Minimized
+    Write-Host "Started draw_ws :8790 (pb=$pbUrl)" -ForegroundColor Green
 }
 
 $pbEnv = @{}
@@ -54,13 +87,14 @@ Set-Location '$pbDir'
 `$env:FCM_RELAY_KEY='$($pbEnv.FCM_RELAY_KEY)'
 & '$pbExe' serve --http=0.0.0.0:8090
 "@
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $pbCmd -WindowStyle Minimized
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", $pbCmd -WindowStyle Normal
 } else {
-    Start-Process -FilePath $pbExe -ArgumentList "serve", "--http=0.0.0.0:8090" -WindowStyle Minimized
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$pbDir'; & '$pbExe' serve --http=0.0.0.0:8090" -WindowStyle Normal
 }
 Start-Sleep -Seconds 2
 Start-Process -FilePath "cloudflared" -ArgumentList "tunnel", "run", "funlife-pb" -WindowStyle Minimized
 
 Write-Host "Started PocketBase :8090 + tunnel funlife-pb" -ForegroundColor Green
 Write-Host "Verify: https://pb.yishi.site/api/health" -ForegroundColor Cyan
+Write-Host "Draw WS: https://draw.yishi.site/health  (wss://draw.yishi.site/ws)" -ForegroundColor Cyan
 Write-Host "Stop: taskkill /IM pocketbase.exe /F; taskkill /IM cloudflared.exe /F" -ForegroundColor DarkGray

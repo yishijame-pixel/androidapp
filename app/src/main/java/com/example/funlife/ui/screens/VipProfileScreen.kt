@@ -37,6 +37,8 @@ import com.example.funlife.ui.components.*
 import com.example.funlife.viewmodel.AuthViewModel
 import com.example.funlife.viewmodel.VipProfileViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
+import com.example.funlife.utils.UserAvatarBitmapCache
+import com.example.funlife.ui.components.warmAvatarFrameAsset
 import kotlinx.coroutines.delay
 import android.net.Uri
 
@@ -49,6 +51,18 @@ fun VipProfileScreen(
     val context = LocalContext.current
     val application = context.applicationContext as FunLifeApplication
     val currentSession = authViewModel.getCurrentSession()
+    val profileUserId = remember(currentSession?.userId) {
+        currentSession?.userId?.takeIf { it > 0L }
+            ?: com.example.funlife.utils.UserSessionManager(context).getCurrentUserId().takeIf { it > 0L }
+            ?: 0L
+    }
+
+    remember(profileUserId) {
+        if (profileUserId > 0L) {
+            UserAvatarBitmapCache.hydrateUserSync(context, profileUserId)
+        }
+        profileUserId
+    }
     
     // 手动创建VipProfileViewModel
     val vipProfileViewModel: VipProfileViewModel = viewModel(
@@ -109,11 +123,27 @@ fun VipProfileScreen(
     val currentBackground = allBackgrounds.find { it.id == userAvatar?.backgroundId }
     val currentFrame = allFrames.find { it.id == userAvatar?.frameId }
     
-    // 🔥 获取装备的头像框（从商城购买的）
+    // 🔥 装备的头像框：Flow 首帧常为 null，用磁盘快照避免先无框后有框
     val userPreferencesDao = remember { application.database.userPreferencesDao() }
-    val userPrefs by userPreferencesDao.getPreferences(currentSession?.userId ?: 0L)
+    val userPrefs by userPreferencesDao.getPreferences(profileUserId)
         .collectAsState(initial = null)
-    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
+    val displayEquippedFrame = userPrefs?.equippedAvatarFrame
+        ?: UserAvatarBitmapCache.peekFrame(profileUserId)
+    val displayAvatarUri = userAvatar?.avatarUri
+        ?: UserAvatarBitmapCache.peekUri(profileUserId)
+
+    LaunchedEffect(profileUserId, userAvatar?.avatarUri, userPrefs?.equippedAvatarFrame) {
+        userAvatar?.avatarUri?.let { UserAvatarBitmapCache.publishUri(profileUserId, it) }
+        if (userPrefs != null) {
+            val frame = userPrefs?.equippedAvatarFrame
+            if (frame != null) {
+                UserAvatarBitmapCache.publishFrame(profileUserId, frame)
+                warmAvatarFrameAsset(context, frame)
+            } else {
+                UserAvatarBitmapCache.clearFrame(profileUserId)
+            }
+        }
+    }
     
     Box(modifier = Modifier.fillMaxSize()) {
         // VIP背景
@@ -154,20 +184,21 @@ fun VipProfileScreen(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.size(160.dp)  // 🔥 外层容器尺寸（从130dp增加到160dp）
                             ) {
-                                // 🔥 如果有装备的头像框，使用AvatarWithFrame组件
-                                if (equippedAvatarFrame != null) {
+                                // 🔥 有装备头像框：首帧即用快照路径，头像与框同时渲染
+                                if (displayEquippedFrame != null) {
                                     com.example.funlife.ui.components.AvatarWithFrame(
-                                        avatarUri = userAvatar?.avatarUri,
-                                        frameAssetPath = equippedAvatarFrame,
-                                        frameSize = 150.dp,  // 🔥 头像框尺寸（从120dp增加到150dp）
+                                        avatarUri = displayAvatarUri,
+                                        frameAssetPath = displayEquippedFrame,
+                                        frameSize = 150.dp,
                                         defaultText = currentSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "U",
-                                        vipLevel = com.example.funlife.data.model.VipLevel.fromLevel(vipLevel)
+                                        vipLevel = com.example.funlife.data.model.VipLevel.fromLevel(vipLevel),
+                                        userId = profileUserId,
                                     )
                                 } else {
                                     // 使用原来的VipAvatarFrame（个人资料页面的装饰框）
                                     VipAvatarFrame(frame = currentFrame) {
                                         AvatarUploader(
-                                            currentAvatarUri = userAvatar?.avatarUri,
+                                            currentAvatarUri = displayAvatarUri,
                                             onAvatarSelected = { uri ->
                                                 vipProfileViewModel.updateAvatarUri(uri)
                                             },

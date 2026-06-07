@@ -31,6 +31,8 @@ data class GameRoomStatePayload(
     @SerializedName("pending_invite_pb_id") val pendingInvitePbId: String? = null,
     @SerializedName("declined_by_pb_id") val declinedByPbId: String? = null,
     @SerializedName("member_ids") val memberIds: List<String> = emptyList(),
+    val gomoku: GomokuPlayState? = null,
+    @SerializedName("draw_guess") val drawGuess: DrawGuessPlayState? = null,
 )
 
 data class GameRoomMemberWire(
@@ -77,6 +79,8 @@ object GameRoomStateCodec {
         put("member_ids", state.memberIds)
         state.pendingInvitePbId?.takeIf { it.isNotBlank() }?.let { put("pending_invite_pb_id", it) }
         state.declinedByPbId?.takeIf { it.isNotBlank() }?.let { put("declined_by_pb_id", it) }
+        state.gomoku?.let { put("gomoku", it.toMap()) }
+        state.drawGuess?.let { put("draw_guess", it.toMap()) }
     }
 
     fun fromLegacy(
@@ -121,9 +125,30 @@ object GameRoomStateCodec {
         state.members.any { it.pbId == pbId }
 
     fun withPendingInvite(state: GameRoomStatePayload, guestPbId: String): GameRoomStatePayload {
-        require(!isMember(state, guestPbId)) { "该好友已在房间内" }
-        require(state.pendingInvitePbId.isNullOrBlank()) { "当前有进行中的邀请" }
         require(joinedCount(state) < state.maxPlayers) { "房间已满" }
+        // 同一好友再次邀请：刷新 pending（PB updated 变化 → 受邀方重新收到通知）
+        if (state.pendingInvitePbId == guestPbId) {
+            val members = if (state.members.any { it.pbId == guestPbId }) {
+                state.members
+            } else {
+                val seat = nextSeat(state)
+                state.members + GameRoomMemberWire(guestPbId, seat, LobbyMemberStatus.PENDING.wire)
+            }
+            return state.copy(
+                members = members,
+                memberIds = members.map { it.pbId }.distinct(),
+                declinedByPbId = if (state.declinedByPbId == guestPbId) null else state.declinedByPbId,
+            )
+        }
+        require(state.pendingInvitePbId.isNullOrBlank()) { "当前有进行中的邀请" }
+        if (state.declinedByPbId == guestPbId) {
+            val cleaned = state.copy(
+                declinedByPbId = null,
+                members = state.members.filter { it.pbId != guestPbId },
+            )
+            return withPendingInvite(cleaned, guestPbId)
+        }
+        require(!isMember(state, guestPbId)) { "该好友已在房间内" }
         val seat = nextSeat(state)
         val members = state.members + GameRoomMemberWire(guestPbId, seat, LobbyMemberStatus.PENDING.wire)
         return state.copy(
@@ -233,6 +258,12 @@ object GameRoomStateCodec {
             memberIds = joinedMemberIds(deduped),
         )
     }
+
+    fun withPlayState(
+        state: GameRoomStatePayload,
+        gomoku: GomokuPlayState? = state.gomoku,
+        drawGuess: DrawGuessPlayState? = state.drawGuess,
+    ): GameRoomStatePayload = state.copy(gomoku = gomoku, drawGuess = drawGuess)
 
     private fun joinedMemberIds(members: List<GameRoomMemberWire>): List<String> =
         members.filter { it.status == LobbyMemberStatus.JOINED.wire }.map { it.pbId }

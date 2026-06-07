@@ -6,9 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.social.FriendsInteractor
 import com.example.funlife.social.PocketBaseConfig
+import com.example.funlife.social.PocketBaseConnectionWarmer
+import com.example.funlife.social.game.GamePlaySyncManager
 import com.example.funlife.social.PocketBaseApiClient
 import com.example.funlife.social.SocialOperationGate
 import com.example.funlife.social.SocialSessionManager
+import com.example.funlife.utils.AvatarImageLoader
 import com.example.funlife.social.game.GameInviteNotifier
 import com.example.funlife.social.game.GameRoomInteractor
 import com.example.funlife.social.game.GameRoomSyncCoordinator
@@ -65,6 +68,10 @@ class GameCenterViewModel(
     private val _navigateToRoomId = MutableStateFlow<String?>(null)
     val navigateToRoomId: StateFlow<String?> = _navigateToRoomId.asStateFlow()
 
+    /** 乐观接受失败后退回上一页 */
+    private val _requestPopLobby = MutableStateFlow(false)
+    val requestPopLobby: StateFlow<Boolean> = _requestPopLobby.asStateFlow()
+
     private val _showTutorial = MutableStateFlow(false)
     val showTutorial: StateFlow<Boolean> = _showTutorial.asStateFlow()
 
@@ -72,6 +79,10 @@ class GameCenterViewModel(
     val busyMessage: StateFlow<String?> = _busyMessage.asStateFlow()
     val isBusy: StateFlow<Boolean> = _busyMessage.map { it != null }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** 房主点击「开始游戏」后保持全屏加载，直到跳转对局页 */
+    private val _startingGameRoomId = MutableStateFlow<String?>(null)
+    val startingGameRoomId: StateFlow<String?> = _startingGameRoomId.asStateFlow()
 
     val linkState: StateFlow<SocialLinkState> = SocialSessionManager.linkState
 
@@ -224,6 +235,11 @@ class GameCenterViewModel(
                     }
                 }
                 list.forEach { room ->
+                    val myId = _myPbId.value?.takeIf { it.isNotBlank() }
+                        ?: SocialSessionManager.snapshot.value.pbRecordId?.takeIf { it.isNotBlank() }
+                    if (myId != null && room.isIncomingInviteFor(myId)) {
+                        GameInviteNotifier.reconcileHandled(currentUserId, room, myId)
+                    }
                     if (room.isInvitePending) {
                         _optimisticPendingInvite.value = _optimisticPendingInvite.value - room.roomId
                     }
@@ -246,6 +262,32 @@ class GameCenterViewModel(
                 _myLocalAvatarUri.value = avatar?.avatarUri
             }
         }
+        viewModelScope.launch {
+            combine(acceptedFriends, _pbAuthToken) { friends, token -> friends to token }
+                .collect { (friends, token) ->
+                    AvatarImageLoader.warmAll(
+                        getApplication(),
+                        friends.map { it.avatarUrl },
+                        token,
+                    )
+                }
+        }
+        viewModelScope.launch {
+            combine(rooms, _pbAuthToken) { list, token -> list to token }
+                .collect { (list, token) ->
+                    AvatarImageLoader.warmAll(
+                        getApplication(),
+                        list.flatMap { room ->
+                            listOfNotNull(
+                                room.hostAvatarUrl,
+                                room.guestAvatarUrl,
+                                room.peerAvatarUrl,
+                            )
+                        },
+                        token,
+                    )
+                }
+        }
     }
 
     fun bootstrapSocialAndRooms() {
@@ -264,13 +306,22 @@ class GameCenterViewModel(
         }
     }
 
-    fun refreshFriendsForLobby() {
+    fun refreshFriendsForLobby(force: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (now - lastFriendsSyncMs < 8_000L) return
+        if (!force && now - lastFriendsSyncMs < 8_000L) return
         lastFriendsSyncMs = now
         viewModelScope.launch {
             friendsInteractor.syncFriendsPresenceForLobby()
         }
+    }
+
+    /** 进入大厅：单房间同步 + 好友在线，不拉全量房间列表 */
+    fun enterLobby(roomId: String) {
+        PocketBaseConnectionWarmer.warmAsync(getApplication())
+        refreshFriendsForLobby(force = true)
+        // 乐观接受尚未完成时不同步，避免 GET 404 弹错；acceptInvite 成功后会 startLobbySync
+        if (roomId in _optimisticAcceptedRoomIds.value) return
+        startLobbySync(roomId, urgent = true)
     }
 
     fun refreshRoomsQuietly() {
@@ -298,12 +349,17 @@ class GameCenterViewModel(
         }
     }
 
-    fun startLobbySync(roomId: String) {
-        GameRoomSyncCoordinator.startLobbyWatch(roomId) {
+    fun startLobbySync(roomId: String, urgent: Boolean = true) {
+        PocketBaseConnectionWarmer.warmAsync(getApplication())
+        GameRoomSyncCoordinator.startLobbyWatch(roomId, urgent = urgent) {
             gameRoomInteractor.refreshRoomById(roomId)
         }
-        // 进房后立即拉一次，避免等首个轮询周期
-        refreshRoomByIdQuietly(roomId)
+    }
+
+    /** 大厅满员可开局时预连对局 Realtime（与 Play 页共用 session） */
+    fun prewarmPlaySync(roomId: String) {
+        if (!pocketBaseConfigured() || !socialReady()) return
+        GamePlaySyncManager.prewarmSession(getApplication(), currentUserId, roomId)
     }
 
     fun stopLobbySync(roomId: String) {
@@ -366,6 +422,10 @@ class GameCenterViewModel(
         _navigateToRoomId.value = null
     }
 
+    fun consumePopLobby() {
+        _requestPopLobby.value = false
+    }
+
     fun refreshRooms() {
         viewModelScope.launch {
             gameRoomInteractor.refreshRooms()
@@ -391,6 +451,7 @@ class GameCenterViewModel(
         if (!ensureOnlineReady(entry)) return
 
         touchGame(gameId)
+        PocketBaseConnectionWarmer.warmAsync(getApplication())
         viewModelScope.launch {
             _busyMessage.value = "正在开房间…"
             gameRoomInteractor.createOpenRoom(gameId)
@@ -417,10 +478,17 @@ class GameCenterViewModel(
             return
         }
         _optimisticPendingInvite.value = _optimisticPendingInvite.value + (roomId to guestPbId)
+        PocketBaseConnectionWarmer.warmAsync(getApplication())
+        startLobbySync(roomId, urgent = true)
         viewModelScope.launch {
             if (showBusy) _busyMessage.value = "正在发送邀请…"
             gameRoomInteractor.inviteFriendToRoom(roomId, guestPbId)
-                .onSuccess { _toast.value = "邀请已发送，等待好友接受" }
+                .onSuccess {
+                    _toast.value = "邀请已发送，等待好友接受"
+                    GameRoomSyncCoordinator.requestRoomRefreshImmediate(roomId) {
+                        gameRoomInteractor.refreshRoomById(roomId)
+                    }
+                }
                 .onFailure {
                     _optimisticPendingInvite.value = _optimisticPendingInvite.value - roomId
                     _toast.value = gameRoomInteractor.mapErrorMessage(it)
@@ -469,7 +537,8 @@ class GameCenterViewModel(
     /** 同步门禁：点击接受/婉拒的第一时间调用（应用级单例，跨 MainActivity / NavGraph VM 共享） */
     fun acknowledgeIncomingInvite(roomId: String) {
         _optimisticAcceptedRoomIds.value = _optimisticAcceptedRoomIds.value + roomId
-        GameInviteNotifier.markHandled(currentUserId, roomId)
+        val updatedAt = rooms.value.firstOrNull { it.roomId == roomId }?.updatedAtMs ?: 0L
+        GameInviteNotifier.markHandled(currentUserId, roomId, updatedAt)
     }
 
     private fun unacknowledgeIncomingInvite(roomId: String) {
@@ -483,14 +552,16 @@ class GameCenterViewModel(
         optimistic: Boolean = false,
         onSettled: (() -> Unit)? = null,
     ) {
+        GameRoomSyncCoordinator.markMutating(roomId)
         acknowledgeIncomingInvite(roomId)
+        if (optimistic) {
+            onAccepted?.invoke()
+        }
         viewModelScope.launch {
-            var success = false
             try {
-                if (optimistic) onAccepted?.invoke()
                 gameRoomInteractor.acceptInvite(roomId)
                     .onSuccess {
-                        success = true
+                        startLobbySync(roomId, urgent = true)
                         GameRoomSyncCoordinator.requestRoomRefreshImmediate(roomId) {
                             gameRoomInteractor.refreshRoomById(roomId)
                         }
@@ -501,10 +572,12 @@ class GameCenterViewModel(
                     }
                     .onFailure {
                         unacknowledgeIncomingInvite(roomId)
+                        if (optimistic) _requestPopLobby.value = true
                         notifyUser(gameRoomInteractor.mapErrorMessage(it), systemToast = optimistic)
                     }
             } finally {
-                if (!success) onSettled?.invoke()
+                GameRoomSyncCoordinator.clearMutating(roomId)
+                onSettled?.invoke()
             }
         }
     }
@@ -552,6 +625,7 @@ class GameCenterViewModel(
                 result.onSuccess {
                     if (action == LobbyExitAction.LEAVE_SEAT) {
                         gameRoomInteractor.dismissLocalRoom(roomId)
+                        GameInviteNotifier.unmarkHandled(currentUserId, roomId)
                     }
                 }.onFailure {
                     if (action == LobbyExitAction.REJECT_INVITE) {
@@ -587,12 +661,22 @@ class GameCenterViewModel(
 
     fun startGame(roomId: String, onStarted: () -> Unit = {}) {
         viewModelScope.launch {
-            _busyMessage.value = "正在开始…"
+            _startingGameRoomId.value = roomId
             gameRoomInteractor.startGame(roomId)
-                .onSuccess { onStarted() }
-                .onFailure { notifyUser(gameRoomInteractor.mapErrorMessage(it), systemToast = true) }
-            _busyMessage.value = null
+                .onSuccess {
+                    delay(350L)
+                    onStarted()
+                    _startingGameRoomId.value = null
+                }
+                .onFailure {
+                    _startingGameRoomId.value = null
+                    notifyUser(gameRoomInteractor.mapErrorMessage(it), systemToast = true)
+                }
         }
+    }
+
+    fun clearStartingGame() {
+        _startingGameRoomId.value = null
     }
 
     private fun roomSubtitle(room: LocalGameRoomDraft): String = when {

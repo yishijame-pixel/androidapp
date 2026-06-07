@@ -1,5 +1,6 @@
 package com.example.funlife.ui.screens.socialgame
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
+import com.example.funlife.utils.AvatarImageLoader
 
 @Composable
 fun SocialGameAvatar(
@@ -38,6 +40,10 @@ fun SocialGameAvatar(
         .size(size)
         .clip(CircleShape)
 
+    LaunchedEffect(avatarUrl, pbAuthToken) {
+        AvatarImageLoader.warm(context, avatarUrl, pbAuthToken)
+    }
+
     @Composable
     fun InitialPlaceholder() {
         Box(
@@ -52,28 +58,34 @@ fun SocialGameAvatar(
         }
     }
 
+    val localBitmap = AvatarImageLoader.rememberLocalAvatarBitmap(avatarUrl)
+    val cachedRemoteBitmap = AvatarImageLoader.rememberCachedRemoteAvatarBitmap(avatarUrl, pbAuthToken)
+    val instantBitmap = localBitmap ?: cachedRemoteBitmap
+
     Box(modifier = modifier.size(size)) {
-        if (!avatarUrl.isNullOrBlank()) {
-            val needsAuth = avatarUrl.contains("/api/files/") && !pbAuthToken.isNullOrBlank()
-            val model = remember(avatarUrl, pbAuthToken) {
-                ImageRequest.Builder(context)
-                    .data(avatarUrl)
-                    .crossfade(true)
-                    .apply {
-                        if (needsAuth) addHeader("Authorization", "Bearer $pbAuthToken")
-                    }
-                    .build()
+        when {
+            instantBitmap != null -> {
+                Image(
+                    bitmap = instantBitmap,
+                    contentDescription = null,
+                    modifier = boxModifier,
+                    contentScale = ContentScale.Crop,
+                )
             }
-            SubcomposeAsyncImage(
-                model = model,
-                contentDescription = null,
-                modifier = boxModifier,
-                contentScale = ContentScale.Crop,
-                loading = { InitialPlaceholder() },
-                error = { InitialPlaceholder() },
-            )
-        } else {
-            InitialPlaceholder()
+            !avatarUrl.isNullOrBlank() -> {
+                val model = remember(avatarUrl, pbAuthToken) {
+                    AvatarImageLoader.buildRequest(context, avatarUrl, pbAuthToken)
+                }
+                SubcomposeAsyncImage(
+                    model = model,
+                    contentDescription = null,
+                    modifier = boxModifier,
+                    contentScale = ContentScale.Crop,
+                    loading = { InitialPlaceholder() },
+                    error = { InitialPlaceholder() },
+                )
+            }
+            else -> InitialPlaceholder()
         }
         if (showOnline != null) {
             val dotSize = size * 0.28f

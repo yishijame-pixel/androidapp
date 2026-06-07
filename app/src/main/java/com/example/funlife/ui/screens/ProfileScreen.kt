@@ -348,15 +348,29 @@ fun ProfileScreen(
                         .align(Alignment.BottomCenter)
                         .offset(y = 52.dp)  // 🔥 往下移动（从42dp增加到52dp）
                 ) {
-                    // 🔥 获取装备的头像框（从商城购买的）
+                    // 🔥 装备头像框：Flow 首帧 null 时用磁盘快照
+                    val profileUserId = remember(currentSession?.userId) {
+                        currentSession?.userId?.takeIf { it > 0L }
+                            ?: com.example.funlife.utils.UserSessionManager(context).getCurrentUserId().takeIf { it > 0L }
+                            ?: 0L
+                    }
+                    remember(profileUserId) {
+                        if (profileUserId > 0L) {
+                            com.example.funlife.utils.UserAvatarBitmapCache.hydrateUserSync(context, profileUserId)
+                        }
+                        profileUserId
+                    }
                     val userPreferencesDao = remember { application.database.userPreferencesDao() }
-                    val userPrefs by userPreferencesDao.getPreferences(currentSession?.userId ?: 0L)
+                    val userPrefs by userPreferencesDao.getPreferences(profileUserId)
                         .collectAsState(initial = null)
-                    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
+                    val displayEquippedFrame = userPrefs?.equippedAvatarFrame
+                        ?: com.example.funlife.utils.UserAvatarBitmapCache.peekFrame(profileUserId)
+                    val displayAvatarUri = userAvatar?.avatarUri
+                        ?: com.example.funlife.utils.UserAvatarBitmapCache.peekUri(profileUserId)
                     
                     var showAvatarUploadDialog by remember { mutableStateOf(false) }
                     
-                    if (equippedAvatarFrame != null) {
+                    if (displayEquippedFrame != null) {
                         // ═══════════════════════════════════════════════════════
                         // 🎨 使用商城购买的头像框（完全替代橙色边框）
                         // ═══════════════════════════════════════════════════════
@@ -370,11 +384,12 @@ fun ProfileScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             com.example.funlife.ui.components.AvatarWithFrame(
-                                avatarUri = userAvatar?.avatarUri,
-                                frameAssetPath = equippedAvatarFrame,
+                                avatarUri = displayAvatarUri,
+                                frameAssetPath = displayEquippedFrame,
                                 frameSize = 150.dp,
                                 defaultText = currentSession?.username?.firstOrNull()?.toString()?.uppercase() ?: "U",
-                                vipLevel = vipLevel  // 🔥 动态读取实际VIP等级
+                                vipLevel = vipLevel,
+                                userId = profileUserId,
                             )
                             
                             // 编辑按钮 - 右下角

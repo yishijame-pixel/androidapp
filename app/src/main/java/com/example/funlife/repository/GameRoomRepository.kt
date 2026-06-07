@@ -18,6 +18,9 @@ import com.example.funlife.social.game.model.InviteMode
 import com.example.funlife.social.game.model.LobbyMember
 import com.example.funlife.social.game.model.LobbyMemberStatus
 import com.example.funlife.social.game.model.LocalGameRoomDraft
+import com.example.funlife.social.game.model.DrawGuessPhase
+import com.example.funlife.social.game.model.GomokuEndReason
+import com.example.funlife.social.game.model.PlayStateFactory
 import com.example.funlife.social.game.model.GameRoomStateMachine
 import com.example.funlife.social.model.FriendshipStatus
 import com.example.funlife.social.model.PbUserProfile
@@ -68,12 +71,11 @@ class GameRoomRepository(
         userId: Long,
         myPbId: String,
         token: String,
-        skipRoomIds: Set<String> = emptySet(),
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
                 val invites = api.listIncomingGameInvites(token, myPbId)
-                    .filter { it.id !in skipRoomIds }
+                    .filter { canGuestAcceptInvite(it, myPbId) }
                 if (invites.isEmpty()) return@withContext Result.success(Unit)
                 val friends = socialDao.getFriends(userId)
                 val existingById = socialDao.getGameRooms(userId).associateBy { it.roomId }
@@ -94,7 +96,7 @@ class GameRoomRepository(
             try {
                 val dtos = buildList {
                     addAll(api.listMyGameRooms(token, myPbId))
-                    addAll(api.listIncomingGameInvites(token, myPbId))
+                    addAll(api.listIncomingGameInvites(token, myPbId).filter { canGuestAcceptInvite(it, myPbId) })
                 }.distinctBy { it.id }.toMutableList()
                 dedupeHostRoomsInRefresh(userId, myPbId, token, dtos)
                 val friends = socialDao.getFriends(userId)
@@ -117,20 +119,28 @@ class GameRoomRepository(
         myPbId: String,
         token: String,
         roomId: String,
+        lite: Boolean = true,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val dto = api.getGameRoom(token, roomId)
+            val dto = if (lite) api.getGameRoomLite(token, roomId) else api.getGameRoom(token, roomId)
             val state = resolveState(dto)
             val joined = GameRoomStateCodec.joinedCount(state)
-            Log.i(TAG, "refreshRoomById roomId=$roomId joined=$joined guest=${dto.guestPbId} members=${state.members.size}")
-            val friends = socialDao.getFriends(userId)
-            val existing = socialDao.getGameRoom(userId, roomId)
-            socialDao.upsertGameRooms(
-                listOf(buildRoomCache(userId, myPbId, dto, friends, token, existing)),
-            )
+            Log.i(TAG, "refreshRoomById roomId=$roomId joined=$joined lite=$lite")
+            cacheRoomDto(userId, myPbId, token, dto, lite = lite)
             Result.success(Unit)
         } catch (e: PocketBaseApiException) {
             if (e.code == 404) {
+                val cached = socialDao.getGameRoom(userId, roomId)
+                val keepPending = cached != null && (
+                    cached.pendingInvitePbId == myPbId ||
+                        cached.guestPbId == myPbId
+                    )
+                if (keepPending) {
+                    Log.w(TAG, "refreshRoomById 404 keep pending invite cache roomId=$roomId")
+                    return@withContext Result.failure(
+                        PocketBaseApiException(404, "房间同步中，请稍候"),
+                    )
+                }
                 socialDao.deleteGameRoom(userId, roomId)
                 Result.success(Unit)
             } else {
@@ -141,6 +151,37 @@ class GameRoomRepository(
         }
     }
 
+    /** SSE 推送：先写本地缓存再 HTTP 对账，房主可即时看见宾客入座。 */
+    suspend fun cacheRoomFromRemoteDto(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        dto: GameRoomDto,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val state = resolveState(dto)
+            Log.i(TAG, "cacheRoomFromRemoteDto roomId=${dto.id} joined=${GameRoomStateCodec.joinedCount(state)}")
+            cacheRoomDto(userId, myPbId, token, dto, lite = true)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun cacheRoomDto(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        dto: GameRoomDto,
+        lite: Boolean,
+    ) {
+        val friends = socialDao.getFriends(userId)
+        val existing = socialDao.getGameRoom(userId, dto.id)
+        socialDao.upsertGameRooms(
+            listOf(buildRoomCache(userId, myPbId, dto, friends, token, existing, lite = lite)),
+        )
+    }
+
     private suspend fun buildRoomCache(
         userId: Long,
         myPbId: String,
@@ -148,10 +189,11 @@ class GameRoomRepository(
         friends: List<SocialFriendCache>,
         token: String,
         existing: SocialGameRoomCache?,
+        lite: Boolean = false,
     ): SocialGameRoomCache {
         val existingMembers = existing?.let { parseMembersJson(it.membersJson) }.orEmpty()
-        val needsFetch = existing == null ||
-            membersMissingProfiles(existingMembers)
+        val needsFetch = !lite &&
+            (existing == null || membersMissingProfiles(existingMembers))
         val fresh = dto.toCache(userId, myPbId, friends, token, fetchMissingProfiles = needsFetch)
         return fresh.mergeFromPrevious(existing)
     }
@@ -215,7 +257,7 @@ class GameRoomRepository(
                     GameRoomStateMachine.requireActiveRoom(current)
                     GameRoomStateMachine.requireHost(current, myPbId)
                     GameRoomStateMachine.requireRoomNotFull(state)
-                    val next = GameRoomStateCodec.withPendingInvite(state, guestPbId)
+                    val next = prepareStateForDirectInvite(state, guestPbId)
                     directInvitePatch(next, guestPbId)
                 },
                 verify = { dto, state ->
@@ -292,6 +334,8 @@ class GameRoomRepository(
         roomId: String,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val invited = resolveRoomForAcceptInvite(userId, myPbId, token, roomId)
+            cacheRoomDto(userId, myPbId, token, invited, lite = false)
             mutateRoomState(
                 token = token,
                 roomId = roomId,
@@ -490,9 +534,19 @@ class GameRoomRepository(
                     GameRoomStateMachine.requireHost(current, myPbId)
                     GameRoomStateMachine.requireActiveRoom(current)
                     GameRoomStateMachine.requireReadyToStart(state)
+                    val guestPbId = state.members
+                        .filter { it.status == LobbyMemberStatus.JOINED.wire && it.pbId != current.hostPbId }
+                        .firstOrNull()?.pbId
+                        ?: current.guestPbId?.takeIf { it.isNotBlank() }
+                        ?: throw IllegalStateException("对手尚未加入")
+                    val withPlay = PlayStateFactory.mergePlayIntoLobby(
+                        state, current.gameType, current.hostPbId, guestPbId,
+                    )
                     LobbyPatchOptions(
-                        state = state,
+                        state = withPlay,
                         status = GameRoomStatus.PLAYING,
+                        currentTurnPbId = PlayStateFactory.firstTurnPbId(current.gameType, current.hostPbId),
+                        clearWinner = true,
                     )
                 },
                 verify = { dto, _ -> dto.status == GameRoomStatus.PLAYING },
@@ -501,6 +555,210 @@ class GameRoomRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun patchPlayState(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+        state: GameRoomStatePayload,
+        status: GameRoomStatus? = null,
+        currentTurnPbId: String? = null,
+        winnerPbId: String? = null,
+    ): Result<GameRoomDto> = withContext(Dispatchers.IO) {
+        try {
+            val targetStatus = status ?: GameRoomStatus.PLAYING
+            val dto = mutateRoomState(
+                token = token,
+                roomId = roomId,
+                userId = userId,
+                myPbId = myPbId,
+                maxAttempts = 3,
+                transform = { _, _ ->
+                    LobbyPatchOptions(
+                        state = state,
+                        status = targetStatus,
+                        currentTurnPbId = currentTurnPbId,
+                        winnerPbId = winnerPbId,
+                    )
+                },
+                verify = { dto, _ ->
+                    when {
+                        winnerPbId != null -> dto.winnerPbId == winnerPbId
+                        currentTurnPbId != null && targetStatus == GameRoomStatus.PLAYING ->
+                            dto.currentTurnPbId == currentTurnPbId
+                        else -> true
+                    }
+                },
+            )
+            Result.success(dto)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 对局进行中主动退出：判己方负、对手胜，并结束房间。 */
+    suspend fun abandonPlay(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        Log.i(TAG, "abandonPlay start userId=$userId roomId=$roomId myPbId=$myPbId")
+        try {
+            val current = runCatching { api.getGameRoom(token, roomId) }
+                .getOrElse { error ->
+                    if (error is PocketBaseApiException && error.code == 404) {
+                        socialDao.deleteGameRoom(userId, roomId)
+                        return@withContext Result.success(Unit)
+                    }
+                    throw error
+                }
+            if (current.status != GameRoomStatus.PLAYING) {
+                socialDao.deleteGameRoom(userId, roomId)
+                return@withContext Result.success(Unit)
+            }
+            val state = resolveState(current)
+            GameRoomStateMachine.requireMember(state, myPbId)
+            val opponentPbId = resolvePlayOpponent(current, state, myPbId)
+                ?: return@withContext Result.failure(IllegalStateException("找不到对手"))
+            val winnerPbId = opponentPbId
+            mutateRoomState(
+                token = token,
+                roomId = roomId,
+                userId = userId,
+                myPbId = myPbId,
+                cache = false,
+                transform = { dto, normalized ->
+                    val updatedState = when (dto.gameType) {
+                        "gomoku" -> {
+                            val g = normalized.gomoku
+                                ?: throw IllegalStateException("对局数据异常")
+                            normalized.copy(
+                                gomoku = g.copy(endReason = GomokuEndReason.RESIGN),
+                            )
+                        }
+                        "draw_guess" -> {
+                            val d = normalized.drawGuess
+                                ?: throw IllegalStateException("对局数据异常")
+                            normalized.copy(
+                                drawGuess = d.copy(phase = DrawGuessPhase.FINISHED.wire),
+                            )
+                        }
+                        else -> normalized
+                    }
+                    LobbyPatchOptions(
+                        state = updatedState,
+                        status = GameRoomStatus.FINISHED,
+                        winnerPbId = winnerPbId,
+                    )
+                },
+                verify = { dto, _ ->
+                    dto.status == GameRoomStatus.FINISHED && dto.winnerPbId == winnerPbId
+                },
+            )
+            socialDao.deleteGameRoom(userId, roomId)
+            Log.i(TAG, "abandonPlay ok roomId=$roomId winner=$winnerPbId")
+            Result.success(Unit)
+        } catch (e: PocketBaseApiException) {
+            Log.w(TAG, "abandonPlay failed roomId=$roomId code=${e.code} msg=${e.message}")
+            if (e.code == 404) {
+                socialDao.deleteGameRoom(userId, roomId)
+                Result.success(Unit)
+            } else {
+                Result.failure(e)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 落子后仅补写 current_turn（完整 game_state PATCH 失败时的兜底）。 */
+    suspend fun patchCurrentTurnOnly(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+        currentTurnPbId: String,
+    ): Result<GameRoomDto> = withContext(Dispatchers.IO) {
+        try {
+            if (currentTurnPbId.isBlank()) {
+                return@withContext Result.failure(IllegalStateException("回合方为空"))
+            }
+            val dto = patchLobby(
+                token = token,
+                roomId = roomId,
+                userId = userId,
+                myPbId = myPbId,
+                options = LobbyPatchOptions(
+                    state = resolveState(api.getGameRoom(token, roomId)),
+                    status = GameRoomStatus.PLAYING,
+                    currentTurnPbId = currentTurnPbId,
+                ),
+            )
+            Result.success(dto)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 单条 GET 在旧服 ACL 下可能对受邀宾客 404，但 list 仍可见（game_state ~ auth.id）。
+     * 接受/拒绝邀请等变更前用 list 兜底，避免 "The requested resource wasn't found."
+     */
+    private suspend fun fetchRoomForMutation(
+        token: String,
+        roomId: String,
+        myPbId: String,
+    ): GameRoomDto {
+        return try {
+            api.getGameRoom(token, roomId)
+        } catch (e: PocketBaseApiException) {
+            if (e.code != 404) throw e
+            api.listIncomingGameInvites(token, myPbId).firstOrNull { it.id == roomId }
+                ?: api.listMyGameRooms(token, myPbId).firstOrNull { it.id == roomId }
+                ?: api.listActiveRoomsForUser(token, myPbId).firstOrNull { it.id == roomId }
+                ?: throw e
+        }
+    }
+
+    private suspend fun resolveRoomForAcceptInvite(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+    ): GameRoomDto {
+        api.listIncomingGameInvites(token, myPbId)
+            .firstOrNull { it.id == roomId && canGuestAcceptInvite(it, myPbId) }
+            ?.let { return it }
+        runCatching { fetchRoomForMutation(token, roomId, myPbId) }.getOrNull()?.let { dto ->
+            if (canGuestAcceptInvite(dto, myPbId)) {
+                Log.i(TAG, "resolveRoomForAcceptInvite via fetch roomId=$roomId status=${dto.status}")
+                return dto
+            }
+        }
+        val cached = socialDao.getGameRoom(userId, roomId)
+        if (cached != null && (cached.pendingInvitePbId == myPbId || cached.guestPbId == myPbId)) {
+            Log.w(
+                TAG,
+                "resolveRoomForAcceptInvite cache-only roomId=$roomId pending=${cached.pendingInvitePbId} guest=${cached.guestPbId}",
+            )
+        }
+        throw PocketBaseApiException(404, "邀请已失效，请让房主重新邀请")
+    }
+
+    private fun canGuestAcceptInvite(dto: GameRoomDto, myPbId: String): Boolean {
+        if (dto.hostPbId == myPbId || dto.status !in GameRoomStatus.ACTIVE) return false
+        val state = resolveState(dto)
+        if (state.pendingInvitePbId == myPbId) return true
+        if (state.members.any { it.pbId == myPbId && it.status == LobbyMemberStatus.PENDING.wire }) return true
+        if (dto.guestPbId == myPbId && dto.status == GameRoomStatus.WAITING &&
+            state.members.none { it.pbId == myPbId && it.status == LobbyMemberStatus.JOINED.wire }
+        ) {
+            return true
+        }
+        return false
     }
 
     private suspend fun mutateRoomState(
@@ -517,7 +775,7 @@ class GameRoomRepository(
         var lastError: Exception? = null
         repeat(maxAttempts) { attempt ->
             try {
-                val current = api.getGameRoom(token, roomId)
+                val current = fetchRoomForMutation(token, roomId, myPbId)
                 val normalized = GameRoomStateCodec.normalize(resolveState(current), current.hostPbId)
                 val patch = transform(current, normalized)
                 val dto = patchLobby(token, roomId, userId, myPbId, patch, cache = cache)
@@ -528,7 +786,7 @@ class GameRoomRepository(
                         throw GameRoomStateMachine.ConflictException("状态校验未通过")
                     }
                     delay(120L)
-                    val confirmed = api.getGameRoom(token, roomId)
+                    val confirmed = fetchRoomForMutation(token, roomId, myPbId)
                     val confirmedState = GameRoomStateCodec.normalize(resolveState(confirmed), confirmed.hostPbId)
                     if (!verify(confirmed, confirmedState)) {
                         throw GameRoomStateMachine.ConflictException("服务端未确认变更")
@@ -607,12 +865,26 @@ class GameRoomRepository(
                 runCatching {
                     when {
                         room.id in staleHostIds -> cancelRemoteAndLocal(userId, token, room.id)
-                        room.hostPbId == myPbId -> cancelRemoteAndLocal(userId, token, room.id)
+                        room.hostPbId == myPbId -> {
+                            val state = resolveState(room)
+                            if (shouldPreserveActiveHostRoom(state)) {
+                                Log.d(TAG, "preserve host room ${room.id} pending=${state.pendingInvitePbId}")
+                                return@runCatching
+                            }
+                            cancelRemoteAndLocal(userId, token, room.id)
+                        }
                         else -> leaveGuestFromRoom(userId, myPbId, token, room)
                     }
                 }
             }
         }
+    }
+
+    /** 仍有待处理邀请或已有人入座的主机房间，不因「单房间策略」被自动取消 */
+    private fun shouldPreserveActiveHostRoom(state: GameRoomStatePayload): Boolean {
+        if (!state.pendingInvitePbId.isNullOrBlank()) return true
+        if (GameRoomStateCodec.joinedCount(state) > 1) return true
+        return false
     }
 
     private suspend fun dedupeHostRoomsInRefresh(
@@ -705,6 +977,11 @@ class GameRoomRepository(
         val guestReady: Boolean? = null,
         val hostReady: Boolean? = null,
         val expiresMinutes: Long? = null,
+        val currentTurnPbId: String? = null,
+        val winnerPbId: String? = null,
+        val clearWinner: Boolean = false,
+        /** 再次邀请时写入 invite_message，确保 PB updated 变化 */
+        val touchInviteMessage: Boolean = false,
     )
 
     private fun openLobbyPatch(
@@ -733,25 +1010,39 @@ class GameRoomRepository(
         hostReady = true,
     )
 
-    /** 宾客离座：以 game_state.members 为准，同步清空 legacy guest 字段避免房主回显幽灵玩家。 */
+    /** 宾客离座：以 game_state.members 为准；status 强制回到 waiting 以便再次邀请。 */
     private fun memberLeftPatch(
         state: GameRoomStatePayload,
         current: GameRoomDto,
         leftPbId: String,
     ): LobbyPatchOptions {
-        val leavingGuest = leftPbId != current.hostPbId
         return LobbyPatchOptions(
             state = state,
-            status = GameRoomStateCodec.resolveStatusAfterJoin(state),
+            status = GameRoomStatus.WAITING,
             inviteMode = current.inviteMode,
-            clearGuest = leavingGuest && (
-                current.guestPbId == leftPbId ||
-                    current.guestPbId.isNullOrBlank() ||
-                    !GameRoomStateCodec.isMember(state, current.guestPbId.orEmpty())
-                ),
-            guestReady = if (current.guestPbId == leftPbId) false else current.guestReady,
+            clearGuest = false,
+            guestReady = false,
             hostReady = true,
         )
+    }
+
+    /** 再次 direct 邀请前：清掉宾客旧席位（含已离座但 members 未同步的情况）。 */
+    private fun prepareStateForDirectInvite(
+        state: GameRoomStatePayload,
+        guestPbId: String,
+    ): GameRoomStatePayload {
+        var base = state
+        if (base.members.any { it.pbId == guestPbId }) {
+            base = if (base.members.any { it.pbId == guestPbId && it.status == LobbyMemberStatus.JOINED.wire }) {
+                GameRoomStateCodec.withMemberLeft(base, guestPbId)
+            } else {
+                base.copy(
+                    members = base.members.filter { it.pbId != guestPbId },
+                    pendingInvitePbId = if (base.pendingInvitePbId == guestPbId) null else base.pendingInvitePbId,
+                )
+            }
+        }
+        return GameRoomStateCodec.withPendingInvite(base, guestPbId)
     }
 
     private fun directInvitePatch(
@@ -764,6 +1055,7 @@ class GameRoomRepository(
         guestPbId = guestPbId,
         guestReady = false,
         expiresMinutes = 5,
+        touchInviteMessage = true,
     )
 
     private suspend fun patchLobby(
@@ -780,17 +1072,42 @@ class GameRoomRepository(
         )
         options.inviteMode?.let { body["invite_mode"] = it.wire }
         when {
-            options.clearGuest -> body["guest"] = ""
-            options.guestPbId != null -> body["guest"] = options.guestPbId
+            options.clearGuest -> { /* 禁止 guest=""（PB 报 Cannot be blank）；留空表示不改动关系字段 */ }
+            else -> options.guestPbId?.takeIf { it.isNotBlank() }?.let { body["guest"] = it }
         }
         options.guestReady?.let { body["guest_ready"] = it }
         options.hostReady?.let { body["host_ready"] = it }
         options.expiresMinutes?.let { body["expires_at"] = expiresAtMinutes(it) }
+        if (options.touchInviteMessage) {
+            body["invite_message"] = System.currentTimeMillis().toString()
+        }
+        // 关系字段禁止传 ""，否则 PocketBase 返回 Cannot be blank
+        options.currentTurnPbId?.takeIf { it.isNotBlank() }?.let { body["current_turn"] = it }
+        when {
+            options.clearWinner -> body["winner"] = ""
+            else -> options.winnerPbId?.takeIf { it.isNotBlank() }?.let { body["winner"] = it }
+        }
         val dto = api.updateGameRoom(token, roomId, body)
         if (cache) {
             cacheSingle(userId, myPbId, dto, token)
         }
         return dto
+    }
+
+    private fun resolvePlayOpponent(
+        current: GameRoomDto,
+        state: GameRoomStatePayload,
+        myPbId: String,
+    ): String? {
+        state.gomoku?.let { g ->
+            if (myPbId == g.blackPbId) return g.whitePbId.takeIf { it.isNotBlank() }
+            if (myPbId == g.whitePbId) return g.blackPbId.takeIf { it.isNotBlank() }
+        }
+        if (current.hostPbId == myPbId) return current.guestPbId?.takeIf { it.isNotBlank() }
+        if (current.guestPbId == myPbId) return current.hostPbId.takeIf { it.isNotBlank() }
+        return state.members
+            .firstOrNull { it.status == LobbyMemberStatus.JOINED.wire && it.pbId != myPbId }
+            ?.pbId
     }
 
     private fun resolveState(dto: GameRoomDto): GameRoomStatePayload {
@@ -993,6 +1310,7 @@ class GameRoomRepository(
             minPlayers = minPlayers,
             pendingInvitePbId = pendingInvitePbId.takeIf { it.isNotBlank() },
             createdAtMs = createdAtMs,
+            updatedAtMs = updatedAtMs,
         )
     }
 }

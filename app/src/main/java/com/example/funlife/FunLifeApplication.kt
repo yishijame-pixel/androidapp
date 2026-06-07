@@ -12,6 +12,9 @@ import coil.memory.MemoryCache
 import coil.util.DebugLogger
 import com.example.funlife.utils.AuditLogger
 import com.example.funlife.security.SecurityInitializer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class FunLifeApplication : Application(), ImageLoaderFactory {
     
@@ -22,6 +25,8 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
     
     override fun onCreate() {
         super.onCreate()
+
+        com.example.funlife.utils.UserAvatarBitmapCache.install(this)
 
         // 🛡️ 全局崩溃兜底：必须最早安装，才能捕获后续初始化中的异常
         com.example.funlife.utils.CrashHandler.install(this)
@@ -78,6 +83,7 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
         //   节流交给 VipRuntimeConfig 内部 30s 控制，这里只是触发
         try {
             com.example.funlife.notifications.SocialAlertBus.installProcessObserver()
+            warmCurrentUserAvatarAsync()
             androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
                 object : androidx.lifecycle.DefaultLifecycleObserver {
                     override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
@@ -86,6 +92,7 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
                         com.example.funlife.social.SocialPresenceManager.onAppForeground(applicationContext)
                         com.example.funlife.social.SocialForegroundPoller.onAppForeground(applicationContext)
                         com.example.funlife.social.game.GameRoomForegroundSync.onAppForeground(applicationContext)
+                        warmCurrentUserAvatarAsync()
                     }
 
                     override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
@@ -117,16 +124,34 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
         super.onTrimMemory(level)
         when (level) {
             TRIM_MEMORY_RUNNING_CRITICAL,
-            TRIM_MEMORY_COMPLETE -> com.example.funlife.utils.ImageCache.clear()
+            TRIM_MEMORY_COMPLETE -> {
+                com.example.funlife.utils.ImageCache.clear()
+                com.example.funlife.utils.UserAvatarBitmapCache.clear()
+            }
             TRIM_MEMORY_RUNNING_LOW,
             TRIM_MEMORY_MODERATE,
-            TRIM_MEMORY_BACKGROUND -> com.example.funlife.utils.ImageCache.trim()
+            TRIM_MEMORY_BACKGROUND -> {
+                com.example.funlife.utils.ImageCache.trim()
+                com.example.funlife.utils.UserAvatarBitmapCache.trim()
+            }
         }
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
         com.example.funlife.utils.ImageCache.clear()
+        com.example.funlife.utils.UserAvatarBitmapCache.clear()
+    }
+
+    private fun warmCurrentUserAvatarAsync() {
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val userId = com.example.funlife.utils.UserSessionManager(applicationContext).getCurrentUserId()
+                if (userId > 0L) {
+                    com.example.funlife.utils.UserAvatarBitmapCache.warmUser(applicationContext, userId)
+                }
+            }
+        }
     }
 
     override fun newImageLoader(): ImageLoader {
@@ -150,7 +175,7 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
                     .build()
             }
             .respectCacheHeaders(false)
-            .crossfade(true)
+            .crossfade(false)
             .logger(DebugLogger())
             .build()
     }

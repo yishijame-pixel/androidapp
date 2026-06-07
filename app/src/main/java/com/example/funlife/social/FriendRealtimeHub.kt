@@ -7,6 +7,7 @@ import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.notifications.FriendRequestNotifier
 import com.example.funlife.repository.FriendsRepository
 import com.example.funlife.repository.GameRoomRepository
+import com.example.funlife.social.game.GamePlaySyncManager
 import com.example.funlife.social.game.GameInviteNotifier
 import com.example.funlife.social.game.GameRoomSyncCoordinator
 import com.example.funlife.repository.SocialLinkRepository
@@ -123,16 +124,26 @@ object FriendRealtimeHub {
                 }
                 SocialSessionManager.onSyncCompleted()
             },
-            onIncomingGameRoom = { roomId ->
+            onIncomingGameRoom = { room ->
                 scope.launch {
-                    GameRoomSyncCoordinator.requestRoomRefreshImmediate(roomId) {
-                        gameRoomRepo.refreshRoomById(userId, myPbId, token, roomId)
+                    Log.d(TAG, "hub room update ${room.id}")
+                    runCatching {
+                        gameRoomRepo.cacheRoomFromRemoteDto(userId, myPbId, token, room)
+                    }.onFailure { Log.w(TAG, "sse room cache failed: ${it.message}") }
+                    GamePlaySyncManager.dispatchRoomUpdate(room.id)
+                    GameRoomSyncCoordinator.requestRoomRefreshImmediate(room.id) {
+                        gameRoomRepo.refreshRoomById(userId, myPbId, token, room.id, lite = true)
+                            .map { }
                     }
-                    if (!GameInviteNotifier.isHandled(userId, roomId)) {
+                    if (!GameInviteNotifier.isHandled(userId, room.id)) {
                         runCatching { GameInviteNotifier.publishNewInvites(ctx, userId) }
                     }
                     SocialSessionManager.onSyncCompleted()
                 }
+            },
+            onIncomingGameMove = { move ->
+                Log.d(TAG, "hub move #${move.moveIndex} room=${move.roomId}")
+                GamePlaySyncManager.dispatchMove(move)
             },
             onUserPresenceChanged = { friendPbId, online ->
                 scope.launch {

@@ -432,6 +432,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         _isLoggedIn.value = false
         _authState.value = AuthState.Idle
         if (uid > 0L) {
+            com.example.funlife.utils.UserAvatarBitmapCache.clearUser(uid)
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching {
                     val app = getApplication<FunLifeApplication>()

@@ -20,8 +20,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
+import com.example.funlife.utils.AvatarImageLoader
 import com.example.funlife.utils.AvatarStorageHelper
+import com.example.funlife.utils.UserAvatarBitmapCache
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlin.math.cos
 import kotlin.math.sin
@@ -39,6 +40,20 @@ import kotlin.math.sin
 // 用 LruCache 限制条目数，避免缓存膨胀导致 OOM
 private val frameAnalysisCache = object : android.util.LruCache<String, Pair<ImageBitmap, Float>>(12) {
     override fun sizeOf(key: String, value: Pair<ImageBitmap, Float>) = 1
+}
+
+/** App 启动 / 回前台时预热头像框 PNG，避免首页先无框后有框。 */
+fun warmAvatarFrameAsset(context: android.content.Context, frameAssetPath: String?) {
+    val path = frameAssetPath?.trim()?.takeIf { it.isNotEmpty() } ?: return
+    if (frameAnalysisCache.get(path) != null) return
+    runCatching {
+        context.assets.open(path).use { inputStream ->
+            val bmp = BitmapFactory.decodeStream(inputStream) ?: return@runCatching
+            loadAndAnalyzeFrame(bmp).also { frameAnalysisCache.put(path, it) }
+        }
+    }.onFailure {
+        android.util.Log.e("AvatarWithFrame", "warmAvatarFrameAsset failed: ${it.message}")
+    }
 }
 
 private fun loadAndAnalyzeFrame(
@@ -135,38 +150,74 @@ private fun UserAvatarImage(
     size: Dp,
     defaultText: String,
     useWarmGradient: Boolean,
+    userId: Long? = null,
 ) {
     val context = LocalContext.current
-    val loadableUri = remember(avatarUri) {
-        AvatarStorageHelper.resolveLoadableAvatarUri(context, avatarUri)
+    val effectiveUri = remember(avatarUri, userId) {
+        avatarUri?.trim()?.takeIf { it.isNotEmpty() }
+            ?: userId?.let { UserAvatarBitmapCache.peekUri(it) }
     }
 
-    if (loadableUri == null) {
-        DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
-        return
+    val loadableUri = remember(effectiveUri) {
+        AvatarStorageHelper.resolveLoadableAvatarUri(context, effectiveUri)
     }
 
+    val processCachedBitmap = UserAvatarBitmapCache.peekBitmap(loadableUri)
+    val localBitmap = AvatarImageLoader.rememberLocalAvatarBitmap(effectiveUri)
+    val cachedRemoteBitmap = AvatarImageLoader.rememberCachedRemoteAvatarBitmap(loadableUri)
     val model = remember(loadableUri) {
-        ImageRequest.Builder(context)
-            .data(loadableUri)
-            .crossfade(true)
-            .build()
+        loadableUri?.let { AvatarImageLoader.buildRequest(context, it) }
     }
 
-    SubcomposeAsyncImage(
-        model = model,
-        contentDescription = "用户头像",
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape),
-        contentScale = ContentScale.Crop,
-        loading = {
+    when {
+        processCachedBitmap != null -> {
+            Image(
+                bitmap = processCachedBitmap,
+                contentDescription = "用户头像",
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        localBitmap != null -> {
+            Image(
+                bitmap = localBitmap,
+                contentDescription = "用户头像",
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        loadableUri == null -> {
             DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
-        },
-        error = {
-            DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
-        },
-    )
+        }
+        cachedRemoteBitmap != null -> {
+            UserAvatarBitmapCache.putBitmap(loadableUri, cachedRemoteBitmap)
+            Image(
+                bitmap = cachedRemoteBitmap,
+                contentDescription = "用户头像",
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        else -> {
+            SubcomposeAsyncImage(
+                model = model,
+                contentDescription = "用户头像",
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+                error = {
+                    DefaultCircleAvatar(size = size, defaultText = defaultText, useWarmGradient = useWarmGradient)
+                },
+            )
+        }
+    }
 }
 
 /**
@@ -195,24 +246,22 @@ fun AvatarWithFrame(
     frameAssetPath: String?,
     frameSize: Dp = 120.dp,
     defaultText: String = "U",
-    vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL
+    vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL,
+    userId: Long? = null,
 ) {
     val context = LocalContext.current
-    
+
+    val effectiveFramePath = remember(frameAssetPath, userId) {
+        frameAssetPath?.trim()?.takeIf { it.isNotEmpty() }
+            ?: userId?.let { UserAvatarBitmapCache.peekFrame(it) }
+    }
+
     // 加载头像框图片并自动分析透明区域（🚀 LruCache 跨页面缓存，最多保留 12 个）
-    val frameData = remember(frameAssetPath) {
-        if (frameAssetPath == null) return@remember null
-        frameAnalysisCache.get(frameAssetPath)?.let { return@remember it }
-        try {
-            context.assets.open(frameAssetPath).use { inputStream ->
-                val bmp = BitmapFactory.decodeStream(inputStream)
-                if (bmp != null) loadAndAnalyzeFrame(bmp).also {
-                    frameAnalysisCache.put(frameAssetPath, it)
-                } else null
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("AvatarWithFrame", "Failed to load frame: ${e.message}")
-            null
+    val frameData = remember(effectiveFramePath) {
+        if (effectiveFramePath == null) return@remember null
+        frameAnalysisCache.get(effectiveFramePath) ?: run {
+            warmAvatarFrameAsset(context, effectiveFramePath)
+            frameAnalysisCache.get(effectiveFramePath)
         }
     }
     val frameBitmap = frameData?.first
@@ -222,27 +271,29 @@ fun AvatarWithFrame(
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(frameSize)
     ) {
-        if (frameBitmap != null) {
+        if (effectiveFramePath != null) {
             // ═══════════════════════════════════════════════════════
             // 🎨 有头像框的情况：简单层叠方案（框在上，头像在下）
             // ═══════════════════════════════════════════════════════
-            
+
             // 🔥 底层：圆形头像（自动适配大小，紧贴框内边缘）
             UserAvatarImage(
                 avatarUri = avatarUri,
                 size = frameSize * avatarRatio,
                 defaultText = defaultText,
                 useWarmGradient = true,
+                userId = userId,
             )
-            
+
             // 🔥 顶层：PNG头像框（完整显示，装饰保留）
-            Image(
-                bitmap = frameBitmap,
-                contentDescription = "头像框",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-            
+            if (frameBitmap != null) {
+                Image(
+                    bitmap = frameBitmap,
+                    contentDescription = "头像框",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+            }
         } else {
             // ═══════════════════════════════════════════════════════
             // 🎨 没有头像框的情况：显示VIP光环和徽章
@@ -262,6 +313,7 @@ fun AvatarWithFrame(
                 size = frameSize,
                 defaultText = defaultText,
                 useWarmGradient = false,
+                userId = userId,
             )
             
         }

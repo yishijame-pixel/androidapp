@@ -43,6 +43,9 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.funlife.data.model.Anniversary
 import com.example.funlife.data.model.UserPreferences
+import com.example.funlife.utils.AvatarImageLoader
+import com.example.funlife.utils.UserAvatarBitmapCache
+import com.example.funlife.utils.AvatarStorageHelper
 import com.example.funlife.viewmodel.AnniversaryViewModel
 import com.example.funlife.viewmodel.ScoreViewModel
 import com.example.funlife.viewmodel.GoalViewModel
@@ -68,14 +71,28 @@ fun HomeScreen(
     authViewModel: com.example.funlife.viewmodel.AuthViewModel,
     goalViewModel: GoalViewModel
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val anniversaries by anniversaryViewModel.anniversaries.collectAsState()
     val pinnedAnniversary by anniversaryViewModel.pinnedAnniversary.collectAsState()
     val players by scoreViewModel.players.collectAsState()
     val userSession = authViewModel.getCurrentSession()
+    val sessionUserId = remember(userSession?.userId) {
+        userSession?.userId?.takeIf { it > 0L }
+            ?: com.example.funlife.utils.UserSessionManager(context).getCurrentUserId().takeIf { it > 0L }
+            ?: 0L
+    }
+
+    // 同步 hydrate：首帧前从磁盘快照解码头像/框，避免 Room Flow 尚未 emit 时闪占位
+    remember(sessionUserId) {
+        if (sessionUserId > 0L) {
+            UserAvatarBitmapCache.hydrateUserSync(context, sessionUserId)
+        }
+        sessionUserId
+    }
+
     val countdowns by goalViewModel.countdowns.collectAsState()
     
     // 获取VIP状态
-    val context = androidx.compose.ui.platform.LocalContext.current
     val database = remember { (context.applicationContext as com.example.funlife.FunLifeApplication).database }
     val vipRepository = remember {
         com.example.funlife.repository.VipRepository(
@@ -86,14 +103,30 @@ fun HomeScreen(
             database
         )
     }
-    val userVip by vipRepository.getUserVip(userSession?.userId ?: 0L)
+    val userVip by vipRepository.getUserVip(sessionUserId)
         .collectAsState(initial = null)
     val vipLevel = userVip?.getCurrentVipLevel() ?: com.example.funlife.data.model.VipLevel.NORMAL
     
     // 获取用户头像
     val userAvatarDao = remember { database.userAvatarDao() }
-    val userAvatar by userAvatarDao.getUserAvatar(userSession?.userId ?: 0L)
+    val userAvatar by userAvatarDao.getUserAvatar(sessionUserId)
         .collectAsState(initial = null)
+
+    val homeUserId = sessionUserId
+    val snapshotAvatarUri = UserAvatarBitmapCache.peekUri(homeUserId)
+    val displayAvatarUri = userAvatar?.avatarUri ?: snapshotAvatarUri
+
+    LaunchedEffect(homeUserId) {
+        if (homeUserId > 0L) {
+            UserAvatarBitmapCache.warmUser(context, homeUserId)
+        }
+    }
+    LaunchedEffect(homeUserId, userAvatar?.avatarUri) {
+        userAvatar?.avatarUri?.let { uri ->
+            UserAvatarBitmapCache.publishUri(homeUserId, uri)
+            UserAvatarBitmapCache.rememberBitmap(context, uri)
+        }
+    }
 
     // 登录后：先确保社交会话，再强制补拉好友待办 → 收件箱 + 铃铛红点
     LaunchedEffect(userSession?.userId) {
@@ -129,8 +162,22 @@ fun HomeScreen(
             (context.applicationContext as com.example.funlife.FunLifeApplication).database.userPreferencesDao()
         )
     }
-    val userPreferences by userPreferencesRepository.getPreferences(userSession?.userId ?: 0L)
+    val userPreferences by userPreferencesRepository.getPreferences(sessionUserId)
         .collectAsState(initial = null)
+
+    val snapshotEquippedFrame = UserAvatarBitmapCache.peekFrame(homeUserId)
+    val displayEquippedFrame = userPreferences?.equippedAvatarFrame ?: snapshotEquippedFrame
+
+    LaunchedEffect(homeUserId, userPreferences?.equippedAvatarFrame) {
+        if (userPreferences == null) return@LaunchedEffect
+        val frame = userPreferences?.equippedAvatarFrame
+        if (frame != null) {
+            UserAvatarBitmapCache.publishFrame(homeUserId, frame)
+            com.example.funlife.ui.components.warmAvatarFrameAsset(context, frame)
+        } else {
+            UserAvatarBitmapCache.clearFrame(homeUserId)
+        }
+    }
     
     val scope = rememberCoroutineScope()
 
@@ -218,13 +265,17 @@ fun HomeScreen(
                     onUnpin = { anniversaryViewModel.unpinAnniversary(pinnedAnniversary!!) },
                     onClick = { navController.navigate("anniversary") },
                     userSession = userSession,
-                    avatarUri = userAvatar?.avatarUri,
+                    avatarUri = displayAvatarUri,
+                    equippedAvatarFrame = displayEquippedFrame,
                     vipLevel = vipLevel,
+                    userId = homeUserId,
                 )
             } else {
                 WelcomeHeader(
                     userSession = userSession,
-                    avatarUri = userAvatar?.avatarUri,
+                    avatarUri = displayAvatarUri,
+                    equippedAvatarFrame = displayEquippedFrame,
+                    userId = homeUserId,
                     vipLevel = vipLevel,
                     showFirstEntryEffect = showFirstEntryEffect,
                     onFirstEntryComplete = {
@@ -308,20 +359,14 @@ fun PinnedAnniversaryHeader(
     onClick: () -> Unit,
     userSession: com.example.funlife.data.model.UserSession? = null,  // 🔥 新增
     avatarUri: String? = null,  // 🔥 新增
+    equippedAvatarFrame: String? = null,
     vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL,  // 🔥 新增
+    userId: Long? = null,
     onOpenInbox: () -> Unit = {},
 ) {
     val daysRemaining = anniversary.getDaysRemaining()
     val isToday = daysRemaining == 0L
     val isPast = daysRemaining < 0
-    
-    // 🔥 获取装备的头像框
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val database = remember { (context.applicationContext as com.example.funlife.FunLifeApplication).database }
-    val userPreferencesDao = remember { database.userPreferencesDao() }
-    val userPrefs by userPreferencesDao.getPreferences(userSession?.userId ?: 0L)
-        .collectAsState(initial = null)
-    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
     
     // 🔥 旋转时钟动画（秒针60秒转一圈，分针缓慢旋转）
     val infiniteTransition = rememberInfiniteTransition(label = "clock")
@@ -463,7 +508,8 @@ fun PinnedAnniversaryHeader(
                             frameAssetPath = equippedAvatarFrame,
                             frameSize = if (equippedAvatarFrame != null) 72.dp else 54.dp,
                             defaultText = userSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "U",
-                            vipLevel = vipLevel
+                            vipLevel = vipLevel,
+                            userId = userId,
                         )
                         
                         // 中间：纪念日名称 + 日期
@@ -702,6 +748,8 @@ fun PinnedAnniversaryHeader(
 fun WelcomeHeader(
     userSession: com.example.funlife.data.model.UserSession?,
     avatarUri: String? = null,
+    equippedAvatarFrame: String? = null,
+    userId: Long? = null,
     vipLevel: com.example.funlife.data.model.VipLevel = com.example.funlife.data.model.VipLevel.NORMAL,
     showFirstEntryEffect: Boolean = false,
     onFirstEntryComplete: () -> Unit = {},
@@ -725,14 +773,14 @@ fun WelcomeHeader(
         else -> "⭐"
     }
     
-    // 🔥 获取装备的头像框
+    // 🔥 获取装备的头像框（由 HomeScreen 传入快照值，避免 Flow 首帧 null）
     val context = androidx.compose.ui.platform.LocalContext.current
-    val database = remember { (context.applicationContext as com.example.funlife.FunLifeApplication).database }
-    val userPreferencesDao = remember { database.userPreferencesDao() }
-    val userPrefs by userPreferencesDao.getPreferences(userSession?.userId ?: 0L)
-        .collectAsState(initial = null)
-    val equippedAvatarFrame = userPrefs?.equippedAvatarFrame
-    
+
+    LaunchedEffect(avatarUri) {
+        val loadable = AvatarStorageHelper.resolveLoadableAvatarUri(context, avatarUri)
+        AvatarImageLoader.warm(context, loadable)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -773,7 +821,8 @@ fun WelcomeHeader(
                         frameAssetPath = equippedAvatarFrame,
                         frameSize = if (equippedAvatarFrame != null) 90.dp else 54.dp,
                         defaultText = userSession?.nickname?.firstOrNull()?.toString()?.uppercase() ?: "U",
-                        vipLevel = vipLevel
+                        vipLevel = vipLevel,
+                        userId = userId,
                     )
                     
                     // 用户名和昵称 - VIP用户名发光

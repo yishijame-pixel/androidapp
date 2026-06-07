@@ -196,7 +196,16 @@ fun GameInviteRequestPanel(
                 fontWeight = FontWeight.Medium,
             )
             Spacer(Modifier.height(12.dp))
-            Text(entry?.iconEmoji ?: "🎮", fontSize = 40.sp)
+            if (entry != null) {
+                GameCatalogHeroIcon(entry = entry, size = 80.dp)
+            } else {
+                GameCatalogIcon(
+                    gameId = invite.gameId,
+                    fallbackEmoji = "🎮",
+                    size = 80.dp,
+                    emojiFontSize = 40.sp,
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 entry?.title ?: invite.gameTitle,

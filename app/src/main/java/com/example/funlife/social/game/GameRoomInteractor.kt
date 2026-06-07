@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.repository.GameRoomRepository
 import com.example.funlife.repository.SocialLinkRepository
+import com.example.funlife.social.PocketBaseApiException
 import com.example.funlife.social.SocialFailureException
 import com.example.funlife.social.SocialOperationGate
 import com.example.funlife.social.game.model.GameRoomStateMachine
@@ -47,12 +48,7 @@ class GameRoomInteractor(
             timeoutMs = SocialOperationGate.TIMEOUT_SYNC_MS,
             forceSession = false,
         ) { cred ->
-            repo.refreshIncomingInvitesOnly(
-                userId,
-                cred.pbRecordId,
-                cred.token,
-                skipRoomIds = GameInviteNotifier.handledFor(userId),
-            )
+            repo.refreshIncomingInvitesOnly(userId, cred.pbRecordId, cred.token)
         }
 
     suspend fun refreshRoomById(roomId: String): Result<Unit> =
@@ -146,6 +142,11 @@ class GameRoomInteractor(
             repo.startGame(userId, cred.pbRecordId, cred.token, roomId)
         }
 
+    suspend fun abandonPlay(roomId: String): Result<Unit> =
+        mutateRoom(roomId, "退出对局", forceSession = true) { cred ->
+            repo.abandonPlay(userId, cred.pbRecordId, cred.token, roomId)
+        }
+
     private suspend fun mutateRoom(
         roomId: String,
         operation: String,
@@ -169,9 +170,17 @@ class GameRoomInteractor(
         val root = generateSequence(t) { it.cause }.last()
         return when (root) {
             is SocialFailureException -> root.failure.userMessage
+            is PocketBaseApiException -> root.toUserMessage("操作失败")
             is GameRoomStateMachine.ConflictException -> root.message ?: "房间状态已变化，请重试"
             is IllegalStateException -> root.message ?: "操作失败"
-            else -> root.message ?: "网络异常，请稍后重试"
+            else -> when {
+                root.message?.contains("Cannot be blank", ignoreCase = true) == true ->
+                    "落子同步失败，请再点一次"
+                root.message?.contains("requested resource", ignoreCase = true) == true ||
+                    root.message?.contains("wasn't found", ignoreCase = true) == true ->
+                    "房间不存在或无权访问，可能已结束"
+                else -> root.message ?: "网络异常，请稍后重试"
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.funlife.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -615,24 +616,30 @@ private fun ChatPeerAvatar(
             .clip(RoundedCornerShape(4.dp)),
     ) {
         if (!avatarUrl.isNullOrBlank()) {
-            val needsAuth = avatarUrl.contains("/api/files/") && !pbAuthToken.isNullOrBlank()
-            val model = remember(avatarUrl, pbAuthToken) {
-                ImageRequest.Builder(context)
-                    .data(avatarUrl)
-                    .crossfade(true)
-                    .apply {
-                        if (needsAuth) addHeader("Authorization", "Bearer $pbAuthToken")
-                    }
-                    .build()
+            val cachedBitmap = com.example.funlife.utils.AvatarImageLoader
+                .rememberCachedRemoteAvatarBitmap(avatarUrl, pbAuthToken)
+            if (cachedBitmap != null) {
+                Image(
+                    bitmap = cachedBitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                val model = remember(avatarUrl, pbAuthToken) {
+                    com.example.funlife.utils.AvatarImageLoader.buildRequest(context, avatarUrl, pbAuthToken)
+                }
+                androidx.compose.runtime.LaunchedEffect(avatarUrl, pbAuthToken) {
+                    com.example.funlife.utils.AvatarImageLoader.warm(context, avatarUrl, pbAuthToken)
+                }
+                coil.compose.SubcomposeAsyncImage(
+                    model = model,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = { InitialPlaceholder() },
+                )
             }
-            SubcomposeAsyncImage(
-                model = model,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                loading = { InitialPlaceholder() },
-                error = { InitialPlaceholder() },
-            )
         } else {
             InitialPlaceholder()
         }

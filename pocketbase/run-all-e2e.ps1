@@ -14,7 +14,8 @@ $scripts = @(
     "tools\test_social_chat_e2e.js",
     "tools\test_game_room_e2e.js",
     "tools\test_game_invite_delivery_e2e.js",
-    "tools\test_game_room_extended_e2e.js"
+    "tools\test_game_room_extended_e2e.js",
+    "tools\test_game_gomoku_move_e2e.js"
 )
 
 $failed = 0

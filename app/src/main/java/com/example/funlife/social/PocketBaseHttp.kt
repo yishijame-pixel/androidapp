@@ -6,19 +6,28 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.example.funlife.BuildConfig
 import okhttp3.CertificatePinner
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
 /**
  * PocketBase 专用 HTTP 客户端。
+ * - 全局单例 + ConnectionPool：复用 TCP/TLS，避免每次请求重新握手（公网 RTT 主因之一）
  * - Token 不落日志（Authorization redact）
  * - Release 禁止 BODY 日志
  * - 可选证书 Pin（POCKETBASE_PIN）
  */
 object PocketBaseHttp {
 
-    fun client(): OkHttpClient = newBuilder().build()
+    private val sharedClient: OkHttpClient by lazy {
+        newBuilder()
+            .connectionPool(ConnectionPool(12, 5, TimeUnit.MINUTES))
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
+    fun client(): OkHttpClient = sharedClient
 
     fun newBuilder(): OkHttpClient.Builder {
         val readSec = if (PocketBaseConfig.isRemote()) 45L else 20L
@@ -27,6 +36,8 @@ object PocketBaseHttp {
             .connectTimeout(connectSec, TimeUnit.SECONDS)
             .readTimeout(readSec, TimeUnit.SECONDS)
             .writeTimeout(readSec, TimeUnit.SECONDS)
+            .connectionPool(ConnectionPool(12, 5, TimeUnit.MINUTES))
+            .retryOnConnectionFailure(true)
 
         applyPinning(builder)
 

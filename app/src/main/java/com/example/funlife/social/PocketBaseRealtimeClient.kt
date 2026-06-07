@@ -6,6 +6,9 @@ import com.example.funlife.social.model.FriendshipStatus
 import com.example.funlife.social.model.MessageDto
 import com.google.gson.Gson
 import com.google.gson.JsonElement
+import com.example.funlife.social.game.model.GameMoveDto
+import com.example.funlife.social.game.model.GameRoomDto
+import com.example.funlife.social.game.model.GameRoomRecordParser
 import com.example.funlife.social.game.model.GameRoomStateCodec
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -24,7 +27,7 @@ class PocketBaseRealtimeClient {
 
     private val gson = Gson()
     private val jsonType = "application/json".toMediaType()
-    private val sseClient = PocketBaseHttp.newBuilder()
+    private val sseClient = PocketBaseHttp.client().newBuilder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .connectTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
@@ -35,7 +38,8 @@ class PocketBaseRealtimeClient {
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
         onIncomingMessage: suspend (MessageDto, String?, String?) -> Unit,
-        onIncomingGameRoom: suspend (String) -> Unit = {},
+        onIncomingGameRoom: suspend (GameRoomDto) -> Unit = {},
+        onIncomingGameMove: suspend (GameMoveDto) -> Unit = {},
         onUserPresenceChanged: suspend (String, Boolean) -> Unit = { _, _ -> },
     ) {
         val url = "${PocketBaseConfig.apiBase()}/realtime"
@@ -80,7 +84,73 @@ class PocketBaseRealtimeClient {
                                 onIncomingRequest = onIncomingRequest,
                                 onIncomingMessage = onIncomingMessage,
                                 onIncomingGameRoom = onIncomingGameRoom,
+                                onIncomingGameMove = onIncomingGameMove,
                                 onUserPresenceChanged = onUserPresenceChanged,
+                            )
+                            dataLines.clear()
+                            eventName = ""
+                        }
+                    }
+                }
+            }
+        } finally {
+            response.close()
+            call.cancel()
+        }
+    }
+
+    /**
+     * 对局专用 Realtime：订阅 game_rooms + game_moves，仅处理指定房间事件。
+     */
+    suspend fun listenPlay(
+        authToken: String,
+        myPbId: String,
+        roomId: String,
+        onGameRoom: suspend (String) -> Unit,
+        onGameMove: suspend (GameMoveDto) -> Unit,
+    ) {
+        val url = "${PocketBaseConfig.apiBase()}/realtime"
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .header("Authorization", "Bearer $authToken")
+            .get()
+            .build()
+
+        val call = sseClient.newCall(request)
+        val response = call.execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw PocketBaseApiException(response.code, "Realtime 连接失败 ${response.code}")
+        }
+
+        val body = response.body ?: throw PocketBaseApiException(0, "Realtime 无响应体")
+        try {
+            val source = body.source()
+            var eventName = ""
+            val dataLines = StringBuilder()
+
+            while (coroutineContext.isActive) {
+                val line = source.readUtf8Line() ?: break
+                when {
+                    line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
+                    line.startsWith("data:") -> {
+                        if (dataLines.isNotEmpty()) dataLines.append('\n')
+                        dataLines.append(line.removePrefix("data:").trim())
+                    }
+                    line.isEmpty() -> {
+                        if (dataLines.isNotEmpty()) {
+                            val data = dataLines.toString()
+                            val ev = eventName.ifBlank { inferEventName(data) }
+                            handlePlaySseEvent(
+                                eventName = ev,
+                                data = data,
+                                authToken = authToken,
+                                myPbId = myPbId,
+                                roomId = roomId,
+                                onGameRoom = onGameRoom,
+                                onGameMove = onGameMove,
                             )
                             dataLines.clear()
                             eventName = ""
@@ -116,7 +186,8 @@ class PocketBaseRealtimeClient {
         myPbId: String,
         onIncomingRequest: (FriendUiModel) -> Unit,
         onIncomingMessage: suspend (MessageDto, String?, String?) -> Unit,
-        onIncomingGameRoom: suspend (String) -> Unit,
+        onIncomingGameRoom: suspend (GameRoomDto) -> Unit,
+        onIncomingGameMove: suspend (GameMoveDto) -> Unit,
         onUserPresenceChanged: suspend (String, Boolean) -> Unit,
     ) {
         when {
@@ -137,9 +208,14 @@ class PocketBaseRealtimeClient {
                     onIncomingMessage(dto, name, username)
                     return
                 }
-                parseIncomingGameRoom(data, myPbId)?.let { roomId ->
-                    Log.d(TAG, "incoming game room $roomId")
-                    onIncomingGameRoom(roomId)
+                parseIncomingGameRoomDto(data, myPbId)?.let { room ->
+                    Log.d(TAG, "incoming game room ${room.id} joined=${room.gameState?.members?.count { it.status == "joined" }}")
+                    onIncomingGameRoom(room)
+                    return
+                }
+                parseIncomingGameMove(data)?.let { move ->
+                    Log.d(TAG, "incoming game move #${move.moveIndex} room=${move.roomId}")
+                    onIncomingGameMove(move)
                     return
                 }
                 parseUserPresenceUpdate(data, myPbId)?.let { (friendPbId, online) ->
@@ -150,10 +226,83 @@ class PocketBaseRealtimeClient {
         }
     }
 
+    private fun subscribePlay(clientId: String, authToken: String): Boolean {
+        val body = mapOf(
+            "clientId" to clientId,
+            "subscriptions" to listOf("game_rooms", "game_moves"),
+        )
+        val req = Request.Builder()
+            .url("${PocketBaseConfig.apiBase()}/realtime")
+            .post(gson.toJson(body).toRequestBody(jsonType))
+            .header("Authorization", "Bearer $authToken")
+            .header("Content-Type", "application/json")
+            .build()
+        return sseClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                Log.w(TAG, "Play subscribe failed: ${resp.code} ${resp.body?.string()}")
+                false
+            } else {
+                true
+            }
+        }
+    }
+
+    private suspend fun handlePlaySseEvent(
+        eventName: String,
+        data: String,
+        authToken: String,
+        myPbId: String,
+        roomId: String,
+        onGameRoom: suspend (String) -> Unit,
+        onGameMove: suspend (GameMoveDto) -> Unit,
+    ) {
+        when {
+            eventName == "PB_CONNECT" || data.contains("clientId") -> {
+                val obj = JsonParser.parseString(data).asJsonObject
+                val id = obj.get("clientId")?.asString ?: return
+                val ok = subscribePlay(id, authToken)
+                Log.d(TAG, "Play subscribe ok=$ok room=$roomId")
+            }
+            eventName == "PB_EVENT" || data.contains("\"action\"") -> {
+                parseIncomingGameRoom(data, myPbId)?.let { incomingRoomId ->
+                    if (incomingRoomId == roomId) {
+                        Log.d(TAG, "play room update $incomingRoomId")
+                        onGameRoom(incomingRoomId)
+                    }
+                    return
+                }
+                parseIncomingGameMove(data, roomId)?.let { move ->
+                    Log.d(TAG, "play move #${move.moveIndex} room=$roomId")
+                    onGameMove(move)
+                }
+            }
+        }
+    }
+
+    private fun parseIncomingGameMove(data: String, filterRoomId: String? = null): GameMoveDto? =
+        runCatching {
+            val root = JsonParser.parseString(data).asJsonObject
+            val action = root.get("action")?.asString ?: return null
+            if (action != "create" && action != "update") return null
+            val record = root.getAsJsonObject("record") ?: return null
+            if (record.get("move_index") == null) return null
+            val moveRoomId = relationId(record.get("room")).orEmpty()
+            if (filterRoomId != null && moveRoomId != filterRoomId) return null
+            GameMoveDto(
+                id = record.get("id").asString,
+                roomId = moveRoomId,
+                playerPbId = relationId(record.get("player")).orEmpty(),
+                moveIndex = record.get("move_index")?.asInt ?: 0,
+                payload = record.get("payload"),
+                createdAtMs = SocialChatUtils.parseCreatedAt(record.get("created")?.asString),
+            )
+        }.onFailure { Log.w(TAG, "parse game move failed: ${it.message}") }
+            .getOrNull()
+
     private fun subscribeSocial(clientId: String, authToken: String): Boolean {
         val body = mapOf(
             "clientId" to clientId,
-            "subscriptions" to listOf("friendships", "messages", "game_rooms", "users"),
+            "subscriptions" to listOf("friendships", "messages", "game_rooms", "game_moves", "users"),
         )
         val req = Request.Builder()
             .url("${PocketBaseConfig.apiBase()}/realtime")
@@ -211,27 +360,21 @@ class PocketBaseRealtimeClient {
             .getOrNull()
     }
 
-    private fun parseIncomingGameRoom(data: String, myPbId: String): String? {
-        return runCatching {
+    private fun parseIncomingGameRoomDto(data: String, myPbId: String): GameRoomDto? =
+        runCatching {
             val root = JsonParser.parseString(data).asJsonObject
             val action = root.get("action")?.asString ?: return null
             if (action != "create" && action != "update") return null
             val record = root.getAsJsonObject("record") ?: return null
             if (record.get("game_type") == null) return null
-            val roomId = record.get("id")?.asString ?: return null
-            val hostId = relationId(record.get("host"))
-            val guestId = relationId(record.get("guest"))
-            val gameState = GameRoomStateCodec.parse(record.get("game_state"))
-            // 房主：宾客离座只改 game_state / 清空 guest，必须仍命中推送
-            if (hostId == myPbId) return roomId
-            if (guestId == myPbId) return roomId
-            if (gameState?.pendingInvitePbId == myPbId) return roomId
-            if (gameState != null && GameRoomStateCodec.isMember(gameState, myPbId)) return roomId
-            if (gameState != null && gameState.memberIds.contains(myPbId)) return roomId
-            null
+            val dto = GameRoomRecordParser.fromRecord(record)
+            if (GameRoomRecordParser.isRelevantToUser(dto, myPbId)) dto else null
         }.onFailure { Log.w(TAG, "parse game room PB_EVENT failed: ${it.message}") }
             .getOrNull()
-    }
+
+    /** @deprecated 使用 [parseIncomingGameRoomDto] */
+    private fun parseIncomingGameRoom(data: String, myPbId: String): String? =
+        parseIncomingGameRoomDto(data, myPbId)?.id
 
     private fun parseUserPresenceUpdate(data: String, myPbId: String): Pair<String, Boolean>? =
         runCatching {

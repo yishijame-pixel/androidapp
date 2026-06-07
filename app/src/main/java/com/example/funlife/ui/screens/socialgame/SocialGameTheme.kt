@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -408,12 +411,51 @@ fun StatusDotBadge(
 }
 
 @Composable
+fun GameCatalogIcon(
+    gameId: String,
+    fallbackEmoji: String,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 48.dp,
+    emojiFontSize: androidx.compose.ui.unit.TextUnit = 24.sp,
+) {
+    val iconRes = SocialGameIcons.resId(gameId)
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        if (iconRes != null) {
+            Image(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                modifier = Modifier.height(size),
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
+                Text(fallbackEmoji, fontSize = emojiFontSize)
+            }
+        }
+    }
+}
+
+@Composable
 fun GameCatalogHeroIcon(
     entry: com.example.funlife.social.game.catalog.SocialGameEntry,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 88.dp,
     emojiFontSize: androidx.compose.ui.unit.TextUnit = 40.sp,
 ) {
+    val iconRes = SocialGameIcons.resId(entry.gameId)
+    if (iconRes != null) {
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = entry.title,
+            modifier = modifier.height(size),
+            contentScale = ContentScale.Fit,
+        )
+        return
+    }
+
     val c1 = Color((entry.accentColors.getOrNull(0) ?: 0xFF7C4DFF).toInt())
     val c2 = Color((entry.accentColors.getOrNull(1) ?: 0xFF38BDF8).toInt())
     Box(
@@ -425,33 +467,7 @@ fun GameCatalogHeroIcon(
             .border(1.dp, c1.copy(alpha = 0.35f), RoundedCornerShape(22.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        when (entry.gameId) {
-            "gomoku" -> GomokuStonePair()
-            else -> Text(entry.iconEmoji, fontSize = emojiFontSize)
-        }
-    }
-}
-
-@Composable
-private fun GomokuStonePair() {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(26.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF2D2D3A))
-                .border(1.dp, Color(0xFF1A1A24), CircleShape),
-        )
-        Box(
-            modifier = Modifier
-                .size(26.dp)
-                .clip(CircleShape)
-                .background(Color.White)
-                .border(1.dp, Color(0xFFE2E8F0), CircleShape),
-        )
+        Text(entry.iconEmoji, fontSize = emojiFontSize)
     }
 }
 

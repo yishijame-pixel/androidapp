@@ -33,6 +33,7 @@ class ProfileRepository(
         } else {
             userAvatarDao.updateAvatarUri(userId, avatarUri)
         }
+        com.example.funlife.utils.UserAvatarBitmapCache.publishUri(userId, avatarUri)
     }
     
     suspend fun updateFrameId(userId: Long, frameId: String?) {

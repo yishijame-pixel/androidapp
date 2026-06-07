@@ -2,6 +2,7 @@ package com.example.funlife.social
 
 import android.content.Context
 import com.example.funlife.social.game.model.GameRoomDto
+import com.example.funlife.social.game.model.GameRoomRecordParser
 import com.example.funlife.social.game.model.GameRoomStateCodec
 import com.example.funlife.social.game.model.GameRoomStatus
 import com.example.funlife.social.game.model.InviteMode
@@ -21,6 +22,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 /**
  * PocketBase REST 客户端（OkHttp + Gson，与 VIP 层风格一致）。
@@ -230,7 +235,7 @@ class PocketBaseApiClient(private val context: Context) {
     /** 受邀方专用：排除自己为 host 的房间，避免 outbound 邀请误命中。 */
     fun listIncomingGameInvites(token: String, myPbId: String): List<GameRoomDto> {
         val filter = URLEncoder.encode(
-            "status = 'waiting' && host != '$myPbId' && (guest = '$myPbId' || game_state ~ '$myPbId')",
+            "host != '$myPbId' && (guest = '$myPbId' || game_state ~ '$myPbId') && (status = 'waiting' || status = 'accepted')",
             StandardCharsets.UTF_8.name(),
         )
         val expand = URLEncoder.encode("host,guest", StandardCharsets.UTF_8.name())
@@ -259,6 +264,28 @@ class PocketBaseApiClient(private val context: Context) {
         return parseGameRoom(getJson(url, token))
     }
 
+    /** 无 expand，用于对局中轻量同步 status / current_turn / winner（省一次关联查询）。 */
+    fun getGameRoomLite(token: String, roomId: String): GameRoomDto {
+        val url = "$apiBase/collections/game_rooms/records/$roomId"
+        return parseGameRoom(getJson(url, token))
+    }
+
+    /** room + moves 并行拉取，缩短进房/对账延迟。 */
+    suspend fun fetchPlayState(
+        token: String,
+        roomId: String,
+        includeProfiles: Boolean = true,
+    ): Pair<GameRoomDto, List<com.example.funlife.social.game.model.GameMoveDto>> =
+        withContext(Dispatchers.IO) {
+            coroutineScope {
+                val roomDeferred = async {
+                    if (includeProfiles) getGameRoom(token, roomId) else getGameRoomLite(token, roomId)
+                }
+                val movesDeferred = async { listGameMoves(token, roomId) }
+                roomDeferred.await() to movesDeferred.await()
+            }
+        }
+
     fun createGameRoom(token: String, body: Map<String, Any?>): GameRoomDto {
         val json = postJson("$apiBase/collections/game_rooms/records", body, authToken = token)
         val id = json.get("id").asString
@@ -281,6 +308,84 @@ class PocketBaseApiClient(private val context: Context) {
         val json = getJson(url, token)
         val items = json.getAsJsonArray("items") ?: return emptyList()
         return items.map { parseGameRoom(it.asJsonObject) }
+    }
+
+    fun listGameMoves(token: String, roomId: String): List<com.example.funlife.social.game.model.GameMoveDto> {
+        val filter = URLEncoder.encode(
+            "room = '${escapeFilter(roomId)}'",
+            StandardCharsets.UTF_8.name(),
+        )
+        val url = "$apiBase/collections/game_moves/records?filter=$filter&sort=move_index&perPage=500"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return emptyList()
+        return items.map { parseGameMove(it.asJsonObject) }
+    }
+
+    /** 增量拉取：仅 move_index > afterIndex 的记录（对账/轮询省带宽）。 */
+    fun listGameMovesSince(
+        token: String,
+        roomId: String,
+        afterIndex: Int,
+    ): List<com.example.funlife.social.game.model.GameMoveDto> {
+        if (afterIndex <= 0) return listGameMoves(token, roomId)
+        val filter = URLEncoder.encode(
+            "room = '${escapeFilter(roomId)}' && move_index > $afterIndex",
+            StandardCharsets.UTF_8.name(),
+        )
+        val url = "$apiBase/collections/game_moves/records?filter=$filter&sort=move_index&perPage=100"
+        val json = getJson(url, token)
+        val items = json.getAsJsonArray("items") ?: return emptyList()
+        return items.map { parseGameMove(it.asJsonObject) }
+    }
+
+    /** 增量对账：lite room + delta moves 并行。 */
+    suspend fun fetchPlayStateDelta(
+        token: String,
+        roomId: String,
+        afterMoveIndex: Int,
+    ): Triple<GameRoomDto, List<com.example.funlife.social.game.model.GameMoveDto>, Boolean> =
+        withContext(Dispatchers.IO) {
+            coroutineScope {
+                if (afterMoveIndex <= 0) {
+                    val (room, moves) = fetchPlayState(token, roomId, includeProfiles = true)
+                    return@coroutineScope Triple(room, moves, false)
+                }
+                val roomDeferred = async { getGameRoomLite(token, roomId) }
+                val movesDeferred = async { listGameMovesSince(token, roomId, afterMoveIndex) }
+                Triple(roomDeferred.await(), movesDeferred.await(), true)
+            }
+        }
+
+    fun createGameMove(
+        token: String,
+        roomId: String,
+        playerPbId: String,
+        moveIndex: Int,
+        payload: Map<String, Any?>,
+    ): com.example.funlife.social.game.model.GameMoveDto {
+        require(token.isNotBlank()) { "社交 Token 为空" }
+        require(roomId.isNotBlank()) { "房间 id 为空" }
+        val authPlayerId = runCatching { recordIdFromToken(token) }.getOrElse { throw it }
+        require(authPlayerId.isNotBlank()) { "JWT 无用户 id" }
+        val body = mapOf(
+            "room" to roomId,
+            "player" to authPlayerId,
+            "move_index" to moveIndex,
+            "payload" to payload,
+        )
+        val json = postJson("$apiBase/collections/game_moves/records", body, authToken = token)
+        return parseGameMove(json)
+    }
+
+    private fun parseGameMove(obj: JsonObject): com.example.funlife.social.game.model.GameMoveDto {
+        return com.example.funlife.social.game.model.GameMoveDto(
+            id = obj.get("id").asString,
+            roomId = relationId(obj.get("room")).orEmpty(),
+            playerPbId = relationId(obj.get("player")).orEmpty(),
+            moveIndex = obj.get("move_index")?.asInt ?: 0,
+            payload = obj.get("payload"),
+            createdAtMs = SocialChatUtils.parseCreatedAt(obj.get("created")?.asString),
+        )
     }
 
     // ── Phase 2: Conversations / Messages ───────────────────────────────
@@ -506,37 +611,7 @@ class PocketBaseApiClient(private val context: Context) {
         }
     }
 
-    private fun parseGameRoom(obj: JsonObject): GameRoomDto {
-        val expand = obj.getAsJsonObject("expand")
-        val hostId = relationId(obj.get("host")).orEmpty()
-        val guestId = relationId(obj.get("guest"))
-        val hostProfile = expand?.getAsJsonObject("host")?.let { parseUser(it) }
-        val guestProfile = expand?.getAsJsonObject("guest")?.let { parseUser(it) }
-        val gameState = GameRoomStateCodec.parse(obj.get("game_state"))
-        val legacyDeclined = obj.get("game_state")?.takeIf { it.isJsonObject }?.asJsonObject
-            ?.get("declined_by")?.asString == "guest"
-        val declinedByPbId = gameState?.declinedByPbId
-        val declinedByGuest = !declinedByPbId.isNullOrBlank() || legacyDeclined
-        return GameRoomDto(
-            id = obj.get("id").asString,
-            gameType = obj.get("game_type")?.asString.orEmpty(),
-            inviteMode = InviteMode.fromWire(obj.get("invite_mode")?.asString),
-            roomCode = obj.get("room_code")?.asString.orEmpty(),
-            hostPbId = hostId,
-            guestPbId = guestId,
-            status = GameRoomStatus.fromWire(obj.get("status")?.asString),
-            hostReady = obj.get("host_ready")?.asBoolean ?: false,
-            guestReady = obj.get("guest_ready")?.asBoolean ?: false,
-            inviteMessage = obj.get("invite_message")?.asString.orEmpty(),
-            declinedByGuest = !declinedByPbId.isNullOrBlank() || legacyDeclined,
-            declinedByPbId = declinedByPbId,
-            gameState = gameState,
-            hostProfile = hostProfile,
-            guestProfile = guestProfile,
-            updatedAtMs = SocialChatUtils.parseCreatedAt(obj.get("updated")?.asString),
-            createdAtMs = SocialChatUtils.parseCreatedAt(obj.get("created")?.asString),
-        )
-    }
+    private fun parseGameRoom(obj: JsonObject): GameRoomDto = GameRoomRecordParser.fromRecord(obj)
 
     private fun parseConversation(obj: JsonObject): ConversationDto {
         return ConversationDto(

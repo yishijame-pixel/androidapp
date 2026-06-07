@@ -507,6 +507,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
         immersiveRoute?.startsWith("friend_chat/") != true &&
         immersiveRoute?.startsWith("social_game_detail/") != true &&
         immersiveRoute?.startsWith("social_game_lobby/") != true &&
+        immersiveRoute?.startsWith("social_game_play/") != true &&
         immersiveRoute?.startsWith("social_game_center") != true
 
     com.example.funlife.ui.components.topdrawer.TopDrawerHost(

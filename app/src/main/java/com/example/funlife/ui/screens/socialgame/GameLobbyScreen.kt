@@ -64,17 +64,21 @@ fun GameLobbyScreen(
     val pbAuthToken by viewModel.pbAuthToken.collectAsState()
     val myLocalAvatarUri by viewModel.myLocalAvatarUri.collectAsState()
     val busyMessage by viewModel.busyMessage.collectAsState()
+    val startingGameRoomId by viewModel.startingGameRoomId.collectAsState()
+    val isStartingGame = startingGameRoomId == roomId
     val navigateRoomId by viewModel.navigateToRoomId.collectAsState()
+    val requestPopLobby by viewModel.requestPopLobby.collectAsState()
     val room = rooms.firstOrNull { it.roomId == roomId }
     val context = LocalContext.current
 
     LaunchedEffect(roomId) {
-        viewModel.refreshRoomsQuietly()
-        viewModel.refreshFriendsForLobby()
+        viewModel.enterLobby(roomId)
     }
     DisposableEffect(roomId) {
-        viewModel.startLobbySync(roomId)
-        onDispose { viewModel.stopLobbySync(roomId) }
+        onDispose {
+            viewModel.stopLobbySync(roomId)
+            viewModel.clearStartingGame()
+        }
     }
     LaunchedEffect(navigateRoomId) {
         navigateRoomId?.let { newRoomId ->
@@ -82,13 +86,38 @@ fun GameLobbyScreen(
             viewModel.consumeNavigateToRoom()
         }
     }
+    LaunchedEffect(requestPopLobby) {
+        if (requestPopLobby) {
+            viewModel.consumePopLobby()
+            onNavigateToGameCenter()
+        }
+    }
+    LaunchedEffect(room?.status, roomId) {
+        if (room?.status == GameRoomStatus.PLAYING) {
+            viewModel.clearStartingGame()
+            onStartGame(roomId)
+        }
+    }
+    LaunchedEffect(room?.roomId, room?.joinedCount, room?.status, room?.minPlayers) {
+        if (room != null && room.canStartGame) {
+            viewModel.prewarmPlaySync(roomId)
+        }
+    }
 
     var showLeaveConfirm by remember { mutableStateOf(false) }
 
     if (room == null) {
         LaunchedEffect(roomId) {
-            onNavigateToGameCenter()
+            kotlinx.coroutines.delay(6_000L)
+            if (rooms.none { it.roomId == roomId }) {
+                onNavigateToGameCenter()
+            }
         }
+        GameEnterLoadingScreen(
+            gameTitle = "对战大厅",
+            gameEmoji = "🎮",
+            headline = if (roomId in optimisticAccepted) "正在确认邀请…" else "正在进入对战大厅…",
+        )
         return
     }
 
@@ -106,7 +135,7 @@ fun GameLobbyScreen(
     val canInviteFriend = isHost && room.status == GameRoomStatus.WAITING &&
         !effectiveInvitePending && !room.isRoomFull
     val showDeclineBanner = isHost && room.declinedByGuest && room.isSoloLobby
-    val showInviteSection = isHost && !guestCanRespond && !room.isRoomFull
+    val showInviteSection = isHost && !guestCanRespond && !room.isRoomFull && !isStartingGame
     val joinedCount = room.joinedCount
     val canStart = isHost && room.canStartGame
     val isJoinedGuest = !isHost && !myPbId.isNullOrBlank() &&
@@ -147,7 +176,17 @@ fun GameLobbyScreen(
 
     val handleBackRequest = { showLeaveConfirm = true }
 
-    BackHandler(onBack = handleBackRequest)
+    BackHandler(onBack = if (isStartingGame) ({ }) else handleBackRequest)
+
+    if (isStartingGame) {
+        SocialGameEnterLoading(
+            gameId = room.gameId,
+            gameTitle = room.gameTitle,
+            gameEmoji = entry?.iconEmoji ?: "🎮",
+            headline = "正在进入${room.gameTitle}",
+        )
+        return
+    }
 
     SocialGameScaffold(
         title = when {
@@ -194,6 +233,7 @@ fun GameLobbyScreen(
                         else -> {
                             GameLobbyCompactPanel(
                                 room = room,
+                                gameId = entry?.gameId ?: room.gameId,
                                 gameEmoji = entry?.iconEmoji ?: "🎮",
                                 maxPlayers = maxPlayers,
                                 minPlayers = minPlayers,
@@ -208,7 +248,7 @@ fun GameLobbyScreen(
                                 friendProfiles = friendProfiles,
                             )
 
-                            if (effectiveInvitePending && isHost) {
+                            if (effectiveInvitePending && isHost && !isStartingGame) {
                                 Spacer(Modifier.height(8.dp))
                                 InviteStatusBanner(
                                     peerName = pendingFriendName,
@@ -249,11 +289,18 @@ fun GameLobbyScreen(
                     when {
                         canStart -> {
                             HubPrimaryButton(
-                                text = "开始游戏 · $joinedCount/$maxPlayers",
-                                onClick = {
-                                    viewModel.startGame(roomId) { onStartGame(roomId) }
+                                text = if (isStartingGame) {
+                                    "正在进入游戏…"
+                                } else {
+                                    "开始游戏 · $joinedCount/$maxPlayers"
                                 },
-                                enabled = busyMessage == null,
+                                onClick = {
+                                    if (!isStartingGame) {
+                                        viewModel.startGame(roomId) { onStartGame(roomId) }
+                                    }
+                                },
+                                enabled = busyMessage == null && !isStartingGame,
+                                loading = isStartingGame,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             Spacer(Modifier.height(8.dp))

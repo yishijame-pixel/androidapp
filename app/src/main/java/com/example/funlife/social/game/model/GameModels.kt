@@ -57,6 +57,8 @@ data class LocalGameRoomDraft(
     val minPlayers: Int = 2,
     val pendingInvitePbId: String? = null,
     val createdAtMs: Long,
+    /** PocketBase `updated`；同一房间再次邀请时递增，用于重新推送通知 */
+    val updatedAtMs: Long = 0L,
 ) {
     val joinedMembers: List<LobbyMember>
         get() = members.filter { it.status == LobbyMemberStatus.JOINED }

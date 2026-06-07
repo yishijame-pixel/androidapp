@@ -83,7 +83,7 @@ fun GameDetailScreen(
                             .padding(vertical = 28.dp, horizontal = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        GameCatalogHeroIcon(entry = entry, size = 88.dp)
+                        GameCatalogHeroIcon(entry = entry, size = 128.dp)
                         Spacer(Modifier.height(14.dp))
                         Text(
                             entry.title,

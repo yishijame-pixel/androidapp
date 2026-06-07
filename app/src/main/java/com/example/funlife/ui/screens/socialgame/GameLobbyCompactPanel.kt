@@ -107,6 +107,7 @@ fun buildLobbySeats(
 @Composable
 fun GameLobbyCompactPanel(
     room: LocalGameRoomDraft,
+    gameId: String,
     gameEmoji: String,
     maxPlayers: Int,
     minPlayers: Int,
@@ -139,13 +140,15 @@ fun GameLobbyCompactPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SocialGamePalette.bgBase),
+                    modifier = Modifier.size(44.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(gameEmoji, fontSize = 22.sp)
+                    GameCatalogIcon(
+                        gameId = gameId,
+                        fallbackEmoji = gameEmoji,
+                        size = 44.dp,
+                        emojiFontSize = 22.sp,
+                    )
                 }
                 Column(modifier = Modifier.padding(start = 10.dp).weight(1f)) {
                     Text(

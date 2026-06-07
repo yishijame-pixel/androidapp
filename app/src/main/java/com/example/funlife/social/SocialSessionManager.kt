@@ -90,6 +90,7 @@ object SocialSessionManager {
 
     fun warmStartAsync(ctx: Context) {
         if (!PocketBaseConfig.isEnabled()) return
+        PocketBaseConnectionWarmer.warmAsync(ctx)
         scope.launch {
             runCatching { warmStart(ctx) }
                 .onFailure { Log.w(TAG, "warmStart failed: ${it.message}") }

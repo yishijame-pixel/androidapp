@@ -173,6 +173,9 @@ sealed class Screen(val route: String, val title: String) {
     object SocialGameLobby : Screen("social_game_lobby/{roomId}", "游戏房间") {
         fun route(roomId: String) = "social_game_lobby/$roomId"
     }
+    object SocialGamePlay : Screen("social_game_play/{roomId}", "对局中") {
+        fun route(roomId: String) = "social_game_play/$roomId"
+    }
     // 🆕 v55 古籍日记本
     object DiaryBook : Screen("diary_book", "日记本")
     object DiaryBookFull : Screen("diary_book_full", "日记本")
@@ -534,6 +537,9 @@ fun NavGraph(
                 onNavigateToLobby = { roomId ->
                     navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
                 },
+                onNavigateToPlay = { roomId ->
+                    navController.safeNavigate(Screen.SocialGamePlay.route(roomId), context)
+                },
             )
         }
 
@@ -615,7 +621,47 @@ fun NavGraph(
                         launchSingleTop = true
                     }
                 },
-                onStartGame = { /* P1: navigate to game room */ },
+                onStartGame = { playRoomId ->
+                    navController.navigate(Screen.SocialGamePlay.route(playRoomId)) {
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = Screen.SocialGamePlay.route,
+            arguments = listOf(navArgument("roomId") { type = NavType.StringType }),
+        ) {
+            val userSession = authViewModel.getCurrentSession()
+            val playRoomId = it.arguments?.getString("roomId").orEmpty()
+            if (playRoomId.isBlank() || userSession == null) {
+                LoadingFallback(if (userSession == null) "正在跳转登录…" else "无效的房间")
+                if (userSession == null) {
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    }
+                } else {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                }
+                return@composable
+            }
+            val playVm = com.example.funlife.ui.screens.socialgame.play.rememberGamePlayViewModel(userSession, playRoomId)
+            com.example.funlife.ui.screens.socialgame.play.GamePlayScreen(
+                roomId = playRoomId,
+                viewModel = playVm,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToLobby = {
+                    navController.navigate(Screen.SocialGameLobby.route(playRoomId)) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToGameCenter = {
+                    navController.navigate(Screen.SocialGameCenter.route()) {
+                        popUpTo(Screen.SocialGamePlay.route(playRoomId)) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         

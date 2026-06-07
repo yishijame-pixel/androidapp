@@ -16,6 +16,8 @@ data class GameRoomDto(
     val declinedByGuest: Boolean,
     val declinedByPbId: String?,
     val gameState: GameRoomStatePayload?,
+    val currentTurnPbId: String?,
+    val winnerPbId: String?,
     val hostProfile: PbUserProfile?,
     val guestProfile: PbUserProfile?,
     val updatedAtMs: Long,

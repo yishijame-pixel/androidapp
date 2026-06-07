@@ -59,6 +59,7 @@ fun SocialGameCenterScreen(
     onNavigateToDetail: (gameId: String) -> Unit,
     onNavigateToLocalGame: (route: String) -> Unit,
     onNavigateToLobby: (roomId: String) -> Unit,
+    onNavigateToPlay: (roomId: String) -> Unit,
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
     val joinCode by viewModel.joinCode.collectAsState()
@@ -123,7 +124,13 @@ fun SocialGameCenterScreen(
                         items = myGames.filter {
                             it.status != GameRoomStatus.CANCELLED && it.status != GameRoomStatus.EXPIRED
                         },
-                        onContinue = onNavigateToLobby,
+                        onContinue = { item ->
+                            if (item.status == GameRoomStatus.PLAYING) {
+                                onNavigateToPlay(item.roomId)
+                            } else {
+                                onNavigateToLobby(item.roomId)
+                            }
+                        },
                     )
                 }
             }
@@ -288,7 +295,7 @@ private fun LocalTabContent(
 private fun MyGamesTabContent(
     pbConfigured: Boolean,
     items: List<MyGameItemUi>,
-    onContinue: (String) -> Unit,
+    onContinue: (MyGameItemUi) -> Unit,
 ) {
     if (!pbConfigured) {
         EmptyHubState(
@@ -312,10 +319,10 @@ private fun MyGamesTabContent(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            HubSectionTitle("进行中的对局", "点击继续回到对战大厅")
+            HubSectionTitle("进行中的对局", "对局中直接进入棋盘，等待中回大厅")
         }
         items(items, key = { it.roomId }) { item ->
-            ActiveMatchCard(item = item, onClick = { onContinue(item.roomId) })
+            ActiveMatchCard(item = item, onClick = { onContinue(item) })
         }
     }
 }
@@ -484,7 +491,7 @@ private fun HubGameListCard(
     ) {
         GameCatalogHeroIcon(
             entry = entry,
-            size = 58.dp,
+            size = 80.dp,
             emojiFontSize = 28.sp,
         )
 
@@ -546,7 +553,6 @@ private fun ActiveMatchCard(
     item: MyGameItemUi,
     onClick: () -> Unit,
 ) {
-    val c1 = Color((item.accentColors.getOrNull(0) ?: 0xFFFFB84D).toInt())
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -558,14 +564,15 @@ private fun ActiveMatchCard(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(accentBrush(item.accentColors))
-                .border(1.dp, c1.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
+            modifier = Modifier.size(56.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(item.gameEmoji, fontSize = 24.sp)
+            GameCatalogIcon(
+                gameId = item.gameId,
+                fallbackEmoji = item.gameEmoji,
+                size = 56.dp,
+                emojiFontSize = 24.sp,
+            )
         }
         Column(
             modifier = Modifier

@@ -67,6 +67,8 @@ android {
         // 🆕 PocketBase 社交层（Phase1 好友）— 留空则社交入口显示「未配置」
         buildConfigField("String", "POCKETBASE_URL", "\"${props.getProperty("POCKETBASE_URL", "")}\"")
         buildConfigField("String", "POCKETBASE_PIN", "\"${props.getProperty("POCKETBASE_PIN", "")}\"")
+        // 你画我猜笔画 WebSocket（留空则走 PocketBase 分片同步）
+        buildConfigField("String", "DRAW_WS_URL", "\"${props.getProperty("DRAW_WS_URL", "")}\"")
         buildConfigField("boolean", "FCM_ENABLED", fcmEnabled.toString())
     }
 

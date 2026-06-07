@@ -28,6 +28,12 @@ object SocialOperationGate {
     const val TIMEOUT_SEARCH_MS = 25_000L
     const val TIMEOUT_MUTATION_MS = 30_000L
     const val TIMEOUT_SYNC_MS = 30_000L
+    const val TIMEOUT_PLAY_MOVE_MS = 60_000L
+
+    fun playSyncTimeoutMs(): Long = syncTimeoutMs()
+
+    fun playMoveTimeoutMs(): Long =
+        if (PocketBaseConfig.isRemote()) TIMEOUT_PLAY_MOVE_MS else TIMEOUT_MUTATION_MS
 
     private fun bindTimeoutMs(): Long =
         if (PocketBaseConfig.isRemote()) 35_000L else TIMEOUT_BIND_MS
@@ -91,8 +97,10 @@ object SocialOperationGate {
             )
         }
 
+        val appCtx = ctx.applicationContext
+        fromLocalSuspend(appCtx, userId)?.let { return@withContext Result.success(it) }
+
         lockFor(userId).withLock {
-            val appCtx = ctx.applicationContext
             fromLocalSuspend(appCtx, userId)?.let { return@withLock Result.success(it) }
 
             if (!forceSession) {

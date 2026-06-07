@@ -323,6 +323,8 @@ class InventoryViewModel(
                     userPreferencesDao.updateEquippedAvatarFrame(userId, frameAssetPath)
                     android.util.Log.d("InventoryViewModel", "Updated equipped frame: $frameAssetPath")
                 }
+
+                com.example.funlife.utils.UserAvatarBitmapCache.publishFrame(userId, frameAssetPath)
                 
                 _message.value = "装备成功！"
             } catch (e: Exception) {
