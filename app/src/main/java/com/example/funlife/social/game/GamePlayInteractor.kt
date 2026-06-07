@@ -82,7 +82,7 @@ class GamePlayInteractor(
         }
 
     suspend fun submitGuess(roomId: String, text: String): Result<GameRoomDto> =
-        runPlayMutation(roomId, "猜词") { cred ->
+        runPlayMutation(roomId, "发送消息") { cred ->
             val dto = api.getGameRoom(cred.token, roomId)
             moveRepo.submitDrawGuess(userId, cred.pbRecordId, cred.token, dto, text)
         }

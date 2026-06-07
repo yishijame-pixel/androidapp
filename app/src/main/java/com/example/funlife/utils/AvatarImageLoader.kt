@@ -5,7 +5,11 @@ import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Looper
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -191,5 +195,67 @@ object AvatarImageLoader {
             if (loadable == null || !AvatarStorageHelper.isLocalAvatarUri(loadable)) return@remember null
             UserAvatarBitmapCache.peekBitmap(loadable)
         }
+    }
+
+    /**
+     * 异步解析头像：首帧读内存缓存，后台读磁盘/Coil 并写入 UserAvatarBitmapCache 后刷新 UI。
+     */
+    @Composable
+    fun rememberAvatarBitmap(
+        avatarUrl: String?,
+        localAvatarUri: String? = null,
+        pbAuthToken: String? = null,
+    ): ImageBitmap? {
+        val context = LocalContext.current
+        val remote = avatarUrl?.trim()?.takeIf { it.isNotEmpty() }
+            ?.takeUnless { AvatarStorageHelper.isLocalAvatarUri(it) }
+        val local = remember(localAvatarUri, avatarUrl) {
+            localAvatarUri?.takeIf { it.isNotBlank() }
+                ?: avatarUrl?.takeIf { AvatarStorageHelper.isLocalAvatarUri(it) }
+                    ?.let { AvatarStorageHelper.resolveLoadableAvatarUri(context, it) }
+        }
+        var bitmap by remember(remote, local, pbAuthToken) {
+            mutableStateOf(peekInstantBitmap(context, remote, local))
+        }
+        LaunchedEffect(remote, local, pbAuthToken) {
+            peekInstantBitmap(context, remote, local)?.let {
+                bitmap = it
+                return@LaunchedEffect
+            }
+            val loaded = withContext(Dispatchers.IO) {
+                when {
+                    local != null -> UserAvatarBitmapCache.rememberBitmap(context, local)
+                    !remote.isNullOrBlank() -> {
+                        loadCachedBitmapBlocking(context, remote, pbAuthToken)
+                            ?: run {
+                                warm(context, remote, pbAuthToken)
+                                UserAvatarBitmapCache.peekBitmap(remote)
+                                    ?: peekMemoryBitmap(context, remote)?.also {
+                                        UserAvatarBitmapCache.putBitmap(remote, it)
+                                    }
+                            }
+                    }
+                    else -> null
+                }
+            }
+            if (loaded != null) bitmap = loaded
+        }
+        return bitmap
+    }
+
+    private fun peekInstantBitmap(
+        context: Context,
+        remote: String?,
+        local: String?,
+    ): ImageBitmap? {
+        local?.let { UserAvatarBitmapCache.peekBitmap(it) }?.let { return it }
+        if (!remote.isNullOrBlank()) {
+            UserAvatarBitmapCache.peekBitmap(remote)?.let { return it }
+            peekMemoryBitmap(context, remote)?.let {
+                UserAvatarBitmapCache.putBitmap(remote, it)
+                return it
+            }
+        }
+        return null
     }
 }

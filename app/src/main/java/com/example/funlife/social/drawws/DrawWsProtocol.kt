@@ -14,25 +14,31 @@ object DrawWsProtocol {
         color: String,
         width: Float,
         points: List<List<Float>>,
-    ): String {
-        val pts = JsonArray()
-        points.forEach { pair ->
-            val arr = JsonArray()
-            arr.add(pair.getOrNull(0) ?: 0f)
-            arr.add(pair.getOrNull(1) ?: 0f)
-            pts.add(arr)
+    ): String = buildString {
+        append("{\"t\":\"stroke_chunk\",\"v\":")
+        append(VERSION)
+        append(",\"room\":\"")
+        append(roomId)
+        append("\",\"strokeId\":\"")
+        append(strokeId)
+        append("\",\"chunk\":")
+        append(chunk)
+        append(",\"round\":")
+        append(round)
+        append(",\"color\":\"")
+        append(color)
+        append("\",\"width\":")
+        append(width)
+        append(",\"points\":[")
+        points.forEachIndexed { i, pair ->
+            if (i > 0) append(',')
+            append('[')
+            append(pair.getOrNull(0) ?: 0f)
+            append(',')
+            append(pair.getOrNull(1) ?: 0f)
+            append(']')
         }
-        return JsonObject().apply {
-            addProperty("t", "stroke_chunk")
-            addProperty("v", VERSION)
-            addProperty("room", roomId)
-            addProperty("strokeId", strokeId)
-            addProperty("chunk", chunk)
-            addProperty("round", round)
-            addProperty("color", color)
-            addProperty("width", width)
-            add("points", pts)
-        }.toString()
+        append("]}")
     }
 
     fun strokeEnd(
@@ -68,4 +74,6 @@ object DrawWsProtocol {
         """{"t":"clear","v":$VERSION,"room":"$roomId","round":$round}"""
 
     fun ping(): String = """{"t":"ping","v":$VERSION}"""
+
+    fun ready(round: Int): String = """{"t":"ready","v":$VERSION,"round":$round}"""
 }

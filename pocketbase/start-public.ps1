@@ -61,18 +61,37 @@ if ((Test-Path $adminSdk) -and (Test-Path (Join-Path $relayDir 'server.js'))) {
 
 $drawWsDir = Join-Path $pbDir 'tools\draw_ws'
 if (Test-Path (Join-Path $drawWsDir 'server.js')) {
+    $pbUrl = if ($env:PB_BASE_URL) { $env:PB_BASE_URL } else { "http://127.0.0.1:8090" }
     $portPid8790 = (Get-NetTCPConnection -LocalPort 8790 -State Listen -ErrorAction SilentlyContinue |
         Select-Object -First 1).OwningProcess
-    if ($portPid8790) {
-        Stop-Process -Id $portPid8790 -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 1
-    }
-    $pbUrl = if ($env:PB_BASE_URL) { $env:PB_BASE_URL } else { "http://127.0.0.1:8090" }
-    $drawWsCmd = @"
+    if (-not $portPid8790) {
+        $drawWsCmd = @"
 `$env:PB_BASE_URL='$pbUrl'; `$env:PORT='8790'; Set-Location '$drawWsDir'; node server.js
 "@
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $drawWsCmd -WindowStyle Minimized
-    Write-Host "Started draw_ws :8790 (pb=$pbUrl)" -ForegroundColor Green
+        Start-Process powershell -ArgumentList "-NoWindow", "-Command", $drawWsCmd -WindowStyle Hidden
+    }
+    $drawWsOk = $false
+    for ($i = 1; $i -le 12; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $h = Invoke-RestMethod -Uri "http://127.0.0.1:8790/health" -TimeoutSec 2
+            if ($h.ok) { $drawWsOk = $true; break }
+        } catch { }
+    }
+    if ($drawWsOk) {
+        Write-Host "draw_ws :8790 health OK (pb=$pbUrl)" -ForegroundColor Green
+    } else {
+        Write-Host "WARN: draw_ws :8790 not ready — cloudflared /draw-ws will 502 until it starts" -ForegroundColor Yellow
+    }
+    $watchScript = Join-Path $drawWsDir 'watch-draw-ws.ps1'
+    if (Test-Path $watchScript) {
+        $watchRunning = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like '*watch-draw-ws.ps1*' }
+        if (-not $watchRunning) {
+            Start-Process powershell -ArgumentList "-NoWindow", "-File", $watchScript, "-PbBase", $pbUrl -WindowStyle Hidden
+            Write-Host "Started draw_ws watchdog (watch-draw-ws.ps1)" -ForegroundColor Green
+        }
+    }
 }
 
 $pbEnv = @{}
@@ -96,5 +115,6 @@ Start-Process -FilePath "cloudflared" -ArgumentList "tunnel", "run", "funlife-pb
 
 Write-Host "Started PocketBase :8090 + tunnel funlife-pb" -ForegroundColor Green
 Write-Host "Verify: https://pb.yishi.site/api/health" -ForegroundColor Cyan
-Write-Host "Draw WS: https://draw.yishi.site/health  (wss://draw.yishi.site/ws)" -ForegroundColor Cyan
+Write-Host "Draw WS: https://pb.yishi.site/draw-ws/health  (wss://pb.yishi.site/draw-ws/ws)" -ForegroundColor Cyan
+Write-Host "Legacy:  https://draw.yishi.site/health" -ForegroundColor DarkGray
 Write-Host "Stop: taskkill /IM pocketbase.exe /F; taskkill /IM cloudflared.exe /F" -ForegroundColor DarkGray

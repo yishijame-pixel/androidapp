@@ -58,7 +58,17 @@ fun buildDrawGuessPlayers(
 
     fun profile(pbId: String): Triple<String, String?, String?> {
         if (pbId == myPbId) {
-            return Triple(myDisplayName?.takeIf { it.isNotBlank() } ?: "我", null, myLocalAvatarUri)
+            val remote = room.members.firstOrNull { it.pbId == pbId }?.avatarUrl
+                ?: when (pbId) {
+                    room.hostPbId -> room.hostAvatarUrl
+                    room.guestPbId -> room.guestAvatarUrl
+                    else -> null
+                }
+            return Triple(
+                myDisplayName?.takeIf { it.isNotBlank() } ?: "我",
+                remote,
+                myLocalAvatarUri,
+            )
         }
         room.members.firstOrNull { it.pbId == pbId }?.let { member ->
             return Triple(member.displayName?.takeIf { it.isNotBlank() } ?: "玩家", member.avatarUrl, null)
@@ -88,6 +98,17 @@ fun buildDrawGuessPlayers(
     }
 
     return toUi(hostId) to toUi(guestId)
+}
+
+fun buildDrawGuessPlayerList(
+    room: LocalGameRoomDraft?,
+    play: DrawGuessPlayState,
+    myPbId: String?,
+    myDisplayName: String? = null,
+    myLocalAvatarUri: String? = null,
+): List<DrawGuessPlayerUi> {
+    val pair = buildDrawGuessPlayers(room, play, myPbId, myDisplayName, myLocalAvatarUri) ?: return emptyList()
+    return listOf(pair.first, pair.second)
 }
 
 @Composable
@@ -193,7 +214,8 @@ private fun DrawGuessPlayerChip(
         Box {
             SocialGameAvatar(
                 displayName = player.displayName,
-                avatarUrl = player.avatarUrl ?: player.localAvatarUri,
+                avatarUrl = player.avatarUrl,
+                localAvatarUri = player.localAvatarUri,
                 pbAuthToken = pbAuthToken,
                 size = 36.dp,
             )

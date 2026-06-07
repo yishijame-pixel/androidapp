@@ -1,5 +1,6 @@
 package com.example.funlife.social.game.model
 
+import com.example.funlife.social.PocketBaseConfig
 import com.example.funlife.social.SocialChatUtils
 import com.example.funlife.social.model.PbUserProfile
 import com.google.gson.JsonElement
@@ -62,13 +63,20 @@ object GameRoomRecordParser {
     private fun parseUser(obj: JsonObject): PbUserProfile {
         val id = obj.get("id")?.asString.orEmpty()
         val avatarFile = obj.get("avatar")?.asString?.takeIf { it.isNotBlank() }
+        val avatarUrl = avatarFile?.let { fileUrlForUserAvatar(id, it) }
         return PbUserProfile(
             id = id,
             funlifeUsername = obj.get("funlife_username")?.asString.orEmpty(),
             displayName = obj.get("name")?.asString
                 ?: obj.get("funlife_username")?.asString.orEmpty(),
-            avatarUrl = avatarFile,
+            avatarUrl = avatarUrl,
             online = obj.get("online")?.asBoolean ?: false,
         )
+    }
+
+    private fun fileUrlForUserAvatar(userId: String, fileName: String): String {
+        if (fileName.startsWith("http")) return fileName
+        val base = PocketBaseConfig.baseUrl().trimEnd('/')
+        return "$base/api/files/users/$userId/$fileName"
     }
 }

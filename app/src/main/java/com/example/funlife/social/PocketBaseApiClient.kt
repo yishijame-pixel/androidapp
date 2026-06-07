@@ -377,6 +377,21 @@ class PocketBaseApiClient(private val context: Context) {
         return parseGameMove(json)
     }
 
+    fun patchGameMove(
+        token: String,
+        moveId: String,
+        payload: Map<String, Any?>,
+    ): com.example.funlife.social.game.model.GameMoveDto {
+        require(token.isNotBlank()) { "社交 Token 为空" }
+        require(moveId.isNotBlank()) { "move id 为空" }
+        val json = patchJson(
+            "$apiBase/collections/game_moves/records/$moveId",
+            mapOf("payload" to payload),
+            authToken = token,
+        )
+        return parseGameMove(json)
+    }
+
     private fun parseGameMove(obj: JsonObject): com.example.funlife.social.game.model.GameMoveDto {
         return com.example.funlife.social.game.model.GameMoveDto(
             id = obj.get("id").asString,
@@ -519,6 +534,7 @@ class PocketBaseApiClient(private val context: Context) {
         val reqBuilder = Request.Builder()
             .url(url)
             .post(gson.toJson(body).toRequestBody(jsonType))
+            .header("Content-Type", "application/json")
         if (authToken != null) reqBuilder.header("Authorization", "Bearer $authToken")
         return executeJson(reqBuilder.build())
     }
@@ -528,6 +544,7 @@ class PocketBaseApiClient(private val context: Context) {
             .url(url)
             .patch(gson.toJson(body).toRequestBody(jsonType))
             .header("Authorization", "Bearer $authToken")
+            .header("Content-Type", "application/json")
             .build()
         return executeJson(req)
     }
@@ -658,7 +675,11 @@ class PocketBaseApiClient(private val context: Context) {
 class PocketBaseApiException(val code: Int, message: String) : Exception(message) {
     fun toUserMessage(fallback: String = "请求失败"): String = when (code) {
         404 -> "房间不存在或无权访问，可能已结束"
-        403 -> "无权执行此操作"
+        403 -> when {
+            message?.contains("game_moves", ignoreCase = true) == true ->
+                "同步权限不足，请更新 PocketBase 规则后重试"
+            else -> "无权执行此操作"
+        }
         401 -> "登录已过期，请重新进入好友页同步"
         0 -> (message ?: fallback).ifBlank { fallback }
         else -> (message ?: fallback).ifBlank { fallback }

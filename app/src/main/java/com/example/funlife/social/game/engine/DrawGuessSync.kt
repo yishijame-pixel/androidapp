@@ -38,7 +38,6 @@ object DrawGuessSync {
         if (pointsNear(existing.last(), incoming.first())) {
             return appendPointsUnique(existing, incoming)
         }
-        // 同 stroke 的有序增量分片：始终追加，避免长画时只保留最后 2 个点
         return appendPointsUnique(existing, incoming)
     }
 
@@ -89,7 +88,7 @@ object DrawGuessSync {
                 if (idx != null) {
                     val old = result[idx]
                     result[idx] = old.copy(
-                        points = mergeStrokePoints(old.points, stroke.points),
+                        points = pickBestStrokePoints(old.points, stroke.points),
                         color = stroke.color,
                         width = stroke.width,
                     )
@@ -101,7 +100,18 @@ object DrawGuessSync {
                 result.add(stroke)
             }
         }
-        return result
+        return result.sortedBy { it.seq }
+    }
+
+    /** 合并同 stroke 时始终保留点更多的路径，避免 ledger/live 竞态导致笔画缩短 */
+    private fun pickBestStrokePoints(
+        existing: List<Pair<Float, Float>>,
+        incoming: List<Pair<Float, Float>>,
+    ): List<Pair<Float, Float>> {
+        if (incoming.isEmpty()) return existing
+        if (existing.isEmpty()) return incoming
+        val merged = mergeStrokePoints(existing, incoming)
+        return listOf(existing, incoming, merged).maxByOrNull { it.size } ?: merged
     }
 
     fun mergeMoves(local: List<GameMoveDto>, incoming: List<GameMoveDto>): List<GameMoveDto> =
@@ -116,9 +126,7 @@ object DrawGuessSync {
             when (obj.get("kind")?.asString) {
                 "draw_clear" -> if (strokeRound(obj, currentRound)) strokes.clear()
                 "draw_phase" -> {
-                    val phase = obj.get("phase")?.asString
-                    val round = obj.get("round")?.asInt ?: currentRound
-                    if (phase == "drawing" && round == currentRound) strokes.clear()
+                    // 阶段切换只更新元数据，不重置画布；清屏仅认 draw_clear
                 }
                 "draw_stroke" -> {
                     if (!strokeRound(obj, currentRound)) return@forEach
@@ -141,17 +149,17 @@ object DrawGuessSync {
         return coalesceStrokes(strokes)
     }
 
+    /** 当前轮最后一次清屏 move 的 index；无清屏则为 0 */
+    fun lastClearMoveIndex(moves: List<GameMoveDto>, currentRound: Int): Int =
+        moves.filter { move ->
+            val obj = move.payload?.takeIf { it.isJsonObject }?.asJsonObject ?: return@filter false
+            obj.get("kind")?.asString == "draw_clear" && strokeRound(obj, currentRound)
+        }.maxOfOrNull { it.moveIndex } ?: 0
+
     fun clearToken(moves: List<GameMoveDto>, currentRound: Int): Int =
         moves.count { move ->
             val obj = move.payload?.takeIf { it.isJsonObject }?.asJsonObject ?: return@count false
-            when (obj.get("kind")?.asString) {
-                "draw_clear" -> strokeRound(obj, currentRound)
-                "draw_phase" -> {
-                    obj.get("phase")?.asString == "drawing" &&
-                        (obj.get("round")?.asInt ?: currentRound) == currentRound
-                }
-                else -> false
-            }
+            obj.get("kind")?.asString == "draw_clear" && strokeRound(obj, currentRound)
         }
 
     fun strokeExists(moves: List<GameMoveDto>, playerPbId: String, seq: Int, round: Int): Boolean =
@@ -176,6 +184,16 @@ object DrawGuessSync {
             val arr = pt.asJsonArray
             arr[0].asFloat to arr[1].asFloat
         }.orEmpty()
+        if (points.size < 2 && points.size == 1) {
+            val p = points.first()
+            return DrawStrokeUi(
+                seq = obj.get("seq")?.asInt ?: move.moveIndex,
+                points = listOf(p, p),
+                color = obj.get("color")?.asString ?: "#222222",
+                width = obj.get("width")?.asFloat ?: 4f,
+                strokeId = obj.get("stroke_id")?.asString,
+            )
+        }
         if (points.size < 2) return null
         return DrawStrokeUi(
             seq = obj.get("seq")?.asInt ?: move.moveIndex,

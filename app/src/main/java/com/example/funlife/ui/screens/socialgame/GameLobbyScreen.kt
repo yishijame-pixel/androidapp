@@ -98,6 +98,11 @@ fun GameLobbyScreen(
             onStartGame(roomId)
         }
     }
+    LaunchedEffect(room?.gameId, roomId, pbAuthToken) {
+        if (room?.gameId == "draw_guess" && !pbAuthToken.isNullOrBlank()) {
+            viewModel.prewarmDrawWs(roomId)
+        }
+    }
     LaunchedEffect(room?.roomId, room?.joinedCount, room?.status, room?.minPlayers) {
         if (room != null && room.canStartGame) {
             viewModel.prewarmPlaySync(roomId)

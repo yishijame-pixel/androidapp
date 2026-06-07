@@ -5,11 +5,11 @@
 ```
 Android 画手                     Android 猜词方
     │                                  │
-    │  stroke_chunk (50ms)             │
+    │  stroke_chunk (16ms, binary)      │
     ▼                                  ▼
 ┌─────────────────────────────────────────────┐
 │  draw_ws (WebSocket :8790)                  │
-│  鉴权 PB JWT · 房间广播 · 断线环形缓冲回放    │
+│  PB JWT 鉴权 · 房间广播 · 断线环形缓冲回放    │
 └─────────────────────────────────────────────┘
     │                                  │
     │  stroke_end / clear 归档          │  猜词 / 阶段 / 计分
@@ -22,7 +22,7 @@ Android 画手                     Android 猜词方
 
 | 通道 | 用途 | 频率 |
 |------|------|------|
-| **WebSocket** | 实时笔画 `stroke_chunk` | ~20次/秒 |
+| **WebSocket** | 实时笔画 `stroke_chunk`（二进制 v1） | ~60次/秒 |
 | **PocketBase** | 房间、猜词、计分、`stroke_end` 归档 | 低频 |
 | **PB Realtime (SSE)** | 聊天、邀请、阶段变更 | 低频 |
 
@@ -44,52 +44,75 @@ npm start
 ws://127.0.0.1:8790/ws?token=<PB_JWT>&room=<roomId>
 ```
 
-可选 Header：`Authorization: Bearer <DRAW_WS_RELAY_KEY>`
+同区域反代：`wss://pb.yishi.site/draw-ws/ws?token=...&room=...`
 
-## 协议 v1
+## 协议
 
-### 客户端 → 服务端
+### 控制面（JSON 文本）
 
-```json
-{ "t": "stroke_chunk", "strokeId": "s1", "chunk": 0, "round": 1,
-  "color": "#222222", "width": 4,
-  "points": [[0.12, 0.34], [0.13, 0.35]] }
+`joined` / `replay` / `error` / `pong` 仍为 JSON。
 
-{ "t": "stroke_end", "strokeId": "s1", "round": 1,
-  "color": "#222222", "width": 4,
-  "points": [[...全部点...]] }
+### 数据面（二进制 v1，推荐）
 
-{ "t": "clear", "round": 1 }
+| 字节 | 含义 |
+|------|------|
+| 0-1 | Magic `0xFD 0x47` |
+| 2 | Version `1` |
+| 3 | Type: `1` chunk · `2` end · `3` clear · `4` ping |
+| … | strokeId · chunk · round · width · [seq] · flat float32 点阵 |
+| 尾 | （服务端中继）from 用户 id |
 
-{ "t": "ping" }
-```
+JSON 仍兼容；Android 默认 `useBinaryWire()`。
 
-### 服务端 → 客户端
+## Android 配置
 
-```json
-{ "t": "joined", "userId": "...", "room": "...", "status": "playing" }
-{ "t": "replay", "events": [ ...最近80条... ] }
-{ "t": "stroke_chunk", "from": "pbUserId", "serverTs": 123, ... }
-{ "t": "pong", "ts": 123 }
-{ "t": "error", "code": "rate_limit" }
+```properties
+POCKETBASE_URL=https://pb.yishi.site
+# 同区域：留空 DRAW_WS_URL → 自动 wss://pb.yishi.site/draw-ws
+DRAW_WS_URL=
+# 独立隧道：
+# DRAW_WS_URL=wss://draw.yishi.site/ws
 ```
 
 ## 公网部署
 
-与 FCM relay 相同模式：本机 8790 + Cloudflare 隧道 `draw.yishi.site`。
+### 推荐：与 PB 同 VPS / 同域名
 
-`local.properties`：
+见 [deploy-co-located.md](./deploy-co-located.md) 与 `deploy-co-located.ps1`。
 
-```properties
-DRAW_WS_URL=wss://draw.yishi.site/ws
-```
+### 备选：独立 Cloudflare 隧道
+
+`draw.yishi.site` → `:8790`，`local.properties` 显式设置 `DRAW_WS_URL`。
+
+## 客户端优化（已实现）
+
+- [x] **Lobby 预连 WS**：`GameCenterViewModel.prewarmDrawWs`
+- [x] **猜词方笔迹插值**：`DrawStrokeInterpolator`
+- [x] **二进制热路径**：`DrawWsBinaryCodec`
+- [x] **JWT 本地解码 + room 缓存**：`pbAuth.js`
 
 ## 企业级清单
 
 - [x] PB JWT 鉴权 + 房间成员校验
-- [x] 每连接 40 msg/s 限速
+- [x] 每连接 120 msg/s 限速
 - [x] 房间环形缓冲（断线 replay）
 - [x] 热路径无 DB 写入
 - [x] 冷路径 PB 账本（Android stroke_end 归档）
-- [ ] TLS 终止（Cloudflare）
+- [x] 二进制 + JSON 双栈
+- [ ] TLS 终止（Cloudflare / Nginx）
 - [ ] 多实例 Redis pub/sub（用户量 >500 并发房）
+
+## 画布同步验证
+
+```powershell
+# JVM 单测 + 真机抓 log 分析（猜词方连看画家快速连画 5~6 笔）
+.\pocketbase\tools\draw_ws\test_draw_canvas_sync.ps1
+
+# 仅分析已有 log
+.\pocketbase\tools\draw_ws\test_draw_canvas_sync.ps1 -AnalyzeOnly -LogFile canvas.log
+
+# 实时监听
+.\pocketbase\tools\draw_ws\watch-draw-canvas-log.ps1
+```
+
+PASS 期望：`layer append` 链式增长，无 `double rebuild n=X within 150ms`。

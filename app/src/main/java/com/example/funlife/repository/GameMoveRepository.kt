@@ -164,30 +164,56 @@ class GameMoveRepository(
                 return@withContext Result.failure(IllegalStateException("当前不能作画"))
             }
             val moves = resolveMovesForSubmitGeneric(token, room.id, cachedMoves)
+            val payload = buildMap {
+                put("kind", "draw_stroke")
+                put("seq", seq)
+                put("round", play.round)
+                put("points", points)
+                put("color", color)
+                put("width", width)
+                if (!strokeId.isNullOrBlank()) put("stroke_id", strokeId)
+            }
+            if (!strokeId.isNullOrBlank()) {
+                findDrawStrokeByStrokeId(moves, myPbId, strokeId, play.round)?.let { existing ->
+                    val oldCount = existing.payloadPointsSize()
+                    if (points.size >= oldCount) {
+                        return@withContext patchOrCreateDrawStrokePreview(
+                            token = token,
+                            room = room,
+                            myPbId = myPbId,
+                            moves = moves,
+                            existing = existing,
+                            payload = payload,
+                        )
+                    }
+                    return@withContext Result.success(existing)
+                }
+            }
             if (strokeAlreadyExists(moves, myPbId, seq, play.round)) {
-                return@withContext Result.success(
-                    moves.last { move ->
-                        val obj = move.payload?.asJsonObject ?: return@last false
-                        obj.get("kind")?.asString == "draw_stroke" &&
-                            obj.get("seq")?.asInt == seq &&
-                            (obj.get("round")?.asInt ?: play.round) == play.round
-                    },
-                )
+                val existing = moves.last { move ->
+                    val obj = move.payload?.asJsonObject ?: return@last false
+                    obj.get("kind")?.asString == "draw_stroke" &&
+                        obj.get("seq")?.asInt == seq &&
+                        (obj.get("round")?.asInt ?: play.round) == play.round
+                }
+                if (points.size > existing.payloadPointsSize()) {
+                    return@withContext patchOrCreateDrawStrokePreview(
+                        token = token,
+                        room = room,
+                        myPbId = myPbId,
+                        moves = moves,
+                        existing = existing,
+                        payload = payload,
+                    )
+                }
+                return@withContext Result.success(existing)
             }
             val dto = api.createGameMove(
                 token = token,
                 roomId = room.id,
                 playerPbId = myPbId,
                 moveIndex = nextMoveIndex(moves),
-                payload = buildMap {
-                    put("kind", "draw_stroke")
-                    put("seq", seq)
-                    put("round", play.round)
-                    put("points", points)
-                    put("color", color)
-                    put("width", width)
-                    if (!strokeId.isNullOrBlank()) put("stroke_id", strokeId)
-                },
+                payload = payload,
             )
             // PLAYING 笔画：PB hook 同步 stroke_seq；不再 PATCH 省 RTT
             Result.success(dto)
@@ -206,6 +232,12 @@ class GameMoveRepository(
         try {
             val play = resolveState(room).drawGuess
                 ?: return@withContext Result.failure(IllegalStateException("非你画我猜对局"))
+            if (play.drawerPbId != myPbId) {
+                return@withContext Result.failure(IllegalStateException("只有画家可以清空画板"))
+            }
+            if (play.phase != DrawGuessPhase.DRAWING.wire) {
+                return@withContext Result.failure(IllegalStateException("当前不能清空画板"))
+            }
             val moves = resolveMovesForSubmitGeneric(token, room.id, cachedMoves)
             Result.success(
                 api.createGameMove(
@@ -228,18 +260,16 @@ class GameMoveRepository(
         try {
             val state = resolveState(room)
             val play = state.drawGuess ?: return@withContext Result.failure(IllegalStateException("非你画我猜对局"))
-            if (play.phase != DrawGuessPhase.GUESSING.wire) {
-                return@withContext Result.failure(IllegalStateException("当前不能猜词"))
+            val phase = DrawGuessPhase.fromWire(play.phase)
+            if (phase != DrawGuessPhase.DRAWING && phase != DrawGuessPhase.GUESSING) {
+                return@withContext Result.failure(IllegalStateException("当前不能发送消息"))
             }
             if (play.drawerPbId == myPbId) {
-                return@withContext Result.failure(IllegalStateException("画家不能猜词"))
-            }
-            if (play.guesses.count { it.pbId == myPbId } >= play.guessLimit) {
-                return@withContext Result.failure(IllegalStateException("猜词次数已用完"))
+                return@withContext Result.failure(IllegalStateException("画家不能发送消息"))
             }
             val trimmed = text.trim()
-            if (guessAlreadyExists(play, myPbId, trimmed)) {
-                return@withContext Result.success(room)
+            if (trimmed.isBlank()) {
+                return@withContext Result.failure(IllegalStateException("消息不能为空"))
             }
             val moves = resolveMovesForSubmitGeneric(token, room.id, null)
             api.createGameMove(
@@ -252,20 +282,20 @@ class GameMoveRepository(
             // PB hook 权威计分；优先读服务端房间，省 PATCH RTT 且防双写
             val hooked = api.getGameRoom(token, room.id)
             val hookedPlay = resolveState(hooked).drawGuess
-            if (hookedPlay != null && guessRecorded(hookedPlay, myPbId, trimmed)) {
+            if (hookedPlay != null && hookedPlay.guesses.size > play.guesses.size) {
                 return@withContext Result.success(hooked)
             }
-            val correct = normalizeGuess(trimmed) == normalizeGuess(play.word)
+            val isDrawer = play.drawerPbId == myPbId
+            val correct = !isDrawer && normalizeGuess(trimmed) == normalizeGuess(play.word)
             val newGuesses = play.guesses + com.example.funlife.social.game.model.DrawGuessGuess(myPbId, trimmed, correct)
             val newScores = play.scores.toMutableMap()
             if (correct) {
                 newScores[myPbId] = (newScores[myPbId] ?: 0) + 1
             }
-            val updated = when {
-                correct -> advanceAfterCorrectGuess(play.copy(guesses = newGuesses, scores = newScores), room)
-                newGuesses.count { it.pbId == myPbId } >= play.guessLimit ->
-                    play.copy(guesses = newGuesses, scores = newScores, phase = DrawGuessPhase.ROUND_END.wire)
-                else -> play.copy(guesses = newGuesses, scores = newScores)
+            val updated = if (correct) {
+                advanceAfterCorrectGuess(play.copy(guesses = newGuesses, scores = newScores), room)
+            } else {
+                play.copy(guesses = newGuesses, scores = newScores)
             }
             val finished = updated.phase == DrawGuessPhase.FINISHED.wire
             val winnerPbId = if (finished) resolveDrawGuessWinner(updated) else null
@@ -317,29 +347,31 @@ class GameMoveRepository(
             val updated = when (phase) {
                 DrawGuessPhase.GUESSING -> play.copy(
                     phase = phase.wire,
-                    guesses = emptyList(),
                     phaseStartedAtMs = System.currentTimeMillis(),
                 )
                 DrawGuessPhase.DRAWING -> when (play.phase) {
                     DrawGuessPhase.ROUND_END.wire -> buildNextDrawerState(play, room)
                     else -> play.copy(
                         phase = phase.wire,
-                        guesses = emptyList(),
                         strokeSeq = 0,
                         phaseStartedAtMs = System.currentTimeMillis(),
                     )
                 }
                 DrawGuessPhase.ROUND_END -> {
-                    if (play.phase != DrawGuessPhase.GUESSING.wire) {
+                    val current = DrawGuessPhase.fromWire(play.phase)
+                    if (current != DrawGuessPhase.GUESSING && current != DrawGuessPhase.DRAWING) {
                         return@withContext Result.failure(IllegalStateException("当前不能结束本轮"))
                     }
-                    val elapsedMs = System.currentTimeMillis() - play.phaseStartedAtMs
-                    val timedOut = play.phaseStartedAtMs > 0L &&
-                        elapsedMs >= play.guessSeconds * 1000L
-                    val guesserPbId = resolveGuesserPbId(room, play.drawerPbId)
-                    val exhausted = play.guesses.count { it.pbId == guesserPbId } >= play.guessLimit
-                    if (!timedOut && !exhausted) {
-                        return@withContext Result.failure(IllegalStateException("猜词时间未到"))
+                    if (current == DrawGuessPhase.DRAWING && play.drawerPbId != myPbId) {
+                        return@withContext Result.failure(IllegalStateException("只有画家可以结束本轮"))
+                    }
+                    if (current == DrawGuessPhase.GUESSING) {
+                        val elapsedMs = System.currentTimeMillis() - play.phaseStartedAtMs
+                        val timedOut = play.phaseStartedAtMs > 0L &&
+                            elapsedMs >= play.guessSeconds * 1000L
+                        if (!timedOut && play.drawerPbId != myPbId) {
+                            return@withContext Result.failure(IllegalStateException("猜词时间未到"))
+                        }
                     }
                     play.copy(phase = phase.wire, phaseStartedAtMs = System.currentTimeMillis())
                 }
@@ -453,6 +485,50 @@ class GameMoveRepository(
         val host = room.hostPbId
         val guest = room.guestPbId.orEmpty()
         return if (drawerPbId == host) guest else host
+    }
+
+    private fun findDrawStrokeByStrokeId(
+        moves: List<GameMoveDto>,
+        playerPbId: String,
+        strokeId: String,
+        round: Int,
+    ): GameMoveDto? = moves.lastOrNull { move ->
+        if (move.playerPbId != playerPbId) return@lastOrNull false
+        val obj = move.payload?.takeIf { it.isJsonObject }?.asJsonObject ?: return@lastOrNull false
+        obj.get("kind")?.asString == "draw_stroke" &&
+            obj.get("stroke_id")?.asString == strokeId &&
+            (obj.get("round")?.asInt ?: 1) == round
+    }
+
+    private fun GameMoveDto.payloadPointsSize(): Int {
+        val arr = payload?.takeIf { it.isJsonObject }?.asJsonObject?.getAsJsonArray("points") ?: return 0
+        return arr.size()
+    }
+
+    /** PATCH 预览；若 PB 未开 updateRule（403）则降级为新建 move */
+    private fun patchOrCreateDrawStrokePreview(
+        token: String,
+        room: GameRoomDto,
+        myPbId: String,
+        moves: List<GameMoveDto>,
+        existing: GameMoveDto,
+        payload: Map<String, Any?>,
+    ): Result<GameMoveDto> = try {
+        Result.success(api.patchGameMove(token, existing.id, payload))
+    } catch (e: com.example.funlife.social.PocketBaseApiException) {
+        if (e.code == 403) {
+            Result.success(
+                api.createGameMove(
+                    token = token,
+                    roomId = room.id,
+                    playerPbId = myPbId,
+                    moveIndex = nextMoveIndex(moves),
+                    payload = payload,
+                ),
+            )
+        } else {
+            Result.failure(e)
+        }
     }
 
     private fun strokeAlreadyExists(

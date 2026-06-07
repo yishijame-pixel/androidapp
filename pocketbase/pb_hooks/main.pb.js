@@ -257,7 +257,6 @@ function applyDrawPhaseOnRoom(room, playerId, phase, round) {
             if (started <= 0 || (now - started) < drawSec * 1000) return
         }
         dg.phase = "guessing"
-        dg.guesses = []
         dg.phase_started_at_ms = now
     } else if (phase === "drawing") {
         if (round !== undefined && round !== null && round > (dg.round || 1)) {
@@ -273,18 +272,13 @@ function applyDrawPhaseOnRoom(room, playerId, phase, round) {
         dg.phase = "drawing"
         dg.phase_started_at_ms = now
     } else if (phase === "round_end") {
-        if (prevPhase !== "guessing") return
-        var guessStarted = dg.phase_started_at_ms || 0
-        var guessSec = dg.guess_seconds || 90
-        var limit = dg.guess_limit || 5
-        var guesses = dg.guesses || []
-        var guesser = drawGuessGuesserPbId(room, drawer)
-        var guesserCount = 0
-        for (var gi = 0; gi < guesses.length; gi++) {
-            if (guesses[gi].pb_id === guesser) guesserCount++
+        if (prevPhase !== "guessing" && prevPhase !== "drawing") return
+        if (prevPhase === "guessing") {
+            var guessStarted = dg.phase_started_at_ms || 0
+            var guessSec = dg.guess_seconds || 90
+            var timedOut = guessStarted > 0 && (now - guessStarted) >= guessSec * 1000
+            if (!timedOut && (playerId || "").trim() !== drawer) return
         }
-        var timedOut = guessStarted > 0 && (now - guessStarted) >= guessSec * 1000
-        if (!timedOut && guesserCount < limit) return
         dg.phase = "round_end"
         dg.phase_started_at_ms = now
     } else {
@@ -321,26 +315,18 @@ function applyDrawGuessOnRoom(room, playerId, text, round) {
     var gs = readGameState(room)
     var dg = gs.draw_guess
     if (!dg || typeof dg !== "object") return
-    if ((dg.phase || "") !== "guessing") return
+    var phase = dg.phase || "drawing"
+    if (phase !== "drawing" && phase !== "guessing") return
     var drawer = (dg.drawer_pb_id || "").trim()
     if ((playerId || "").trim() === drawer) return
     var moveRound = round !== undefined && round !== null ? round : (dg.round || 1)
     if (moveRound !== (dg.round || 1)) return
-    var guesses = dg.guesses || []
-    var normalized = normalizeDrawGuess(text)
+    var trimmed = (text || "").trim()
+    var normalized = normalizeDrawGuess(trimmed)
     if (!normalized) return
-    for (var i = 0; i < guesses.length; i++) {
-        var g = guesses[i]
-        if (g.pb_id === playerId && normalizeDrawGuess(g.text) === normalized) return
-    }
-    var limit = dg.guess_limit || 5
-    var playerCount = 0
-    for (var j = 0; j < guesses.length; j++) {
-        if (guesses[j].pb_id === playerId) playerCount++
-    }
-    if (playerCount >= limit) return
+    var guesses = dg.guesses || []
     var correct = normalized === normalizeDrawGuess(dg.word)
-    guesses.push({ pb_id: playerId, text: (text || "").trim(), correct: correct })
+    guesses.push({ pb_id: playerId, text: trimmed, correct: correct })
     dg.guesses = guesses
     var scores = dg.scores || {}
     if (correct) {
@@ -359,13 +345,6 @@ function applyDrawGuessOnRoom(room, playerId, text, round) {
         dg.phase = "round_end"
         dg.phase_started_at_ms = Date.now()
         if (drawer) room.set("current_turn", drawer)
-    } else {
-        playerCount++
-        if (playerCount >= limit) {
-            dg.phase = "round_end"
-            dg.phase_started_at_ms = Date.now()
-            if (drawer) room.set("current_turn", drawer)
-        }
     }
     gs.draw_guess = dg
     room.set("game_state", gs)
@@ -467,7 +446,6 @@ onRecordAfterCreateSuccess((e) => {
                     if (started <= 0 || (now - started) < drawSec * 1000) return
                 }
                 dg.phase = "guessing"
-                dg.guesses = []
                 dg.phase_started_at_ms = now
             } else if (phase === "drawing") {
                 if (round !== undefined && round !== null && round > (dg.round || 1)) {
@@ -483,18 +461,13 @@ onRecordAfterCreateSuccess((e) => {
                 dg.phase = "drawing"
                 dg.phase_started_at_ms = now
             } else if (phase === "round_end") {
-                if (prevPhase !== "guessing") return
-                var guessStarted = dg.phase_started_at_ms || 0
-                var guessSec = dg.guess_seconds || 90
-                var limit = dg.guess_limit || 5
-                var guesses = dg.guesses || []
-                var guesser = guesserPbIdLocal(room, drawer)
-                var guesserCount = 0
-                for (var gi = 0; gi < guesses.length; gi++) {
-                    if (guesses[gi].pb_id === guesser) guesserCount++
+                if (prevPhase !== "guessing" && prevPhase !== "drawing") return
+                if (prevPhase === "guessing") {
+                    var guessStarted = dg.phase_started_at_ms || 0
+                    var guessSec = dg.guess_seconds || 90
+                    var timedOut = guessStarted > 0 && (now - guessStarted) >= guessSec * 1000
+                    if (!timedOut && (playerId || "").trim() !== drawer) return
                 }
-                var timedOut = guessStarted > 0 && (now - guessStarted) >= guessSec * 1000
-                if (!timedOut && guesserCount < limit) return
                 dg.phase = "round_end"
                 dg.phase_started_at_ms = now
             } else {
@@ -514,54 +487,7 @@ onRecordAfterCreateSuccess((e) => {
             }
             $app.save(room)
         } else if (payload.kind === "draw_guess") {
-            if ((dg.phase || "") !== "guessing") return
-            if ((playerId || "").trim() === (dg.drawer_pb_id || "").trim()) return
-            var moveRound = payload.round !== undefined && payload.round !== null ? payload.round : (dg.round || 1)
-            if (moveRound !== (dg.round || 1)) return
-            var guessesList = dg.guesses || []
-            var normalized = normalizeDrawGuessLocal(payload.text || "")
-            if (!normalized) return
-            for (var i = 0; i < guessesList.length; i++) {
-                var g = guessesList[i]
-                if (g.pb_id === playerId && normalizeDrawGuessLocal(g.text) === normalized) return
-            }
-            var guessLimit = dg.guess_limit || 5
-            var playerCount = 0
-            for (var j = 0; j < guessesList.length; j++) {
-                if (guessesList[j].pb_id === playerId) playerCount++
-            }
-            if (playerCount >= guessLimit) return
-            var correct = normalized === normalizeDrawGuessLocal(dg.word)
-            guessesList.push({ pb_id: playerId, text: (payload.text || "").trim(), correct: correct })
-            dg.guesses = guessesList
-            var scores = dg.scores || {}
-            if (correct) {
-                scores[playerId] = (scores[playerId] || 0) + 1
-                dg.scores = scores
-                if ((dg.round || 1) >= (dg.max_rounds || 3)) {
-                    dg.phase = "finished"
-                    dg.phase_started_at_ms = Date.now()
-                    gs.draw_guess = dg
-                    room.set("game_state", gs)
-                    room.set("status", "finished")
-                    room.set("winner", playerId)
-                    $app.save(room)
-                    return
-                }
-                dg.phase = "round_end"
-                dg.phase_started_at_ms = Date.now()
-                if ((dg.drawer_pb_id || "").trim()) room.set("current_turn", dg.drawer_pb_id)
-            } else {
-                playerCount++
-                if (playerCount >= guessLimit) {
-                    dg.phase = "round_end"
-                    dg.phase_started_at_ms = Date.now()
-                    if ((dg.drawer_pb_id || "").trim()) room.set("current_turn", dg.drawer_pb_id)
-                }
-            }
-            gs.draw_guess = dg
-            room.set("game_state", gs)
-            $app.save(room)
+            applyDrawGuessOnRoom(room, playerId, payload.text || "", payload.round)
         }
     } catch (err) {
         console.log("[game_moves] hook error: " + err)

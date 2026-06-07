@@ -14,6 +14,7 @@ import com.example.funlife.social.game.GamePlayInteractor
 import com.example.funlife.social.game.GamePlaySyncManager
 import com.example.funlife.social.game.SyncState
 import com.example.funlife.social.drawws.DrawGuessLiveSync
+import com.example.funlife.social.drawws.DrawGuessStrokeDispatchQueue
 import com.example.funlife.social.drawws.DrawWsConfig
 import com.example.funlife.social.game.engine.DrawGuessSync
 import com.example.funlife.social.game.engine.GomokuBoardSync
@@ -29,6 +30,11 @@ import com.example.funlife.social.game.catalog.SocialGameCatalog
 import com.example.funlife.social.game.model.LocalGameRoomDraft
 import com.example.funlife.social.game.model.LobbyMember
 import com.example.funlife.social.game.model.LobbyMemberStatus
+import com.example.funlife.ui.screens.socialgame.play.DrawGuessBubbleManager
+import com.example.funlife.ui.screens.socialgame.play.DrawGuessBubbleMessage
+import com.example.funlife.ui.screens.socialgame.play.DrawGuessCanvasPublishPolicy
+import com.example.funlife.ui.screens.socialgame.play.DrawGuessLayerFingerprint
+import com.example.funlife.utils.AvatarImageLoader
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -36,13 +42,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** 本地落子同步状态（乐观 UI） */
 enum class GomokuPlacementSyncState {
@@ -64,6 +74,7 @@ data class DrawPendingStroke(
     val color: String,
     val width: Float,
     val state: GomokuPlacementSyncState,
+    val strokeId: String? = null,
     val errorMessage: String? = null,
 )
 
@@ -98,10 +109,17 @@ data class GamePlayUiState(
     val endReason: String? = null,
     /** ELO 变化（仅对局结束后） */
     val eloChange: EloChangeInfo? = null,
+    /** 你画我猜：头像旁气泡消息 */
+    val drawGuessBubbles: List<DrawGuessBubbleMessage> = emptyList(),
     /** 首次进盘完成后不再退回全屏加载（防止同步抖动闪屏） */
     val bootstrapComplete: Boolean = false,
     /** 进局加载真实进度 0–100，100 表示可进盘 */
     val bootstrapProgress: Int = 0,
+    /** 你画我猜：room_go 后允许作画/同步倒计时起点 */
+    val drawRoundLive: Boolean = false,
+    val drawRoundStartedAtMs: Long = 0L,
+    val drawWsPeerCount: Int = 0,
+    val drawWsReadyCount: Int = 0,
 )
 
 /** ELO 变化信息 */
@@ -137,12 +155,18 @@ class GamePlayViewModel(
     private var drawWsCollectJob: Job? = null
     private var bootstrapPollJob: Job? = null
     private var wsBootstrapStartedMs = 0L
+    private var roomSyncTimedOut = false
+    private var drawWsReadySentRound = 0
     private var reconcileJob: Job? = null
+    /** moveLedger 回放缓存，避免 WS 分片 60Hz 时重复 parseStrokes */
+    private var ledgerStrokeCacheVersion = 0
     private val syncMutex = Mutex()
     private val refreshMutex = Mutex()
     private val moveLedger = CopyOnWriteArrayList<GameMoveDto>()
     private val pendingPlacements = CopyOnWriteArrayList<Pair<Int, Int>>()
     private val pendingDrawStrokes = CopyOnWriteArrayList<DrawStrokeUi>()
+    /** 抬手后 PB 入账前本地保留，防止 pending 摘掉后画布闪空 */
+    private val localFinishedStrokes = CopyOnWriteArrayList<DrawStrokeUi>()
     private val strokeSubmitMutex = Mutex()
     private val liveStrokeSeq = AtomicInteger(0)
     private var isClearingCanvas = false
@@ -151,9 +175,40 @@ class GamePlayViewModel(
     private var isPlacingMove = false
     private var watermarkMoveIndex = 0
     private var lastIngestAtMs = System.currentTimeMillis()
-    private var drawWsBootstrapTimedOut = false
+    private var ledgerStrokeCacheAtVersion = -1
+    private var ledgerStrokeCacheRound = -1
+    private var ledgerStrokeCacheSinceMove = -1
+    private var ledgerStrokeCache: List<DrawStrokeUi> = emptyList()
+    /** 乐观清屏：在 PB draw_clear 入账前阻止 ledger/live 把旧笔画刷回画布 */
+    private var forceEmptyCanvas = false
+    /** 清屏后双方暂隐藏 ledger/live，直到 draw_clear 入账 */
+    private var suppressCanvasUntilClearAck = false
+    /** 清屏水位：此 moveIndex 之前的 ledger 笔画在 ack 前不参与 UI */
+    private var clearWaterlineMoveIndex = 0
+    /** 猜词方收到对方 WS clear 后，在 PB 入账前屏蔽 ledger 旧笔画 */
+    private var passiveClearDisplayWaterline = 0
+    private var processedGuessCount = 0
+    private var lastDrawGuessRound = 0
+    private val pbPreviewAtMs = ConcurrentHashMap<String, Long>()
+    private companion object {
+        private const val CANVAS_LOG = "DrawGuessCanvas"
+        /** WS 未就绪：猜词方 SSE 兜底间隔 */
+        const val PB_PREVIEW_INTERVAL_MS = 150L
+        /** WS 已就绪但猜词方可能尚未 join：低频双写兜底 */
+        const val PB_HEDGE_INTERVAL_MS = 400L
+        /** 作画阶段开局窗口内启用 PB 双写 */
+        const val OPENING_HEDGE_MS = 25_000L
+        /** 等待全员 WS ready + room_go */
+        const val ROOM_SYNC_GO_TIMEOUT_MS = 10_000L
+        const val WS_BOOTSTRAP_HARD_CAP_MS = 12_000L
+    }
+
+    private fun traceCanvas(message: String) {
+        Log.i(CANVAS_LOG, "room=$roomId $message")
+    }
 
     init {
+        DrawGuessStrokeDispatchQueue.ensureStarted()
         viewModelScope.launch {
             _rawRoom.collect { draft -> mergeRoomDraft(draft) }
         }
@@ -237,46 +292,134 @@ class GamePlayViewModel(
     private fun tickBootstrapProgress() {
         if (_ui.value.bootstrapComplete) return
         ensureDrawGuessShellIfNeeded()
+        maybeSendDrawWsReady()
         val progress = computeBootstrapProgress()
         when {
             isBootstrapReady(_ui.value) -> completeBootstrap()
-            drawWsBootstrapTimedOut && isPlayReady(_ui.value) -> completeBootstrap()
             progress != _ui.value.bootstrapProgress ->
                 _ui.value = _ui.value.copy(bootstrapProgress = progress)
         }
     }
 
     private fun completeBootstrap() {
-        publishUi(_ui.value.copy(bootstrapProgress = 100, bootstrapComplete = true))
+        val cur = _ui.value
+        val round = cur.drawGuess?.round ?: 1
+        val live = cur.drawRoundLive ||
+            !DrawWsConfig.isEnabled() ||
+            !isDrawGuessRoom(cur) ||
+            roomSyncTimedOut ||
+            DrawGuessLiveSync.isRoomGoForRound(round)
+        val startedAt = when {
+            cur.drawRoundStartedAtMs > 0L -> cur.drawRoundStartedAtMs
+            cur.drawGuess != null && live -> cur.drawGuess.phaseStartedAtMs.coerceAtLeast(0L)
+            else -> 0L
+        }
+        val play = cur.drawGuess?.let { dg ->
+            if (live && startedAt > 0L) dg.copy(phaseStartedAtMs = startedAt) else dg
+        }
+        publishUi(
+            cur.copy(
+                bootstrapProgress = 100,
+                bootstrapComplete = true,
+                drawRoundLive = live,
+                drawRoundStartedAtMs = if (live) startedAt else cur.drawRoundStartedAtMs,
+                drawGuess = play,
+            ),
+        )
+        traceCanvas(
+            "bootstrap complete live=$live round=$round ws=${DrawGuessLiveSync.isWsActive()} " +
+                "roomGo=${DrawGuessLiveSync.isRoomGoForRound(round)} timeout=$roomSyncTimedOut",
+        )
     }
 
-    /** 进局加载：身份+房间就绪后最多等 WS 2.5s，硬上限 4s 必进盘 */
+    /** 进局：等 WS + room_go（或超时）后一起进盘 */
     private fun startBootstrapWatchdog() {
         viewModelScope.launch {
-            val wsGraceMs = if (DrawWsConfig.isEnabled()) 2_500L else 0L
-            val hardCapMs = 4_000L
+            val hardCapMs = if (DrawWsConfig.isEnabled() && isDrawGuessRoom(_ui.value)) {
+                WS_BOOTSTRAP_HARD_CAP_MS
+            } else {
+                4_000L
+            }
             val startMs = System.currentTimeMillis()
             while (System.currentTimeMillis() - startMs < hardCapMs && !_ui.value.bootstrapComplete) {
                 ensureDrawGuessShellIfNeeded()
                 tickBootstrapProgress()
                 if (_ui.value.bootstrapComplete) return@launch
                 val elapsed = System.currentTimeMillis() - startMs
-                if (isPlayReady(_ui.value) && elapsed >= wsGraceMs) {
-                    if (DrawWsConfig.isEnabled() && !DrawGuessLiveSync.isWsActive()) {
-                        drawWsBootstrapTimedOut = true
-                        Log.w("DrawGuessCanvas", "ws bootstrap grace elapsed room=$roomId — enter with PB fallback")
+                val round = _ui.value.drawGuess?.round ?: 1
+                if (isPlayReady(_ui.value) && isDrawGuessRoom(_ui.value) && DrawWsConfig.isEnabled()) {
+                    if (DrawGuessLiveSync.isRoomGoForRound(round)) {
+                        applyRoomGo(DrawGuessLiveSync.roomSync.value.goAtMs, round)
+                        completeBootstrap()
+                        return@launch
                     }
-                    forceBootstrapExit()
+                    if (elapsed >= ROOM_SYNC_GO_TIMEOUT_MS && !roomSyncTimedOut) {
+                        roomSyncTimedOut = true
+                        Log.w("DrawGuessCanvas", "room sync timeout room=$roomId — enter without room_go")
+                        forceRoomSyncExit()
+                        return@launch
+                    }
+                } else if (isPlayReady(_ui.value) && !DrawWsConfig.isEnabled()) {
+                    completeBootstrap()
+                    return@launch
+                } else if (isPlayReady(_ui.value) && !isDrawGuessRoom(_ui.value)) {
+                    completeBootstrap()
                     return@launch
                 }
                 delay(200L)
             }
             if (!_ui.value.bootstrapComplete) {
-                drawWsBootstrapTimedOut = true
                 Log.w("DrawGuessCanvas", "bootstrap hard cap room=$roomId — force enter")
-                forceBootstrapExit()
+                forceRoomSyncExit()
             }
         }
+    }
+
+    private fun maybeSendDrawWsReady() {
+        if (!DrawWsConfig.isEnabled()) return
+        if (!isDrawGuessRoom(_ui.value)) return
+        if (_ui.value.status != GameRoomStatus.PLAYING) return
+        val play = _ui.value.drawGuess ?: return
+        if (!DrawGuessLiveSync.isWsActive()) return
+        if (drawWsReadySentRound == play.round) return
+        DrawGuessLiveSync.sendReady(play.round)
+        drawWsReadySentRound = play.round
+        Log.d("DrawGuessCanvas", "ws ready sent round=${play.round} room=$roomId")
+    }
+
+    private fun applyRoomGo(serverTs: Long, round: Int) {
+        if (serverTs <= 0L) return
+        val play = _ui.value.drawGuess ?: return
+        if (play.round != round) return
+        val sync = DrawGuessLiveSync.roomSync.value
+        val effectiveStart = maxOf(play.phaseStartedAtMs, serverTs)
+        publishUi(
+            _ui.value.copy(
+                drawRoundLive = true,
+                drawRoundStartedAtMs = effectiveStart,
+                drawWsPeerCount = sync.peerCount,
+                drawWsReadyCount = sync.readyCount,
+                drawGuess = play.copy(phaseStartedAtMs = effectiveStart),
+            ),
+        )
+    }
+
+    private fun forceRoomSyncExit() {
+        val play = _ui.value.drawGuess
+        val now = System.currentTimeMillis()
+        val round = play?.round ?: 1
+        val effectiveStart = maxOf(play?.phaseStartedAtMs ?: now, now)
+        publishUi(
+            _ui.value.copy(
+                drawRoundLive = true,
+                drawRoundStartedAtMs = effectiveStart,
+                drawGuess = play?.copy(phaseStartedAtMs = effectiveStart),
+            ),
+        )
+        if (DrawWsConfig.isEnabled() && isDrawGuessRoom(_ui.value) && !DrawGuessLiveSync.isWsActive()) {
+            Log.w("DrawGuessCanvas", "enter without ws room=$roomId round=$round")
+        }
+        completeBootstrap()
     }
 
     private fun ensureDrawGuessShellIfNeeded() {
@@ -291,6 +434,7 @@ class GamePlayViewModel(
                     drawGuess = buildDrawGuessShellFromDraft(shellDraft),
                 ),
             )
+            syncDrawWsRoomContext(republishCanvas = true)
             return
         }
         if (room?.gameType == "draw_guess" && room.status == GameRoomStatus.PLAYING) {
@@ -305,6 +449,7 @@ class GamePlayViewModel(
                         ),
                 ),
             )
+            syncDrawWsRoomContext(republishCanvas = true)
         }
     }
 
@@ -315,13 +460,16 @@ class GamePlayViewModel(
         }
         if (state.drawGuess == null) return 35
         if (!DrawWsConfig.isEnabled()) return 100
-        if (DrawGuessLiveSync.isWsActive()) return 100
-        if (drawWsBootstrapTimedOut) return 100
+        val round = state.drawGuess.round
+        if (DrawGuessLiveSync.isRoomGoForRound(round) || roomSyncTimedOut) return 100
+        val sync = DrawGuessLiveSync.roomSync.value
+        if (sync.peerCount >= 2 && sync.readyCount >= 2) return 95
+        if (DrawGuessLiveSync.isWsActive()) return 85
         val started = wsBootstrapStartedMs
-        if (started == 0L) return 72
+        if (started == 0L) return 60
         val elapsed = System.currentTimeMillis() - started
-        val sub = (elapsed * 27 / 2_500L).toInt().coerceIn(0, 27)
-        return 72 + sub
+        val sub = (elapsed * 24 / ROOM_SYNC_GO_TIMEOUT_MS).toInt().coerceIn(0, 24)
+        return 60 + sub
     }
 
     /** 在 tick/watchdog 中调用，标记 WS 等待起点（勿在 Composable 里调用 computeBootstrapProgress） */
@@ -330,7 +478,7 @@ class GamePlayViewModel(
             _ui.value.drawGuess != null &&
             DrawWsConfig.isEnabled() &&
             !DrawGuessLiveSync.isWsActive() &&
-            !drawWsBootstrapTimedOut &&
+            !roomSyncTimedOut &&
             wsBootstrapStartedMs == 0L
         ) {
             wsBootstrapStartedMs = System.currentTimeMillis()
@@ -338,8 +486,14 @@ class GamePlayViewModel(
         return computeBootstrapProgress(_ui.value)
     }
 
-    fun isBootstrapReady(state: GamePlayUiState = _ui.value): Boolean =
-        computeBootstrapProgress(state) >= 100 && isPlayReady(state)
+    fun isBootstrapReady(state: GamePlayUiState = _ui.value): Boolean {
+        if (!isPlayReady(state)) return false
+        if (!isDrawGuessRoom(state)) return true
+        if (state.drawGuess == null) return false
+        if (!DrawWsConfig.isEnabled()) return true
+        val round = state.drawGuess.round
+        return DrawGuessLiveSync.isRoomGoForRound(round) || roomSyncTimedOut
+    }
 
     fun kickBootstrap() {
         viewModelScope.launch {
@@ -356,55 +510,32 @@ class GamePlayViewModel(
         !isIdentitySatisfied(state) -> "验证身份…"
         !isDrawGuessRoom(state) && !isPlayReady(state) -> "同步对局…"
         state.drawGuess == null -> "同步房间状态…"
-        DrawWsConfig.isEnabled() && !DrawGuessLiveSync.isWsActive() && !drawWsBootstrapTimedOut ->
+        DrawWsConfig.isEnabled() && !DrawGuessLiveSync.isWsActive() && !roomSyncTimedOut ->
             "连接笔画通道…"
-        DrawWsConfig.isEnabled() && DrawGuessLiveSync.isWsActive() -> "笔画通道已就绪"
+        DrawWsConfig.isEnabled() && DrawGuessLiveSync.isWsActive() &&
+            state.drawGuess != null &&
+            !DrawGuessLiveSync.isRoomGoForRound(state.drawGuess.round) && !roomSyncTimedOut ->
+            "等待全员就绪…"
+        DrawWsConfig.isEnabled() && state.drawGuess != null &&
+            DrawGuessLiveSync.isRoomGoForRound(state.drawGuess.round) ->
+            "全员就绪"
         else -> "即将开始…"
     }
 
     fun bootstrapSubtitle(state: GamePlayUiState = _ui.value): String = when {
-        isDrawGuessRoom(state) && DrawWsConfig.isEnabled() && DrawGuessLiveSync.isWsActive() ->
-            "低延迟同步已就绪"
-        isDrawGuessRoom(state) && DrawWsConfig.isEnabled() ->
-            "正在连接 WebSocket 画板中继"
+        isDrawGuessRoom(state) && DrawWsConfig.isEnabled() &&
+            DrawGuessLiveSync.isRoomGoForRound(state.drawGuess?.round ?: 1) ->
+            "低延迟同步已就绪，即将开始"
+        isDrawGuessRoom(state) && DrawWsConfig.isEnabled() -> {
+            val sync = DrawGuessLiveSync.roomSync.value
+            "已连接 ${sync.peerCount}/${sync.expectedPeers} · 就绪 ${sync.readyCount}/${sync.expectedPeers}"
+        }
         else -> "正在同步对局数据"
     }
 
-    /** UI/看门狗统一出口：先本地种子状态进盘，后台继续同步 */
+    /** UI/看门狗统一出口：超时或异常时进盘 */
     fun dismissBootstrapLoading() {
-        forceBootstrapExit()
-    }
-
-    private fun forceBootstrapExit() {
-        val room = lastRoomDto
-        val cur = _ui.value
-        val next = when {
-            room?.gameType == "draw_guess" -> cur.copy(
-                gameId = "draw_guess",
-                status = room.status,
-                drawGuess = resolveDrawGuessPlay(room, cur.myPbId)
-                    ?: DrawGuessPlayState(
-                        drawerPbId = room.currentTurnPbId?.takeIf { it.isNotBlank() } ?: room.hostPbId,
-                        scores = drawGuessScoresShell(room),
-                        phaseStartedAtMs = System.currentTimeMillis(),
-                    ),
-                currentTurnPbId = room.currentTurnPbId
-                    ?: resolveDrawGuessTurn(room.gameState?.drawGuess, room.status),
-                bootstrapComplete = true,
-                bootstrapProgress = 100,
-                busy = false,
-            )
-            room != null -> cur.copy(
-                gameId = room.gameType.ifBlank { cur.gameId },
-                status = room.status,
-                bootstrapComplete = true,
-                bootstrapProgress = 100,
-                busy = false,
-            )
-            else -> cur.copy(bootstrapComplete = true, bootstrapProgress = 100, busy = false)
-        }
-        publishUi(next)
-        viewModelScope.launch { refreshNow(showBusy = false) }
+        forceRoomSyncExit()
     }
 
     /** 仅当头像/昵称/席位变化时更新 room，避免轮询写库导致头像闪动 */
@@ -435,6 +566,7 @@ class GamePlayViewModel(
             next = next.copy(drawGuess = buildDrawGuessShellFromDraft(incoming))
         }
         publishUi(next)
+        if (profileChanged) prefetchRoomAvatars(incoming)
     }
 
     private fun buildDrawGuessShellFromDraft(draft: LocalGameRoomDraft): DrawGuessPlayState {
@@ -470,7 +602,9 @@ class GamePlayViewModel(
     private fun hydrateProfilesFromRoom(dto: GameRoomDto) {
         val prev = _ui.value.room
         if (prev == null) {
-            _ui.value = _ui.value.copy(room = draftFromRoomDto(dto), gameId = dto.gameType)
+            val draft = draftFromRoomDto(dto)
+            _ui.value = _ui.value.copy(room = draft, gameId = dto.gameType)
+            prefetchRoomAvatars(draft)
             return
         }
         val host = dto.hostProfile
@@ -512,6 +646,21 @@ class GamePlayViewModel(
         )
         if (prev == next) return
         _ui.value = _ui.value.copy(room = next)
+        prefetchRoomAvatars(next)
+    }
+
+    private fun prefetchRoomAvatars(room: LocalGameRoomDraft?) {
+        if (room == null) return
+        val token = _ui.value.pbAuthToken
+        val urls = buildList {
+            add(room.hostAvatarUrl)
+            add(room.guestAvatarUrl)
+            add(room.peerAvatarUrl)
+            room.members.forEach { add(it.avatarUrl) }
+        }
+        viewModelScope.launch {
+            AvatarImageLoader.warmAll(getApplication(), urls, token)
+        }
     }
 
     private fun draftFromRoomDto(dto: GameRoomDto): LocalGameRoomDraft {
@@ -604,12 +753,23 @@ class GamePlayViewModel(
 
     /** 首次展示棋盘后锁定，避免 identity/同步抖动退回加载页 */
     private fun publishUi(next: GamePlayUiState) {
-        val marked = when {
+        _ui.value = when {
             next.bootstrapComplete -> next.copy(bootstrapProgress = 100)
-            isBootstrapReady(next) -> next.copy(bootstrapComplete = true, bootstrapProgress = 100)
+            isBootstrapReady(next) -> {
+                val round = next.drawGuess?.round ?: 1
+                val live = next.drawRoundLive ||
+                    !DrawWsConfig.isEnabled() ||
+                    !isDrawGuessRoom(next) ||
+                    roomSyncTimedOut ||
+                    DrawGuessLiveSync.isRoomGoForRound(round)
+                next.copy(
+                    bootstrapComplete = true,
+                    bootstrapProgress = 100,
+                    drawRoundLive = live,
+                )
+            }
             else -> next
         }
-        _ui.value = marked
     }
 
     /** transport/live 订阅只建一次，避免 applyCredentials 重连时掐掉 joined 回调 */
@@ -617,16 +777,106 @@ class GamePlayViewModel(
         if (!DrawWsConfig.isEnabled()) return
         if (drawWsCollectJob?.isActive == true) return
         drawWsCollectJob = viewModelScope.launch {
+            var lastTransport = DrawGuessLiveSync.Transport.POCKETBASE
             launch {
-                DrawGuessLiveSync.transport.collect { tickBootstrapProgress() }
+                DrawGuessLiveSync.transport.collect { transport ->
+                    tickBootstrapProgress()
+                    if (transport == DrawGuessLiveSync.Transport.WEBSOCKET &&
+                        lastTransport != DrawGuessLiveSync.Transport.WEBSOCKET
+                    ) {
+                        syncDrawWsRoomContext(republishCanvas = true)
+                        maybeSendDrawWsReady()
+                        Log.d("DrawGuessCanvas", "ws ready room=$roomId — flush live canvas")
+                    }
+                    lastTransport = transport
+                }
             }
             launch {
-                DrawGuessLiveSync.liveStrokes.collect {
-                    if (_ui.value.drawGuess == null) return@collect
-                    if (!DrawGuessLiveSync.isWsActive()) return@collect
+                DrawGuessLiveSync.roomSync.collect { sync ->
                     val round = _ui.value.drawGuess?.round ?: 1
-                    val replayed = DrawGuessSync.parseStrokes(moveLedger.toList(), round)
-                    publishUi(_ui.value.copy(drawStrokes = resolveDrawStrokesForUi(replayed)))
+                    publishUi(
+                        _ui.value.copy(
+                            drawWsPeerCount = sync.peerCount,
+                            drawWsReadyCount = sync.readyCount,
+                        ),
+                    )
+                    if (sync.goAtMs > 0L && sync.goRound == round && !_ui.value.drawRoundLive) {
+                        applyRoomGo(sync.goAtMs, round)
+                        if (!_ui.value.bootstrapComplete) {
+                            completeBootstrap()
+                        }
+                    }
+                    tickBootstrapProgress()
+                }
+            }
+            launch {
+                // stroke_end 后 bitmap 层直读 finalized live，不再 publishUi 触发整树重组闪烁
+                DrawGuessLiveSync.strokeFinalizeNonce.collect {
+                    if (_ui.value.drawGuess == null) return@collect
+                    if (isDrawerSide()) return@collect
+                    if (isAwaitingClearAck() || forceEmptyCanvas) return@collect
+                    val round = currentDrawRound()
+                    if (passiveClearDisplayWaterline > 0) {
+                        passiveClearDisplayWaterline = 0
+                        traceCanvas("passive clear waterline released finalize round=$round")
+                    }
+                }
+            }
+            launch {
+                DrawGuessLiveSync.clearNonce.collect {
+                    if (_ui.value.drawGuess == null) return@collect
+                    invalidateLedgerStrokeCache()
+                    pbPreviewAtMs.clear()
+                    if (isClearingCanvas) {
+                        if (isDrawerSide()) {
+                            pendingDrawStrokes.clear()
+                        }
+                        // 用户主动清屏：等待 PB draw_clear 入账
+                        clearWaterlineMoveIndex = maxOf(
+                            clearWaterlineMoveIndex,
+                            GomokuBoardSync.maxMoveIndex(moveLedger.toList()) + 1,
+                        )
+                        suppressCanvasUntilClearAck = true
+                        if (isDrawerSide()) {
+                            forceEmptyCanvas = true
+                            localFinishedStrokes.clear()
+                        }
+                        traceCanvas(
+                            "ws clear nonce user waterline=$clearWaterlineMoveIndex suppress=true",
+                        )
+                        publishUi(
+                            _ui.value.copy(
+                                drawStrokes = emptyList(),
+                                drawClearToken = _ui.value.drawClearToken,
+                            ),
+                        )
+                    } else {
+                        // 被动 WS clear（对方清屏）：仅猜词方响应；画家忽略（清屏必走 isClearingCanvas）
+                        if (isDrawerSide()) {
+                            traceCanvas("ws clear nonce passive ignored drawer side")
+                            return@collect
+                        }
+                        val ledgerMax = GomokuBoardSync.maxMoveIndex(moveLedger.toList())
+                        if (ledgerMax <= 0) {
+                            traceCanvas("ws clear nonce passive skipped empty ledger")
+                            return@collect
+                        }
+                        passiveClearDisplayWaterline = ledgerMax + 1
+                        traceCanvas(
+                            "ws clear nonce passive round=${currentDrawRound()} " +
+                                "waterline=$passiveClearDisplayWaterline ledgerMax=$ledgerMax",
+                        )
+                        // 勿 bump drawClearToken：入账会用账本 token，token 回跳会清空 bitmap 层导致笔画消失
+                        publishUi(
+                            _ui.value.copy(
+                                drawStrokes = emptyList(),
+                                drawClearToken = DrawGuessSync.clearToken(
+                                    moveLedger.toList(),
+                                    currentDrawRound(),
+                                ),
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -637,12 +887,26 @@ class GamePlayViewModel(
         drawWsConnectJob?.cancel()
         drawWsConnectJob = viewModelScope.launch {
             while (true) {
-                if (DrawGuessLiveSync.isConnected(roomId)) {
-                    delay(5_000)
-                    continue
-                }
-                if (DrawGuessLiveSync.isPending(roomId)) {
-                    delay(400)
+                val playHint = _ui.value.drawGuess
+                val roomHint = lastRoomDto
+                val roundHint = playHint?.round ?: roomHint?.gameState?.drawGuess?.round ?: 1
+                val drawerHint = playHint?.drawerPbId?.takeIf { it.isNotBlank() }
+                    ?: roomHint?.gameState?.drawGuess?.drawerPbId?.takeIf { it.isNotBlank() }
+                    ?: roomHint?.currentTurnPbId?.takeIf { it.isNotBlank() }
+                    ?: roomHint?.hostPbId.orEmpty()
+                if (DrawGuessLiveSync.isConnected(roomId) || DrawGuessLiveSync.isPending(roomId)) {
+                    val token = _ui.value.pbAuthToken?.takeIf { it.isNotBlank() }
+                    if (!token.isNullOrBlank()) {
+                        DrawGuessLiveSync.start(
+                            scope = viewModelScope,
+                            roomId = roomId,
+                            token = token,
+                            round = roundHint,
+                            drawerId = drawerHint,
+                        )
+                    }
+                    syncDrawWsRoomContext()
+                    delay(if (DrawGuessLiveSync.isConnected(roomId)) 2_000 else 200)
                     continue
                 }
                 var token: String? = _ui.value.pbAuthToken
@@ -657,8 +921,25 @@ class GamePlayViewModel(
                     delay(2_000)
                     continue
                 }
-                DrawGuessLiveSync.start(viewModelScope, roomId, authToken)
-                delay(2_000)
+                val play = _ui.value.drawGuess
+                val room = lastRoomDto
+                if (play == null && room?.gameType != "draw_guess") {
+                    delay(200)
+                    continue
+                }
+                val round = play?.round ?: room?.gameState?.drawGuess?.round ?: 1
+                val drawerId = play?.drawerPbId?.takeIf { it.isNotBlank() }
+                    ?: room?.gameState?.drawGuess?.drawerPbId?.takeIf { it.isNotBlank() }
+                    ?: room?.currentTurnPbId?.takeIf { it.isNotBlank() }
+                    ?: room?.hostPbId.orEmpty()
+                DrawGuessLiveSync.start(
+                    scope = viewModelScope,
+                    roomId = roomId,
+                    token = authToken,
+                    round = round,
+                    drawerId = drawerId,
+                )
+                delay(800)
             }
         }
     }
@@ -754,26 +1035,84 @@ class GamePlayViewModel(
      * 绝不增量 patch 旧棋盘（乱套根因）。
      */
     /** 笔画专用轻量入口：合并账本 + 增量追加到画布（不全量 replay）。 */
-    private suspend fun ingestDrawStrokeFast(move: GameMoveDto) {
+    private suspend fun ingestDrawStrokeFast(move: GameMoveDto, force: Boolean = false) {
         syncMutex.withLock {
+            val kind = move.payload?.takeIf { it.isJsonObject }?.asJsonObject?.get("kind")?.asString
+            if (!force && suppressCanvasUntilClearAck && kind == "draw_stroke") {
+                if (clearWaterlineMoveIndex > 0 && move.moveIndex < clearWaterlineMoveIndex) {
+                    traceCanvas("ingest skip: stale pre-clear move#=${move.moveIndex}")
+                    return
+                }
+            }
             val merged = GomokuBoardSync.mergeMoves(moveLedger.toList(), listOf(move))
             val mergedMax = GomokuBoardSync.maxMoveIndex(merged)
-            if (mergedMax < watermarkMoveIndex) return
+            if (mergedMax < watermarkMoveIndex) {
+                traceCanvas("ingest skip: watermark move#=${move.moveIndex} max=$mergedMax wm=$watermarkMoveIndex")
+                return
+            }
             moveLedger.clear()
             moveLedger.addAll(merged)
+            invalidateLedgerStrokeCache()
             if (mergedMax > watermarkMoveIndex) watermarkMoveIndex = mergedMax
-            clearConfirmedDrawStrokes(merged, _ui.value.myPbId, _ui.value.drawGuess?.round ?: 1)
-            pruneLiveStrokesConfirmedInLedger(merged, _ui.value.drawGuess?.round ?: 1)
+            if (kind == "draw_stroke" && !isAwaitingClearAck()) {
+                forceEmptyCanvas = false
+            }
             lastIngestAtMs = System.currentTimeMillis()
             val round = _ui.value.drawGuess?.round ?: 1
-            val replayed = DrawGuessSync.parseStrokes(merged, round)
+            releaseForceEmptyCanvasIfCleared(merged, round)
+            if (!isDrawerSide() && kind == "draw_stroke" && passiveClearDisplayWaterline > 0) {
+                passiveClearDisplayWaterline = 0
+                traceCanvas("passive clear waterline released move#=${move.moveIndex}")
+            }
+            if (!force && isAwaitingClearAck() && kind != "draw_clear") {
+                traceCanvas("ingest defer canvas move#=${move.moveIndex} kind=$kind awaiting clear")
+                return
+            }
+            if (shouldDeferDrawerPreviewCanvasPublish(move, kind, force)) {
+                traceCanvas("ingest defer canvas preview move#=${move.moveIndex} stroke active")
+                return
+            }
+            if (isDrawerMidStroke() && kind == "draw_stroke") {
+                traceCanvas("ingest ledger-only mid-stroke move#=${move.moveIndex}")
+                publishUi(_ui.value.copy(moves = merged))
+                return
+            }
+            if (!isDrawerSide() && kind == "draw_stroke" && DrawGuessLiveSync.isWsActive()) {
+                val strokeId = DrawGuessSync.parseStrokeMove(move, round)?.strokeId.orEmpty()
+                if (strokeId.isNotBlank() && DrawGuessLiveSync.isStrokeFinalized(strokeId)) {
+                    traceCanvas("ingest ledger-only ws-finalized move#=${move.moveIndex} stroke=$strokeId")
+                    publishUi(_ui.value.copy(moves = merged))
+                    return
+                }
+            }
+            val strokes = roleAwareStrokesForPublish(round)
+            val clearToken = DrawGuessSync.clearToken(merged, round)
+            if (kind == "draw_stroke") {
+                if (DrawGuessCanvasPublishPolicy.shouldSkipRepublish(
+                        strokes,
+                        _ui.value.drawStrokes,
+                        clearToken,
+                        _ui.value.drawClearToken,
+                    )
+                ) {
+                    traceCanvas(
+                        "ingest skip canvas republish move#=${move.moveIndex} ui=${strokes.size} not richer",
+                    )
+                    publishUi(_ui.value.copy(moves = merged))
+                    return
+                }
+            }
+            traceCanvas(
+                "ingest ok move#=${move.moveIndex} kind=$kind ui=${strokes.size}",
+            )
             publishUi(
                 _ui.value.copy(
-                    drawStrokes = resolveDrawStrokesForUi(replayed),
+                    drawStrokes = strokes,
                     moves = merged,
-                    drawClearToken = DrawGuessSync.clearToken(merged, round),
+                    drawClearToken = clearToken,
                 ),
             )
+            pruneLocalFinishedConfirmed(round)
         }
     }
 
@@ -799,11 +1138,15 @@ class GamePlayViewModel(
 
             moveLedger.clear()
             moveLedger.addAll(merged)
+            invalidateLedgerStrokeCache()
             if (mergedMax > watermarkMoveIndex) watermarkMoveIndex = mergedMax
 
             clearConfirmedPending(merged, _ui.value.myPbId)
             clearConfirmedDrawStrokes(merged, _ui.value.myPbId, _ui.value.drawGuess?.round ?: 1)
+            pruneLocalFinishedConfirmed(_ui.value.drawGuess?.round ?: 1)
             lastIngestAtMs = System.currentTimeMillis()
+            val ingestRound = _ui.value.drawGuess?.round ?: 1
+            releaseForceEmptyCanvasIfCleared(merged, ingestRound)
 
             if (roomDto != null) {
                 publishFromLedger(roomDto, merged)
@@ -813,39 +1156,252 @@ class GamePlayViewModel(
         }
     }
 
+    private var lastSyncedDrawerId = ""
+    private var lastSyncedRound = 0
+
+    private fun shouldDeferDrawerPreviewCanvasPublish(
+        move: GameMoveDto,
+        kind: String?,
+        force: Boolean = false,
+    ): Boolean {
+        if (force) return false
+        if (!isDrawerSide() || kind != "draw_stroke") return false
+        val obj = move.payload?.takeIf { it.isJsonObject }?.asJsonObject ?: return false
+        val sid = obj.get("stroke_id")?.asString?.takeIf { it.isNotBlank() } ?: return false
+        return pendingDrawStrokes.any { it.strokeId == sid }
+    }
+
+    private fun isDrawerSide(): Boolean {
+        val play = _ui.value.drawGuess ?: return false
+        val myPbId = _ui.value.myPbId ?: return false
+        return play.drawerPbId == myPbId
+    }
+
+    private fun syncDrawWsRoomContext(republishCanvas: Boolean = false) {
+        val play = _ui.value.drawGuess ?: return
+        val drawerChanged = play.drawerPbId != lastSyncedDrawerId
+        val roundChanged = play.round != lastSyncedRound
+        DrawGuessLiveSync.configureRoomContext(play.round, play.drawerPbId)
+        lastSyncedDrawerId = play.drawerPbId
+        lastSyncedRound = play.round
+        if (republishCanvas || drawerChanged || roundChanged) {
+            publishDrawCanvasFromLive()
+        }
+    }
+
+    private fun publishDrawCanvasFromLive() {
+        val play = _ui.value.drawGuess ?: return
+        val round = play.round
+        publishUi(
+            _ui.value.copy(
+                drawStrokes = roleAwareStrokesForPublish(round),
+            ),
+        )
+    }
+
+    private fun currentDrawRound(): Int =
+        _ui.value.drawGuess?.round
+            ?: lastRoomDto?.gameState?.drawGuess?.round
+            ?: 1
+
+    private fun hasClearAckForPendingClear(round: Int): Boolean {
+        if (clearWaterlineMoveIndex <= 0) return true
+        return moveLedger.any { move ->
+            if (move.moveIndex < clearWaterlineMoveIndex) return@any false
+            val obj = move.payload?.takeIf { it.isJsonObject }?.asJsonObject ?: return@any false
+            obj.get("kind")?.asString == "draw_clear" &&
+                (obj.get("round")?.asInt ?: round) == round
+        }
+    }
+
+    private fun isAwaitingClearAck(): Boolean =
+        clearWaterlineMoveIndex > 0 &&
+            (suppressCanvasUntilClearAck || forceEmptyCanvas) &&
+            !hasClearAckForPendingClear(currentDrawRound())
+
+    private fun releaseForceEmptyCanvasIfCleared(moves: List<GameMoveDto>, round: Int) {
+        val cleared = moves.any { move ->
+            val obj = move.payload?.takeIf { it.isJsonObject }?.asJsonObject ?: return@any false
+            obj.get("kind")?.asString == "draw_clear" &&
+                (obj.get("round")?.asInt ?: round) == round &&
+                (clearWaterlineMoveIndex <= 0 || move.moveIndex >= clearWaterlineMoveIndex)
+        }
+        if (cleared && (
+                forceEmptyCanvas ||
+                    suppressCanvasUntilClearAck ||
+                    clearWaterlineMoveIndex > 0 ||
+                    passiveClearDisplayWaterline > 0
+                )
+        ) {
+            forceEmptyCanvas = false
+            suppressCanvasUntilClearAck = false
+            clearWaterlineMoveIndex = 0
+            passiveClearDisplayWaterline = 0
+            traceCanvas("clear ack received round=$round")
+        }
+    }
+
+    private fun invalidateLedgerStrokeCache() {
+        ledgerStrokeCacheVersion++
+    }
+
+    /** PB 提交成功后立即写入本地账本，避免连抬手时重复 nextMoveIndex 撞号 */
+    private fun applySubmittedMove(move: GameMoveDto) {
+        val merged = GomokuBoardSync.mergeMoves(moveLedger.toList(), listOf(move))
+        moveLedger.clear()
+        moveLedger.addAll(merged)
+        invalidateLedgerStrokeCache()
+        val mergedMax = GomokuBoardSync.maxMoveIndex(merged)
+        if (mergedMax > watermarkMoveIndex) watermarkMoveIndex = mergedMax
+    }
+
+    private fun replayedStrokesForRound(round: Int): List<DrawStrokeUi> {
+        val passiveWaterline = if (!isDrawerSide()) passiveClearDisplayWaterline else 0
+        val awaitingWaterline = if (isAwaitingClearAck()) clearWaterlineMoveIndex else 0
+        val sinceMoveIndex = maxOf(passiveWaterline, awaitingWaterline)
+        val cacheKey = sinceMoveIndex
+        if (ledgerStrokeCacheRound == round &&
+            ledgerStrokeCacheAtVersion == ledgerStrokeCacheVersion &&
+            ledgerStrokeCacheSinceMove == cacheKey
+        ) {
+            return ledgerStrokeCache
+        }
+        val moves = if (sinceMoveIndex > 0) {
+            moveLedger.filter { it.moveIndex > sinceMoveIndex }
+        } else {
+            moveLedger.toList()
+        }
+        val parsed = DrawGuessSync.parseStrokes(moves, round)
+        ledgerStrokeCache = parsed
+        ledgerStrokeCacheRound = round
+        ledgerStrokeCacheAtVersion = ledgerStrokeCacheVersion
+        ledgerStrokeCacheSinceMove = cacheKey
+        return parsed
+    }
+
+    private fun isDrawerActivelyDrawing(): Boolean {
+        val play = _ui.value.drawGuess ?: return false
+        val myPbId = _ui.value.myPbId ?: return false
+        return play.drawerPbId == myPbId && play.phase == DrawGuessPhase.DRAWING.wire
+    }
+
+    /** 画家正在拖笔（pending 非空）：SSE 回放不得回退画布 */
+    private fun isDrawerMidStroke(): Boolean =
+        isDrawerSide() && pendingDrawStrokes.isNotEmpty()
+
+    private fun drawStrokesForRoomPublish(round: Int, moves: List<GameMoveDto>): List<DrawStrokeUi> {
+        if (isAwaitingClearAck()) return _ui.value.drawStrokes
+        if (isDrawerMidStroke()) return _ui.value.drawStrokes
+        val candidate = roleAwareStrokesForPublish(round)
+        if (!isDrawerSide() && DrawGuessLiveSync.isWsActive()) {
+            val clearToken = DrawGuessSync.clearToken(moves, round)
+            if (DrawGuessCanvasPublishPolicy.shouldSkipRepublish(
+                    candidate,
+                    _ui.value.drawStrokes,
+                    clearToken,
+                    _ui.value.drawClearToken,
+                )
+            ) {
+                return _ui.value.drawStrokes
+            }
+        }
+        return candidate
+    }
+
     private fun resolveDrawStrokesForUi(replayed: List<DrawStrokeUi>): List<DrawStrokeUi> {
-        val play = _ui.value.drawGuess
-        val myPbId = _ui.value.myPbId
-        val isDrawerDrawing = play != null &&
-            !myPbId.isNullOrBlank() &&
-            play.drawerPbId == myPbId &&
-            play.phase == DrawGuessPhase.DRAWING.wire
-        // 绘画者：本地 pending + localPath 已覆盖当前笔，不再叠 WS live（避免 2 点分片竞态）
-        val live = if (!isDrawerDrawing && DrawGuessLiveSync.isWsActive()) {
+        if (forceEmptyCanvas || isAwaitingClearAck()) {
+            return emptyList()
+        }
+        val round = currentDrawRound()
+        val ledgerStrokes = replayed
+        val archived = coalesceDrawStrokes(localFinishedStrokes.toList())
+        val live = if (DrawWsConfig.isEnabled() && !isDrawerActivelyDrawing()) {
             DrawGuessLiveSync.liveStrokes.value
         } else {
             emptyList()
         }
-        // WS live 优先：ledger 同 strokeId 不参与合并，防止 PB 归档后覆盖热路径导致笔画跳动
-        val liveIds = live.mapNotNull { it.strokeId?.takeIf { id -> id.isNotBlank() } }.toSet()
-        val replayedFiltered = if (liveIds.isEmpty()) {
-            replayed
-        } else {
-            replayed.filter { it.strokeId.isNullOrBlank() || it.strokeId !in liveIds }
-        }
-        val merged = coalesceDrawStrokes(replayedFiltered, pendingDrawStrokes.toList(), live)
-        if (Log.isLoggable("DrawGuessCanvas", Log.DEBUG)) {
-            Log.d(
-                "DrawGuessCanvas",
-                "resolve drawer=$isDrawerDrawing ws=${DrawGuessLiveSync.isWsActive()} " +
-                    "strokes=${merged.size} pts=${merged.sumOf { it.points.size }} " +
-                    "pending=${pendingDrawStrokes.size} live=${live.size}",
+        val merged = coalesceDrawStrokes(
+            ledgerStrokes,
+            archived,
+            pendingDrawStrokes.toList(),
+            live,
+        )
+        if (merged.isEmpty() && (archived.isNotEmpty() || pendingDrawStrokes.isNotEmpty())) {
+            val clearIdx = DrawGuessSync.lastClearMoveIndex(moveLedger.toList(), round)
+            traceCanvas(
+                "resolve EMPTY drawer=${isDrawerSide()} ledger=${ledgerStrokes.size} " +
+                    "archived=${archived.size} pending=${pendingDrawStrokes.size} " +
+                    "clearIdx=$clearIdx forceEmpty=$forceEmptyCanvas awaiting=${isAwaitingClearAck()}",
             )
+            if (isDrawerSide() && archived.isNotEmpty()) {
+                traceCanvas("resolve keep archived fallback n=${archived.size}")
+                return archived
+            }
         }
-        if (!isDrawerDrawing && DrawWsConfig.isEnabled() && !DrawGuessLiveSync.isWsActive()) {
+        if (!isDrawerActivelyDrawing() && DrawWsConfig.isEnabled() && !DrawGuessLiveSync.isWsActive()) {
             Log.w("DrawGuessCanvas", "guesser ws inactive room=$roomId — fallback PB only")
         }
         return merged
+    }
+
+    /** 发布 UI 前统一取画布笔画，清屏等待期间不会被 ledger 全量回放刷回 */
+    private fun canvasStrokesForPublish(round: Int): List<DrawStrokeUi> =
+        resolveDrawStrokesForUi(replayedStrokesForRound(round))
+
+    /** 按角色取发布笔画：画家 archived 兜底，猜词方保留 finalize 的 live */
+    private fun roleAwareStrokesForPublish(round: Int): List<DrawStrokeUi> {
+        val raw = if (isDrawerSide()) drawerStrokesForPublish(round) else guesserStrokesForPublish(round)
+        val clearToken = DrawGuessSync.clearToken(moveLedger.toList(), round)
+        return monotonicDrawStrokes(raw, clearToken)
+    }
+
+    /**
+     * 同 clearToken 下 ledger 回放滞后时，保留 UI 上已有 strokeId，避免已画笔画被覆盖消失。
+     */
+    private fun monotonicDrawStrokes(
+        computed: List<DrawStrokeUi>,
+        clearToken: Int,
+    ): List<DrawStrokeUi> {
+        if (forceEmptyCanvas && isAwaitingClearAck()) return computed
+        if (clearToken != _ui.value.drawClearToken) return computed
+        val current = _ui.value.drawStrokes
+        if (current.isEmpty()) return computed
+        val merged = coalesceDrawStrokes(current, computed)
+        if (merged.size < current.size) {
+            traceCanvas(
+                "monotonic guard count current=${current.size} computed=${computed.size} merged=${merged.size}",
+            )
+        }
+        return merged
+    }
+
+    /** 猜词方 stroke_end：合并 ledger + 已 finalize 的 live（水位仅在 ingest 新笔画时解除） */
+    private fun guesserStrokesForPublish(round: Int): List<DrawStrokeUi> {
+        val ledger = replayedStrokesForRound(round)
+        val liveFinalized = if (DrawWsConfig.isEnabled()) {
+            DrawGuessLiveSync.liveStrokes.value.filter {
+                DrawGuessLiveSync.isStrokeFinalized(it.strokeId)
+            }
+        } else {
+            emptyList()
+        }
+        return coalesceDrawStrokes(ledger, liveFinalized)
+    }
+
+    /** 画家：ledger + archived + pending 直接合并，不经 resolve 空锁 */
+    private fun drawerStrokesForPublish(round: Int): List<DrawStrokeUi> {
+        if (!isDrawerSide()) return canvasStrokesForPublish(round)
+        if (forceEmptyCanvas && isAwaitingClearAck()) return emptyList()
+        val ledger = if (forceEmptyCanvas || isAwaitingClearAck()) {
+            emptyList()
+        } else {
+            replayedStrokesForRound(round)
+        }
+        return coalesceDrawStrokes(
+            ledger,
+            localFinishedStrokes.toList(),
+            pendingDrawStrokes.toList(),
+        )
     }
 
     private fun coalesceDrawStrokes(vararg layers: List<DrawStrokeUi>): List<DrawStrokeUi> =
@@ -859,7 +1415,27 @@ class GamePlayViewModel(
                     _ui.value.room ?: draftFromRoomDto(room),
                 )
             val round = play.round
-            val replayed = DrawGuessSync.parseStrokes(moves, round)
+            val prevRound = lastDrawGuessRound
+            val roundChanged = prevRound != 0 && prevRound != round
+            lastDrawGuessRound = round
+            if (roundChanged) {
+                drawWsReadySentRound = 0
+                roomSyncTimedOut = false
+                localFinishedStrokes.clear()
+                pendingDrawStrokes.clear()
+                DrawGuessLiveSync.configureRoomContext(round, play.drawerPbId)
+                DrawGuessLiveSync.resetRoomGoForRound(round)
+                lastSyncedRound = round
+                lastSyncedDrawerId = play.drawerPbId
+            } else if (!isAwaitingClearAck()) {
+                syncDrawWsRoomContext()
+            }
+            val bubbles = if (roundChanged) {
+                resetGuessBubbleTracking(play)
+                DrawGuessBubbleManager.clearAll()
+            } else {
+                detectAndAddGuessBubbles(play, _ui.value.drawGuessBubbles)
+            }
             publishUi(
                 _ui.value.copy(
                     gameId = room.gameType,
@@ -868,11 +1444,20 @@ class GamePlayViewModel(
                     currentTurnPbId = resolveDrawGuessTurn(play, room.status),
                     winnerPbId = room.winnerPbId,
                     moves = moves,
-                    drawStrokes = resolveDrawStrokesForUi(replayed),
+                    drawStrokes = drawStrokesForRoomPublish(round, moves),
                     drawClearToken = DrawGuessSync.clearToken(moves, round),
+                    drawGuessBubbles = bubbles,
                     busy = false,
+                    drawRoundLive = if (roundChanged) {
+                        _ui.value.bootstrapComplete &&
+                            play.phase == DrawGuessPhase.DRAWING.wire
+                    } else {
+                        _ui.value.drawRoundLive
+                    },
+                    drawRoundStartedAtMs = if (roundChanged) 0L else _ui.value.drawRoundStartedAtMs,
                 ),
             )
+            if (roundChanged) maybeSendDrawWsReady()
             return
         }
         if (room.gameType != "gomoku") {
@@ -949,7 +1534,7 @@ class GamePlayViewModel(
         val play = room.gameState?.drawGuess
         val round = play?.round ?: _ui.value.drawGuess?.round ?: 1
         val strokes = if (room.gameType == "draw_guess") {
-            resolveDrawStrokesForUi(DrawGuessSync.parseStrokes(moves, round))
+            drawStrokesForRoomPublish(round, moves)
         } else {
             _ui.value.drawStrokes
         }
@@ -997,7 +1582,10 @@ class GamePlayViewModel(
     private fun applyCredentials(cred: com.example.funlife.social.SocialCredentials) {
         val authId = GamePlayCredentialGate.authIdFrom(cred)
         val cur = _ui.value
-        if (cur.myPbId == authId && cur.pbAuthToken == cred.token && cur.identityReady) return
+        if (cur.myPbId == authId && cur.pbAuthToken == cred.token && cur.identityReady) {
+            syncDrawWsRoomContext()
+            return
+        }
         publishUi(
             cur.copy(
                 myPbId = authId,
@@ -1007,6 +1595,7 @@ class GamePlayViewModel(
             ),
         )
         startDrawWsIfNeeded()
+        syncDrawWsRoomContext()
     }
 
     private fun clearConfirmedPending(moves: List<GameMoveDto>, myPbId: String?) {
@@ -1189,17 +1778,51 @@ class GamePlayViewModel(
      * 实时笔画：WS 热路径 + PB SSE 双写。
      * 对方优先收 WS；PB 保证 SSE 必达，避免「画完才显示」。
      */
-    fun submitDrawStrokeLive(strokeId: String, points: List<List<Float>>, color: String, width: Float) {
-        val play = _ui.value.drawGuess ?: return
-        val myPbId = _ui.value.myPbId ?: return
-        if (play.drawerPbId != myPbId || play.phase != DrawGuessPhase.DRAWING.wire) return
-        if (points.size < 2) return
+    fun submitDrawStrokeLive(
+        strokeId: String,
+        points: List<List<Float>>,
+        color: String,
+        width: Float,
+        flushNow: Boolean = false,
+    ) {
+        val play = _ui.value.drawGuess
+        if (play == null) {
+            traceCanvas("chunk skip: drawGuess=null")
+            return
+        }
+        val myPbId = _ui.value.myPbId
+        if (myPbId.isNullOrBlank()) {
+            traceCanvas("chunk skip: myPbId=null")
+            return
+        }
+        if (play.drawerPbId != myPbId || play.phase != DrawGuessPhase.DRAWING.wire) {
+            traceCanvas(
+                "chunk skip: not drawer phase drawer=${play.drawerPbId} me=$myPbId phase=${play.phase}",
+            )
+            return
+        }
+        if (!_ui.value.bootstrapComplete) {
+            traceCanvas("chunk skip: bootstrapComplete=false")
+            return
+        }
+        if (points.isEmpty()) return
+        syncDrawWsRoomContext()
 
-        if (DrawGuessLiveSync.isWsActive() && strokeId.isNotBlank()) {
-            DrawGuessLiveSync.sendChunk(roomId, strokeId, play.round, color, width, points)
+        val wsSent = DrawGuessLiveSync.canSendChunks() && strokeId.isNotBlank()
+        if (wsSent) {
+            DrawGuessStrokeDispatchQueue.enqueue(
+                DrawGuessStrokeDispatchQueue.ChunkJob(
+                    roomId = roomId,
+                    strokeId = strokeId,
+                    round = play.round,
+                    color = color,
+                    width = width,
+                    points = points,
+                    flushNow = flushNow,
+                ),
+            )
         }
 
-        val seq = liveStrokeSeq.incrementAndGet()
         val groupSeq = strokeId.hashCode() and 0x7FFFFFFF
         val normalized = points.map { (it.getOrNull(0) ?: 0f) to (it.getOrNull(1) ?: 0f) }
         val pendingIdx = pendingDrawStrokes.indexOfFirst { it.strokeId == strokeId }
@@ -1221,50 +1844,137 @@ class GamePlayViewModel(
                 ),
             )
         }
-        val round = play.round
-        val replayed = DrawGuessSync.parseStrokes(moveLedger.toList(), round)
-        publishUi(
-            _ui.value.copy(
-                drawStrokes = resolveDrawStrokesForUi(replayed),
-            ),
-        )
+        // 画家本地 ink 由 DrawGuessCanvasBoard 渲染；chunk 不发 publishUi，避免 ~250Hz 全树 recompose
+        if (flushNow) {
+            traceCanvas(
+                "chunk flush stroke=$strokeId pts=${pendingDrawStrokes.firstOrNull { it.strokeId == strokeId }?.points?.size ?: 0} " +
+                    "pending=${pendingDrawStrokes.size} ws=$wsSent wsLive=${DrawGuessLiveSync.isWsActive()}",
+            )
+        }
 
-        // WS 活跃时仅走热路径分片；PB 在抬手 stroke_end 一次性归档，避免双写导致猜词方笔画漂移
-        if (!DrawGuessLiveSync.isWsActive()) {
-            viewModelScope.launch {
-                val result = strokeSubmitMutex.withLock {
-                    interactor.submitDrawStroke(
-                        roomId = roomId,
-                        seq = seq,
-                        points = points,
-                        color = color,
-                        width = width,
-                        strokeId = strokeId.takeIf { it.isNotBlank() },
-                        roomHint = lastRoomDto,
-                        cachedMoves = moveLedger.toList(),
-                    )
-                }
-                result.onSuccess { move ->
-                    ingestDrawStrokeFast(move)
-                }.onFailure {
-                    pendingDrawStrokes.removeAll { it.strokeId == strokeId }
-                }
-            }
+        // 作画全程 PB 双写，猜词方 SSE 必达
+        if (shouldHedgePbPreview()) {
+            maybePublishPbPreview(strokeId, color, width, flushNow)
         }
     }
 
-    /** 抬手：WS 广播全量 + PB 归档（对方 PB-only 也能看到完整笔画） */
-    fun finishDrawStrokeWs(strokeId: String, color: String = "#222222", width: Float = 4f) {
-        if (!DrawGuessLiveSync.isWsActive() || strokeId.isBlank()) return
-        val play = _ui.value.drawGuess ?: return
-        val archived = DrawGuessLiveSync.finishStroke(roomId, strokeId, play.round, color, width)
-            ?: return
-        val (seq, allPoints) = archived
-        if (allPoints.size < 2) return
-        val wire = allPoints.map { listOf(it.first, it.second) }
+    /**
+     * WS 活跃时 chunk 仅走 WS；PB 仅在 stroke_end 归档（企业级：避免双通道争用与 SSE 洪泛）。
+     * WS 不可用时作画阶段仍走 PB 预览，保证猜词方必达。
+     */
+    private fun shouldHedgePbPreview(): Boolean {
+        val play = _ui.value.drawGuess ?: return false
+        if (play.phase != DrawGuessPhase.DRAWING.wire) return false
+        return !DrawGuessLiveSync.isWsActive()
+    }
+
+    /** WS 不可用时，合并 pending 点阵后低频 POST，避免猜词方开局全盲 */
+    private fun maybePublishPbPreview(
+        strokeId: String,
+        color: String,
+        width: Float,
+        force: Boolean,
+    ) {
+        val pending = pendingDrawStrokes.firstOrNull { it.strokeId == strokeId } ?: return
+        val minPoints = if (DrawWsConfig.liveWireEnabled()) 1 else 2
+        if (pending.points.size < minPoints && !force) return
+        val now = System.currentTimeMillis()
+        val last = pbPreviewAtMs[strokeId] ?: 0L
+        val interval = if (DrawGuessLiveSync.isWsActive()) PB_HEDGE_INTERVAL_MS else PB_PREVIEW_INTERVAL_MS
+        if (!force && now - last < interval) return
+        pbPreviewAtMs[strokeId] = now
+        val wire = pending.points.map { listOf(it.first, it.second) }
         viewModelScope.launch {
-            strokeSubmitMutex.withLock {
+            val result = strokeSubmitMutex.withLock {
                 interactor.submitDrawStroke(
+                    roomId = roomId,
+                    seq = pending.seq,
+                    points = wire,
+                    color = color,
+                    width = width,
+                    strokeId = strokeId,
+                    roomHint = lastRoomDto,
+                    cachedMoves = moveLedger.toList(),
+                )
+            }
+            result.onSuccess { move ->
+                traceCanvas("pb preview ok stroke=$strokeId move#=${move.moveIndex}")
+                viewModelScope.launch { ingestDrawStrokeFast(move) }
+            }
+                .onFailure { err ->
+                    traceCanvas("pb preview FAIL stroke=$strokeId: ${err.message}")
+                    Log.w(CANVAS_LOG, "pb preview failed stroke=$strokeId", err)
+                }
+        }
+    }
+
+    /** 抬手：WS 广播 stroke_end（全量点）+ PB 归档 */
+    fun finishDrawStrokeWs(strokeId: String, color: String = "#222222", width: Float = 4f) {
+        if (strokeId.isBlank()) return
+        val play = _ui.value.drawGuess ?: run {
+            traceCanvas("finish skip: drawGuess=null stroke=$strokeId")
+            return
+        }
+        val pending = pendingDrawStrokes.firstOrNull { it.strokeId == strokeId }
+        val pendingPoints = pending?.points.orEmpty()
+        if (DrawGuessLiveSync.canSendChunks()) {
+            DrawGuessStrokeDispatchQueue.flushPending()
+        }
+        val archived = if (DrawGuessLiveSync.canSendChunks()) {
+            DrawGuessLiveSync.finishStroke(
+                roomId,
+                strokeId,
+                play.round,
+                color,
+                width,
+                pointsOverride = pendingPoints.takeIf { it.isNotEmpty() },
+            )
+        } else {
+            null
+        }
+        val allPoints = when {
+            pendingPoints.size > (archived?.second?.size ?: 0) && pendingPoints.isNotEmpty() -> pendingPoints
+            archived != null && archived.second.isNotEmpty() -> archived.second
+            pendingPoints.isNotEmpty() -> pendingPoints
+            else -> {
+                traceCanvas(
+                    "finish skip: no points stroke=$strokeId pending=${pending?.points?.size ?: 0} " +
+                        "wsAcc=${archived != null}",
+                )
+                return
+            }
+        }
+        val wirePoints = if (allPoints.size == 1) {
+            val p = allPoints.first()
+            listOf(p, p)
+        } else {
+            allPoints
+        }
+        if (wirePoints.size < 2) {
+            traceCanvas("finish skip: pts<2 stroke=$strokeId n=${wirePoints.size}")
+            return
+        }
+        val seq = archived?.first ?: liveStrokeSeq.incrementAndGet()
+        val wire = wirePoints.map { listOf(it.first, it.second) }
+        val round = play.round
+        upsertLocalFinished(
+            DrawStrokeUi(
+                seq = seq,
+                points = wirePoints,
+                color = color,
+                width = width,
+                strokeId = strokeId,
+            ),
+        )
+        val finishedStrokes = roleAwareStrokesForPublish(round)
+        publishUi(_ui.value.copy(drawStrokes = finishedStrokes))
+        traceCanvas(
+            "finish local stroke=$strokeId pts=${wirePoints.size} ui=${finishedStrokes.size} " +
+                "archived=${localFinishedStrokes.size} awaiting=${isAwaitingClearAck()} wsEnd=${archived != null}",
+        )
+        viewModelScope.launch {
+            val result = strokeSubmitMutex.withLock {
+                val submitResult = interactor.submitDrawStroke(
                     roomId = roomId,
                     seq = seq,
                     points = wire,
@@ -1274,7 +1984,47 @@ class GamePlayViewModel(
                     roomHint = lastRoomDto,
                     cachedMoves = moveLedger.toList(),
                 )
-            }.onSuccess { move -> ingestDrawStrokeFast(move) }
+                if (submitResult.isSuccess) {
+                    applySubmittedMove(submitResult.getOrThrow())
+                }
+                submitResult
+            }
+            if (result.isSuccess) {
+                val move = result.getOrThrow()
+                traceCanvas("pb finish ok stroke=$strokeId move#=${move.moveIndex}")
+                removePendingDrawStroke(strokeId)
+                ingestDrawStrokeFast(move, force = true)
+                val published = canvasStrokesForPublish(round)
+                if (published.any { it.strokeId == strokeId }) {
+                    pruneLocalFinishedConfirmed(round)
+                    publishDrawCanvasFromLedger()
+                } else {
+                    traceCanvas(
+                        "finish keep archived stroke=$strokeId published=${published.size} " +
+                            "archived=${localFinishedStrokes.size}",
+                    )
+                    publishUi(_ui.value.copy(drawStrokes = roleAwareStrokesForPublish(round)))
+                }
+            } else {
+                val err = result.exceptionOrNull() ?: return@launch
+                traceCanvas("pb finish FAIL stroke=$strokeId: ${err.message}")
+                Log.w(CANVAS_LOG, "pb stroke_end failed stroke=$strokeId", err)
+                val errMsg = interactor.mapError(err)
+                publishUi(
+                    _ui.value.copy(
+                        pendingFailedStroke = DrawPendingStroke(
+                            seq = seq,
+                            points = allPoints,
+                            color = color,
+                            width = width,
+                            strokeId = strokeId,
+                            state = GomokuPlacementSyncState.Failed,
+                            errorMessage = errMsg,
+                        ),
+                        toast = errMsg,
+                    ),
+                )
+            }
         }
     }
 
@@ -1361,12 +2111,28 @@ class GamePlayViewModel(
             return
         }
         _ui.value = _ui.value.copy(pendingFailedStroke = null, toast = null)
-        submitDrawStroke(
-            seq = failed.seq,
-            points = failed.points.map { listOf(it.first, it.second) },
-            color = failed.color,
-            width = failed.width,
-        )
+        val wire = failed.points.map { listOf(it.first, it.second) }
+        if (!failed.strokeId.isNullOrBlank()) {
+            pendingDrawStrokes.removeAll { it.strokeId == failed.strokeId }
+            pendingDrawStrokes.add(
+                DrawStrokeUi(
+                    seq = failed.seq,
+                    points = failed.points,
+                    color = failed.color,
+                    width = failed.width,
+                    strokeId = failed.strokeId,
+                ),
+            )
+            publishDrawCanvasFromLedger()
+            finishDrawStrokeWs(failed.strokeId, failed.color, failed.width)
+        } else {
+            submitDrawStroke(
+                seq = failed.seq,
+                points = wire,
+                color = failed.color,
+                width = failed.width,
+            )
+        }
     }
 
     fun dismissFailedStroke() {
@@ -1377,28 +2143,96 @@ class GamePlayViewModel(
 
     fun clearDrawCanvas() {
         viewModelScope.launch {
+            clearWaterlineMoveIndex = GomokuBoardSync.maxMoveIndex(moveLedger.toList()) + 1
+            forceEmptyCanvas = true
+            suppressCanvasUntilClearAck = true
             pendingDrawStrokes.clear()
-            if (DrawGuessLiveSync.isWsActive()) {
-                DrawGuessLiveSync.sendClear(roomId, _ui.value.drawGuess?.round ?: 1)
-            }
-            publishDrawCanvasFromLedger()
+            localFinishedStrokes.clear()
+            pbPreviewAtMs.clear()
+            DrawGuessStrokeDispatchQueue.reset()
+            invalidateLedgerStrokeCache()
+            val round = _ui.value.drawGuess?.round ?: 1
+            traceCanvas("clear start waterline=$clearWaterlineMoveIndex round=$round")
             isClearingCanvas = true
+            publishUi(
+                _ui.value.copy(
+                    drawStrokes = emptyList(),
+                    drawClearToken = _ui.value.drawClearToken + 1,
+                ),
+            )
+            if (DrawGuessLiveSync.canSendChunks()) {
+                DrawGuessLiveSync.sendClear(roomId, round)
+            }
             interactor.clearDrawCanvas(
                 roomId = roomId,
                 roomHint = lastRoomDto,
                 cachedMoves = moveLedger.toList(),
             ).fold(
-                onSuccess = { move -> ingestMoves(incomingMoves = listOf(move)) },
-                onFailure = { notify(interactor.mapError(it)) },
+                onSuccess = { move ->
+                    ingestMoves(incomingMoves = listOf(move))
+                    val clearedStrokes = canvasStrokesForPublish(round)
+                    if (clearedStrokes.isEmpty()) {
+                        publishUi(_ui.value.copy(drawStrokes = emptyList()))
+                    }
+                },
+                onFailure = {
+                    suppressCanvasUntilClearAck = false
+                    forceEmptyCanvas = false
+                    clearWaterlineMoveIndex = 0
+                    notify(interactor.mapError(it))
+                },
             )
             isClearingCanvas = false
         }
     }
 
+    private fun detectAndAddGuessBubbles(
+        play: DrawGuessPlayState,
+        existing: List<DrawGuessBubbleMessage>,
+    ): List<DrawGuessBubbleMessage> {
+        val guesses = play.guesses
+        if (guesses.size <= processedGuessCount) return existing
+        var bubbles = existing
+        guesses.drop(processedGuessCount).forEach { guess ->
+            bubbles = DrawGuessBubbleManager.addBubble(
+                existing = bubbles,
+                playerPbId = guess.pbId,
+                text = guess.text,
+                isCorrect = guess.correct,
+            )
+        }
+        processedGuessCount = guesses.size
+        return bubbles
+    }
+
+    private fun resetGuessBubbleTracking(play: DrawGuessPlayState?) {
+        processedGuessCount = play?.guesses?.size ?: 0
+    }
+
+    fun dismissDrawGuessBubble(bubbleId: String) {
+        publishUi(
+            _ui.value.copy(
+                drawGuessBubbles = DrawGuessBubbleManager.removeBubble(
+                    _ui.value.drawGuessBubbles,
+                    bubbleId,
+                ),
+            ),
+        )
+    }
+
     fun submitGuess(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        val myPbId = _ui.value.myPbId ?: return
+        val optimistic = DrawGuessBubbleManager.addBubble(
+            existing = _ui.value.drawGuessBubbles,
+            playerPbId = myPbId,
+            text = trimmed,
+            isCorrect = false,
+        )
+        publishUi(_ui.value.copy(drawGuessBubbles = optimistic, busy = true))
         viewModelScope.launch {
-            _ui.value = _ui.value.copy(busy = true)
-            interactor.submitGuess(roomId, text)
+            interactor.submitGuess(roomId, trimmed)
                 .onSuccess { dto -> ingestMoves(room = dto, incomingMoves = emptyList()) }
                 .onFailure { notify(interactor.mapError(it)) }
             _ui.value = _ui.value.copy(busy = false)
@@ -1408,7 +2242,7 @@ class GamePlayViewModel(
     fun finishDrawing() {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(busy = true)
-            interactor.setDrawPhase(roomId, DrawGuessPhase.GUESSING)
+            interactor.setDrawPhase(roomId, DrawGuessPhase.ROUND_END)
                 .onSuccess { dto -> ingestMoves(room = dto, incomingMoves = emptyList()) }
                 .onFailure { notify(interactor.mapError(it)) }
             _ui.value = _ui.value.copy(busy = false)
@@ -1418,11 +2252,22 @@ class GamePlayViewModel(
     fun continueAfterRound() {
         viewModelScope.launch {
             pendingDrawStrokes.clear()
-            _ui.value = _ui.value.copy(busy = true)
+            localFinishedStrokes.clear()
+            processedGuessCount = 0
+            pbPreviewAtMs.clear()
+            drawWsReadySentRound = 0
+            roomSyncTimedOut = false
+            _ui.value = _ui.value.copy(
+                busy = true,
+                drawGuessBubbles = DrawGuessBubbleManager.clearAll(),
+                drawRoundLive = false,
+                drawRoundStartedAtMs = 0L,
+            )
             interactor.setDrawPhase(roomId, DrawGuessPhase.DRAWING)
                 .onSuccess { dto -> ingestMoves(room = dto, incomingMoves = emptyList()) }
                 .onFailure { notify(interactor.mapError(it)) }
             _ui.value = _ui.value.copy(busy = false)
+            maybeSendDrawWsReady()
         }
     }
 
@@ -1468,6 +2313,21 @@ class GamePlayViewModel(
         _ui.value = _ui.value.copy(toast = null)
     }
 
+    fun requestDrawGuessHint() {
+        val play = _ui.value.drawGuess ?: return
+        val myPbId = _ui.value.myPbId ?: return
+        if (play.drawerPbId != myPbId) {
+            notify("只有画家可以使用提示")
+            return
+        }
+        val word = play.word
+        if (word.isBlank()) {
+            notify("暂无词语")
+            return
+        }
+        notify("共 ${word.length} 字 · 首字：${word.first()}")
+    }
+
     private fun notify(msg: String) {
         _ui.value = _ui.value.copy(toast = msg, busy = false)
     }
@@ -1481,10 +2341,9 @@ class GamePlayViewModel(
         val room = lastRoomDto ?: return
         val play = _ui.value.drawGuess ?: room.gameState?.drawGuess ?: return
         val round = play.round
-        val replayed = DrawGuessSync.parseStrokes(moveLedger.toList(), round)
         publishUi(
             _ui.value.copy(
-                drawStrokes = resolveDrawStrokesForUi(replayed),
+                drawStrokes = roleAwareStrokesForPublish(round),
                 drawClearToken = DrawGuessSync.clearToken(moveLedger.toList(), round),
             ),
         )
@@ -1495,29 +2354,52 @@ class GamePlayViewModel(
         pending: List<DrawStrokeUi>,
     ): List<DrawStrokeUi> = coalesceDrawStrokes(replayed, pending)
 
-    private fun clearConfirmedDrawStrokes(moves: List<GameMoveDto>, myPbId: String?, round: Int) {
-        if (myPbId.isNullOrBlank()) return
-        val replayed = DrawGuessSync.parseStrokes(moves, round)
-        pendingDrawStrokes.removeAll { pending ->
-            val sid = pending.strokeId
-            if (!sid.isNullOrBlank()) {
-                val confirmed = replayed.firstOrNull { it.strokeId == sid }
-                confirmed != null && confirmed.points.size >= pending.points.size
-            } else {
-                DrawGuessSync.strokeExists(moves, myPbId, pending.seq, round)
-            }
+    private fun removePendingDrawStroke(strokeId: String) {
+        if (strokeId.isBlank()) return
+        pendingDrawStrokes.removeAll { it.strokeId == strokeId }
+    }
+
+    private fun upsertLocalFinished(stroke: DrawStrokeUi) {
+        val sid = stroke.strokeId?.takeIf { it.isNotBlank() } ?: return
+        val merged = DrawGuessSync.coalesceStrokes(
+            localFinishedStrokes.filter { it.strokeId == sid } + stroke,
+        ).firstOrNull { it.strokeId == sid } ?: stroke
+        localFinishedStrokes.removeAll { it.strokeId == sid }
+        localFinishedStrokes.add(merged)
+    }
+
+    private fun pruneLocalFinishedConfirmed(round: Int) {
+        if (localFinishedStrokes.isEmpty()) return
+        if (isDrawerActivelyDrawing()) return
+        val onCanvas = _ui.value.drawStrokes
+        localFinishedStrokes.removeAll { local ->
+            val sid = local.strokeId?.takeIf { it.isNotBlank() } ?: return@removeAll false
+            val confirmed = onCanvas.firstOrNull { it.strokeId == sid } ?: return@removeAll false
+            confirmed.points.size >= local.points.size && confirmed.points.size >= 2
         }
     }
 
-    /** ledger 已含完整笔画时，从 WS live 摘掉，交给 replay 单一数据源渲染 */
-    private fun pruneLiveStrokesConfirmedInLedger(moves: List<GameMoveDto>, round: Int) {
-        if (!DrawGuessLiveSync.isWsActive()) return
+    private fun clearConfirmedDrawStrokes(moves: List<GameMoveDto>, myPbId: String?, round: Int) {
+        if (myPbId.isNullOrBlank()) return
+        // 作画中 pending 只在抬手归档后摘除，避免 PB 预览 PATCH 中途摘掉导致笔画闪没
+        if (isDrawerActivelyDrawing()) return
         val replayed = DrawGuessSync.parseStrokes(moves, round)
-        replayed.forEach { stroke ->
-            val sid = stroke.strokeId?.takeIf { it.isNotBlank() } ?: return@forEach
-            val live = DrawGuessLiveSync.liveStrokes.value.firstOrNull { it.strokeId == sid } ?: return@forEach
-            if (stroke.points.size >= live.points.size) {
-                DrawGuessLiveSync.dropLiveStroke(sid)
+        pendingDrawStrokes.removeAll { pending ->
+            val sid = pending.strokeId
+            val confirmed = when {
+                !sid.isNullOrBlank() -> replayed.firstOrNull { it.strokeId == sid }
+                else -> null
+            }
+            val existsBySeq = if (confirmed == null && sid.isNullOrBlank()) {
+                DrawGuessSync.strokeExists(moves, myPbId, pending.seq, round)
+            } else {
+                false
+            }
+            when {
+                confirmed != null ->
+                    confirmed.points.size >= pending.points.size && confirmed.points.size >= 2
+                existsBySeq -> true
+                else -> false
             }
         }
     }
@@ -1549,7 +2431,7 @@ class GamePlayViewModel(
                 when (play.phase) {
                     DrawGuessPhase.DRAWING.wire -> {
                         if (elapsedSec >= play.drawSeconds) {
-                            finishDrawing()
+                            forceRoundEnd()
                         }
                     }
                     DrawGuessPhase.GUESSING.wire -> {

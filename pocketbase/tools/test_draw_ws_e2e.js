@@ -64,7 +64,11 @@ function drawGuessState(hostId, guestId, word = "测试词") {
 
 function healthHttpUrl(wsUrl) {
   const u = new URL(wsUrl.replace(/^wss:/, "https:").replace(/^ws:/, "http:"));
-  u.pathname = "/health";
+  if (u.pathname.endsWith("/ws")) {
+    u.pathname = u.pathname.slice(0, -"/ws".length) + "/health";
+  } else {
+    u.pathname = "/health";
+  }
   u.search = "";
   return u.toString();
 }

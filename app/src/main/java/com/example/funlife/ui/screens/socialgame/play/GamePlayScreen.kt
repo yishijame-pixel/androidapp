@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.social.game.catalog.SocialGameCatalog
 import com.example.funlife.social.game.model.GameRoomStatus
+import com.example.funlife.social.game.model.DrawGuessPhase
 import com.example.funlife.ui.screens.socialgame.CenteredBusyOverlay
 import com.example.funlife.ui.screens.socialgame.CenteredConfirmDialog
 import com.example.funlife.ui.screens.socialgame.SocialGameEnterLoading
@@ -99,20 +101,30 @@ fun GamePlayScreen(
     SocialGameScaffold(
         title = title,
         onNavigateBack = if (canExitPlay) requestExit else onNavigateBack,
+        compactHeader = ui.gameId == "draw_guess" && ui.status == GameRoomStatus.PLAYING,
     ) {
+        val drawGuessPlaying = ui.gameId == "draw_guess" && ui.status == GameRoomStatus.PLAYING
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .then(
+                    when {
+                        drawGuessPlaying -> Modifier
+                        else -> Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                    },
+                ),
         ) {
-            TurnBanner(
-                currentTurnPbId = ui.currentTurnPbId,
-                myPbId = ui.myPbId,
-                status = ui.status,
-                winnerPbId = ui.winnerPbId,
-                pendingPlacement = ui.pendingPlacement,
-            )
+            if (!drawGuessPlaying) {
+                TurnBanner(
+                    currentTurnPbId = ui.currentTurnPbId,
+                    myPbId = ui.myPbId,
+                    status = ui.status,
+                    winnerPbId = ui.winnerPbId,
+                    pendingPlacement = ui.pendingPlacement,
+                )
+            }
             SyncReconnectBanner(syncState = ui.syncState)
 
             if (!ui.identityReady) {
@@ -190,15 +202,37 @@ fun GamePlayScreen(
                 }
                 "draw_guess" -> {
                     ui.drawGuess?.let { play ->
-                        val players = remember(
+                        val drawStrokes by remember {
+                            derivedStateOf { ui.drawStrokes }
+                        }
+                        val drawClearToken by remember {
+                            derivedStateOf { ui.drawClearToken }
+                        }
+                        val onStrokeChunk = remember(viewModel) {
+                            { strokeId: String, _: Int, pts: List<List<Float>>, color: String, width: Float, flushNow: Boolean ->
+                                viewModel.submitDrawStrokeLive(strokeId, pts, color, width, flushNow)
+                            }
+                        }
+                        val onStrokeEnd = remember(viewModel) {
+                            { strokeId: String, color: String, width: Float ->
+                                viewModel.finishDrawStrokeWs(strokeId, color, width)
+                            }
+                        }
+                        val onClearCanvas = remember(viewModel) { { viewModel.clearDrawCanvas() } }
+                        val onFinishDrawing = remember(viewModel) { { viewModel.finishDrawing() } }
+                        val onContinueRound = remember(viewModel) { { viewModel.continueAfterRound() } }
+                        val onHint = remember(viewModel) { { viewModel.requestDrawGuessHint() } }
+                        val onDismissBubble = remember(viewModel) { viewModel::dismissDrawGuessBubble }
+                        val playerList = remember(
                             ui.room?.roomId,
                             play.drawerPbId,
                             play.scores,
                             ui.room?.hostPbId,
                             ui.room?.guestPbId,
+                            ui.room?.members,
                             ui.myPbId,
                         ) {
-                            buildDrawGuessPlayers(
+                            buildDrawGuessPlayerList(
                                 room = ui.room,
                                 play = play,
                                 myPbId = ui.myPbId,
@@ -206,49 +240,48 @@ fun GamePlayScreen(
                                 myLocalAvatarUri = ui.myLocalAvatarUri,
                             )
                         }
-                        players?.let { (drawer, guesser) ->
-                            DrawGuessPlayerBar(
-                                drawer = drawer,
-                                guesser = guesser,
-                                play = play,
-                                pbAuthToken = ui.pbAuthToken,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        }
-                        val scoreLabels = remember(players, ui.room?.roomId) {
-                            players?.let { (d, g) ->
-                                mapOf(d.pbId to d.displayName, g.pbId to g.displayName)
-                            } ?: emptyMap()
+                        val nameByPbId = remember(playerList, ui.room?.roomId) {
+                            playerList.associate { it.pbId to it.displayName }
                         }
                         val wsTransport by com.example.funlife.social.drawws.DrawGuessLiveSync.transport
                             .collectAsStateWithLifecycle(
                                 initialValue = com.example.funlife.social.drawws.DrawGuessLiveSync.Transport.POCKETBASE,
                             )
-                        val useLiveWs = com.example.funlife.social.drawws.DrawWsConfig.isEnabled() &&
+                        val liveWireEnabled = com.example.funlife.social.drawws.DrawWsConfig.liveWireEnabled()
+                        val useLiveWs = liveWireEnabled &&
                             wsTransport == com.example.funlife.social.drawws.DrawGuessLiveSync.Transport.WEBSOCKET
                         DrawGuessPlayPanel(
                             play = play,
                             myPbId = ui.myPbId.orEmpty(),
-                            strokes = ui.drawStrokes,
-                            clearToken = ui.drawClearToken,
-                            scoreLabels = scoreLabels,
+                            players = playerList,
+                            pbAuthToken = ui.pbAuthToken,
+                            strokes = drawStrokes,
+                            clearToken = drawClearToken,
+                            nameByPbId = nameByPbId,
                             useLiveWs = useLiveWs,
-                            onStrokeChunk = { strokeId, _, pts ->
-                                viewModel.submitDrawStrokeLive(strokeId, pts, "#222222", 4f)
-                            },
-                            onStrokeEnd = { strokeId ->
-                                viewModel.finishDrawStrokeWs(strokeId)
-                            },
-                            onClear = { viewModel.clearDrawCanvas() },
-                            onFinishDrawing = { viewModel.finishDrawing() },
+                            liveWireEnabled = liveWireEnabled,
+                            canDraw = ui.bootstrapComplete &&
+                                play.drawerPbId == ui.myPbId.orEmpty() &&
+                                DrawGuessPhase.fromWire(play.phase) == DrawGuessPhase.DRAWING,
+                            onStrokeChunk = onStrokeChunk,
+                            onStrokeEnd = onStrokeEnd,
+                            onClear = onClearCanvas,
+                            onFinishDrawing = onFinishDrawing,
                             onSubmitGuess = { text ->
                                 viewModel.submitGuess(text)
                                 guessInput = ""
                             },
-                            onContinueRound = { viewModel.continueAfterRound() },
+                            onContinueRound = onContinueRound,
+                            onHint = onHint,
+                            bubbles = ui.drawGuessBubbles,
+                            onDismissBubble = onDismissBubble,
                             guessInput = guessInput,
                             onGuessChange = { guessInput = it },
-                            modifier = Modifier.padding(top = 12.dp),
+                            modifier = if (drawGuessPlaying) {
+                                Modifier.fillMaxSize()
+                            } else {
+                                Modifier.padding(top = 8.dp)
+                            },
                         )
                         ui.pendingFailedStroke?.let { failed ->
                             FailedPlacementBanner(
@@ -271,37 +304,39 @@ fun GamePlayScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            if (!drawGuessPlaying) {
+                Spacer(Modifier.height(16.dp))
 
-            when (ui.status) {
-                GameRoomStatus.FINISHED -> {
-                    ResultPanel(
-                        winnerPbId = ui.winnerPbId,
-                        myPbId = ui.myPbId,
-                        drawGuessScores = ui.drawGuess?.scores,
-                    )
-                    HubPrimaryButton(
-                        text = "返回趣玩中心",
-                        onClick = onNavigateToGameCenter,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                when (ui.status) {
+                    GameRoomStatus.FINISHED -> {
+                        ResultPanel(
+                            winnerPbId = ui.winnerPbId,
+                            myPbId = ui.myPbId,
+                            drawGuessScores = ui.drawGuess?.scores,
+                        )
+                        HubPrimaryButton(
+                            text = "返回趣玩中心",
+                            onClick = onNavigateToGameCenter,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    GameRoomStatus.PLAYING -> {
+                        HubSecondaryButton(
+                            text = "退出对局",
+                            onClick = requestExit,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    else -> {
+                        HubSecondaryButton(
+                            text = "回到大厅",
+                            onClick = onNavigateToLobby,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
-                GameRoomStatus.PLAYING -> {
-                    HubSecondaryButton(
-                        text = "退出对局",
-                        onClick = requestExit,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                else -> {
-                    HubSecondaryButton(
-                        text = "回到大厅",
-                        onClick = onNavigateToLobby,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(24.dp))
         }
         CenteredBusyOverlay(
             when {

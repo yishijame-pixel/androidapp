@@ -7,6 +7,8 @@ import com.example.funlife.FunLifeApplication
 import com.example.funlife.social.FriendsInteractor
 import com.example.funlife.social.PocketBaseConfig
 import com.example.funlife.social.PocketBaseConnectionWarmer
+import com.example.funlife.social.drawws.DrawGuessLiveSync
+import com.example.funlife.social.drawws.DrawWsConfig
 import com.example.funlife.social.game.GamePlaySyncManager
 import com.example.funlife.social.PocketBaseApiClient
 import com.example.funlife.social.SocialOperationGate
@@ -360,10 +362,29 @@ class GameCenterViewModel(
     fun prewarmPlaySync(roomId: String) {
         if (!pocketBaseConfigured() || !socialReady()) return
         GamePlaySyncManager.prewarmSession(getApplication(), currentUserId, roomId)
+        prewarmDrawWs(roomId)
+    }
+
+    /** 你画我猜：大厅阶段预连 WS，进盘时 bootstrap 不再等 join */
+    fun prewarmDrawWs(roomId: String) {
+        if (!DrawWsConfig.isEnabled()) return
+        val room = rooms.value.firstOrNull { it.roomId == roomId } ?: return
+        if (room.gameId != "draw_guess") return
+        val token = _pbAuthToken.value?.takeIf { it.isNotBlank() } ?: return
+        DrawGuessLiveSync.prewarm(
+            scope = viewModelScope,
+            roomId = roomId,
+            token = token,
+            round = 1,
+            drawerId = room.hostPbId,
+        )
     }
 
     fun stopLobbySync(roomId: String) {
         GameRoomSyncCoordinator.stopLobbyWatch(roomId)
+        if (_startingGameRoomId.value != roomId) {
+            DrawGuessLiveSync.stopIfRoom(roomId)
+        }
     }
 
     private suspend fun refreshCredentialSnapshot() {
@@ -539,6 +560,9 @@ class GameCenterViewModel(
         _optimisticAcceptedRoomIds.value = _optimisticAcceptedRoomIds.value + roomId
         val updatedAt = rooms.value.firstOrNull { it.roomId == roomId }?.updatedAtMs ?: 0L
         GameInviteNotifier.markHandled(currentUserId, roomId, updatedAt)
+        rooms.value.firstOrNull { it.roomId == roomId }?.let { room ->
+            if (room.gameId == "draw_guess") prewarmDrawWs(roomId)
+        }
     }
 
     private fun unacknowledgeIncomingInvite(roomId: String) {
@@ -561,6 +585,7 @@ class GameCenterViewModel(
             try {
                 gameRoomInteractor.acceptInvite(roomId)
                     .onSuccess {
+                        prewarmDrawWs(roomId)
                         startLobbySync(roomId, urgent = true)
                         GameRoomSyncCoordinator.requestRoomRefreshImmediate(roomId) {
                             gameRoomInteractor.refreshRoomById(roomId)

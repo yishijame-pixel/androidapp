@@ -144,6 +144,7 @@ fun SocialGameScaffold(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    compactHeader: Boolean = false,
     trailing: @Composable (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -157,32 +158,46 @@ fun SocialGameScaffold(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
+                    .padding(
+                        start = 4.dp,
+                        end = 12.dp,
+                        top = if (compactHeader) 2.dp else 6.dp,
+                        bottom = if (compactHeader) 2.dp else 10.dp,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onNavigateBack) {
+                IconButton(
+                    onClick = onNavigateBack,
+                    modifier = if (compactHeader) Modifier.size(36.dp) else Modifier,
+                ) {
                     Icon(
                         Icons.Filled.ArrowBack,
                         contentDescription = "返回",
                         tint = SocialGamePalette.inkPrimary,
+                        modifier = if (compactHeader) Modifier.size(20.dp) else Modifier,
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        color = SocialGamePalette.inkPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    if (!subtitle.isNullOrBlank()) {
+                if (!compactHeader) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = subtitle,
-                            color = SocialGamePalette.inkMuted,
-                            fontSize = 12.sp,
+                            text = title,
+                            color = SocialGamePalette.inkPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
                         )
+                        if (!subtitle.isNullOrBlank()) {
+                            Text(
+                                text = subtitle,
+                                color = SocialGamePalette.inkMuted,
+                                fontSize = 12.sp,
+                            )
+                        }
                     }
+                    trailing?.invoke()
+                } else {
+                    Spacer(Modifier.weight(1f))
+                    trailing?.invoke()
                 }
-                trailing?.invoke()
             }
             content()
         }

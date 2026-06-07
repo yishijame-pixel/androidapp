@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -30,6 +29,7 @@ fun SocialGameAvatar(
     displayName: String,
     avatarUrl: String?,
     pbAuthToken: String?,
+    localAvatarUri: String? = null,
     size: Dp = 40.dp,
     showOnline: Boolean? = null,
     modifier: Modifier = Modifier,
@@ -40,8 +40,15 @@ fun SocialGameAvatar(
         .size(size)
         .clip(CircleShape)
 
-    LaunchedEffect(avatarUrl, pbAuthToken) {
+    val cachedBitmap = AvatarImageLoader.rememberAvatarBitmap(
+        avatarUrl = avatarUrl,
+        localAvatarUri = localAvatarUri,
+        pbAuthToken = pbAuthToken,
+    )
+
+    LaunchedEffect(avatarUrl, localAvatarUri, pbAuthToken) {
         AvatarImageLoader.warm(context, avatarUrl, pbAuthToken)
+        AvatarImageLoader.prefetch(context, avatarUrl, pbAuthToken)
     }
 
     @Composable
@@ -58,23 +65,21 @@ fun SocialGameAvatar(
         }
     }
 
-    val localBitmap = AvatarImageLoader.rememberLocalAvatarBitmap(avatarUrl)
-    val cachedRemoteBitmap = AvatarImageLoader.rememberCachedRemoteAvatarBitmap(avatarUrl, pbAuthToken)
-    val instantBitmap = localBitmap ?: cachedRemoteBitmap
+    val remoteUrl = avatarUrl?.trim()?.takeIf { it.isNotEmpty() }
 
     Box(modifier = modifier.size(size)) {
         when {
-            instantBitmap != null -> {
+            cachedBitmap != null -> {
                 Image(
-                    bitmap = instantBitmap,
+                    bitmap = cachedBitmap,
                     contentDescription = null,
                     modifier = boxModifier,
                     contentScale = ContentScale.Crop,
                 )
             }
-            !avatarUrl.isNullOrBlank() -> {
-                val model = remember(avatarUrl, pbAuthToken) {
-                    AvatarImageLoader.buildRequest(context, avatarUrl, pbAuthToken)
+            !remoteUrl.isNullOrBlank() -> {
+                val model = remember(remoteUrl, pbAuthToken) {
+                    AvatarImageLoader.buildRequest(context, remoteUrl, pbAuthToken)
                 }
                 SubcomposeAsyncImage(
                     model = model,

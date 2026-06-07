@@ -168,18 +168,22 @@ class GameRoomInteractor(
 
     fun mapErrorMessage(t: Throwable): String {
         val root = generateSequence(t) { it.cause }.last()
+        val raw = root.message.orEmpty()
+        if (raw.contains("Unsupported Content-Type", ignoreCase = true)) {
+            return "同步请求格式异常，请检查 PocketBase 与 draw_ws 是否已启动并重试"
+        }
         return when (root) {
             is SocialFailureException -> root.failure.userMessage
             is PocketBaseApiException -> root.toUserMessage("操作失败")
             is GameRoomStateMachine.ConflictException -> root.message ?: "房间状态已变化，请重试"
             is IllegalStateException -> root.message ?: "操作失败"
             else -> when {
-                root.message?.contains("Cannot be blank", ignoreCase = true) == true ->
+                raw.contains("Cannot be blank", ignoreCase = true) ->
                     "落子同步失败，请再点一次"
-                root.message?.contains("requested resource", ignoreCase = true) == true ||
-                    root.message?.contains("wasn't found", ignoreCase = true) == true ->
+                raw.contains("requested resource", ignoreCase = true) ||
+                    raw.contains("wasn't found", ignoreCase = true) ->
                     "房间不存在或无权访问，可能已结束"
-                else -> root.message ?: "网络异常，请稍后重试"
+                else -> raw.ifBlank { "网络异常，请稍后重试" }
             }
         }
     }
