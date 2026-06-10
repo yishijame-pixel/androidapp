@@ -8,6 +8,7 @@ import com.example.funlife.FunLifeApplication
 import com.example.funlife.data.database.AppDatabase
 import com.example.funlife.data.model.UserSession
 import com.example.funlife.repository.SocialLinkRepository
+import com.example.funlife.repository.CoinRepository
 import com.example.funlife.repository.UserRepository
 import com.example.funlife.utils.UserSessionManager
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +21,7 @@ import kotlinx.coroutines.withContext
 sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
-    data class Success(val session: UserSession) : AuthState()
+    data class Success(val session: UserSession, val recoveredFromCloud: Boolean = false) : AuthState()
     data class RegisterSuccess(val username: String) : AuthState()  // 🔥 新增：注册成功状态
     data class Banned(val reason: String) : AuthState()              // 🔥 新增：被封号
     data class Error(val message: String, val field: ErrorField = ErrorField.GENERAL) : AuthState()
@@ -129,7 +130,55 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 
                 // 🔒 安全修复：合并用户名/密码错误为统一信息，
                 // 防止用户名枚举攻击（攻击者通过响应差异判断哪些账号已存在）
-                val user = userRepository.login(trimmedUsername, trimmedPassword)
+                var user = userRepository.login(trimmedUsername, trimmedPassword)
+                var recoveredFromCloud = false
+
+                if (user == null) {
+                    val recoverResult = withContext(Dispatchers.IO) {
+                        com.example.funlife.vip.UserCloudRepository(getApplication())
+                            .recoverAccount(trimmedUsername, trimmedPassword)
+                    }
+                    when (recoverResult) {
+                        is com.example.funlife.vip.UserCloudRepository.RecoverResult.Ok -> {
+                            user = withContext(Dispatchers.IO) {
+                                val rebuilt = userRepository.recreateLocalAccount(
+                                    username = trimmedUsername,
+                                    password = trimmedPassword,
+                                    nickname = recoverResult.nickname,
+                                )
+                                val db = AppDatabase.getDatabase(getApplication())
+                                CoinRepository(db.coinDao(), getApplication())
+                                    .restoreWalletFromCloudSnapshot(rebuilt.id, recoverResult.wallet)
+                                rebuilt
+                            }
+                            recoveredFromCloud = true
+                            android.util.Log.i("AuthViewModel", "Account recovered from cloud for $trimmedUsername")
+                        }
+                        is com.example.funlife.vip.UserCloudRepository.RecoverResult.CredentialsInvalid -> {
+                            _authState.value = AuthState.Error("用户名或密码错误", ErrorField.PASSWORD)
+                            return@launch
+                        }
+                        is com.example.funlife.vip.UserCloudRepository.RecoverResult.Rejected -> {
+                            if (recoverResult.code == "BANNED") {
+                                _authState.value = AuthState.Banned(recoverResult.msg)
+                            } else {
+                                val field = when (recoverResult.code) {
+                                    "DEVICE_CONFLICT" -> ErrorField.USERNAME
+                                    else -> ErrorField.GENERAL
+                                }
+                                _authState.value = AuthState.Error(recoverResult.msg, field)
+                            }
+                            return@launch
+                        }
+                        is com.example.funlife.vip.UserCloudRepository.RecoverResult.NetworkError -> {
+                            _authState.value = AuthState.Error(
+                                "无法连接服务器验证账号，请检查网络后重试",
+                                ErrorField.NETWORK,
+                            )
+                            return@launch
+                        }
+                    }
+                }
 
                 if (user != null) {
                     // 🔒 登录前先调云端检查是否被封禁
@@ -173,7 +222,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     _isLoggedIn.value = true
-                    _authState.value = AuthState.Success(session)
+                    _authState.value = AuthState.Success(session, recoveredFromCloud = recoveredFromCloud)
                     com.example.funlife.social.SocialSessionManager.warmStartAsync(getApplication())
                     // 登录成功后稍后再刷一次 token 健康度（兜底 registerLog 完成后）
                     refreshTokenHealth()

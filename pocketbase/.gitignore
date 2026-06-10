@@ -7,3 +7,8 @@ secrets/firebase-adminsdk.json
 
 # 本地工具依赖（npm install 生成）
 tools/**/node_modules/
+
+# Docker 隧道凭证（勿提交）
+docker/cloudflared/*.json
+docker/cloudflared/config.yml
+.env

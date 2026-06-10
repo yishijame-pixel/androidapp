@@ -32,6 +32,8 @@ import com.example.funlife.viewmodel.ScoreViewModel
 import com.example.funlife.viewmodel.GoalViewModel
 import com.example.funlife.viewmodel.PetViewModel
 import com.example.funlife.viewmodel.ChatViewModel
+import com.example.funlife.viewmodel.PacMazeLocalViewModel
+import com.example.funlife.viewmodel.PacMazeLocalViewModelFactory
 
 /**
  * 🛡️ 安全导航：当目标路由不存在 / 无法解析时，吃掉异常并提示用户，
@@ -405,6 +407,47 @@ fun NavGraph(
                 }
             }
         }
+
+        composable(
+            route = "pac_maze?autoStart={autoStart}",
+            arguments = listOf(
+                navArgument("autoStart") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
+        ) {
+            val context = LocalContext.current
+            val application = context.applicationContext as FunLifeApplication
+            val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+            val userSession = if (isLoggedIn) authViewModel.getCurrentSession() else null
+            val autoStart = it.arguments?.getBoolean("autoStart") ?: false
+            if (userSession != null) {
+                val userId = userSession.userId
+                val vm = viewModel<PacMazeLocalViewModel>(
+                    key = "pac_maze_$userId",
+                    factory = PacMazeLocalViewModelFactory(
+                        userId = userId,
+                        database = application.database,
+                        appContext = context.applicationContext,
+                    ),
+                )
+                com.example.funlife.ui.screens.pacmaze.PacMazeModeSelectScreen(
+                    viewModel = vm,
+                    autoStart = autoStart,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            } else {
+                LoadingFallback(if (isLoggedIn) "加载中…" else "正在跳转登录…")
+                LaunchedEffect(isLoggedIn) {
+                    if (!isLoggedIn) {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                }
+            }
+        }
         
         composable(Screen.Profile.route) {
             val ctx = LocalContext.current
@@ -532,7 +575,7 @@ fun NavGraph(
                     navController.safeNavigate(Screen.SocialGameDetail.route(gameId), context)
                 },
                 onNavigateToLocalGame = { route ->
-                    navController.safeNavigate(route, context)
+                    navController.safeNavigate("$route?autoStart=true", context)
                 },
                 onNavigateToLobby = { roomId ->
                     navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
@@ -575,7 +618,7 @@ fun NavGraph(
                     navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
                 },
                 onNavigateToLocalGame = { route ->
-                    navController.safeNavigate(route, context)
+                    navController.safeNavigate("$route?autoStart=true", context)
                 },
             )
         }
@@ -626,6 +669,12 @@ fun NavGraph(
                         launchSingleTop = true
                     }
                 },
+                onNavigateToLocalPacMaze = {
+                    navController.navigate("pac_maze?autoStart=true") {
+                        popUpTo(Screen.SocialGameLobby.route(roomId)) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
             )
         }
 
@@ -658,6 +707,12 @@ fun NavGraph(
                 },
                 onNavigateToGameCenter = {
                     navController.navigate(Screen.SocialGameCenter.route()) {
+                        popUpTo(Screen.SocialGamePlay.route(playRoomId)) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToLocalPacMaze = {
+                    navController.navigate("pac_maze?autoStart=true") {
                         popUpTo(Screen.SocialGamePlay.route(playRoomId)) { inclusive = true }
                         launchSingleTop = true
                     }

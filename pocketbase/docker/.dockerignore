@@ -1,0 +1,8 @@
+pb_data/
+secrets/
+tools/**/node_modules/
+pocketbase.exe
+*.md
+.git/
+cloudflared/
+docker/cloudflared/*.json

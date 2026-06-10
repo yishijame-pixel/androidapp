@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-10T00:00:00Z",
+  "baseUrl": "https://6675-funlife-prod-d8gxf7og0518b8253-1333176506.tcb.qcloud.la/yishi-assetss/v1/bundles",
+  "bundles": [
+    { "id": "xiangkuang", "file": "xiangkuang.zip", "targetDir": "xiangkuang", "description": "头像框资源" },
+    { "id": "pet", "file": "pet.zip", "targetDir": "pet", "description": "宠物动画资源" },
+    { "id": "login", "file": "login.zip", "targetDir": "login", "description": "登录/商店 UI 装饰" },
+    { "id": "renge", "file": "renge.zip", "targetDir": "renge", "description": "人格相关资源" },
+    { "id": "dibu", "file": "dibu.zip", "targetDir": "dibu", "description": "底部导航装饰" },
+    { "id": "wheel", "file": "wheel.zip", "targetDir": "wheel", "description": "转盘资源" }
+  ]
+}

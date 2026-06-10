@@ -11,6 +11,7 @@
 //   · DEVELOPMENT_PRINCIPLES.md：复用现有 MoodViewModel，不动 DAO / Migration；Canvas radius 已 coerceAtLeast(1f)
 package com.example.funlife.ui.screens
 
+import com.example.funlife.resource.ResourceStore
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -285,7 +286,7 @@ fun MoodScreen(
 
     val bgBitmap: androidx.compose.ui.graphics.ImageBitmap? = remember {
         try {
-            context.assets.open("login/xinq_1.png").use {
+            ResourceStore.openInputStream("login/xinq_1.png")?.use {
                 android.graphics.BitmapFactory.decodeStream(it)?.asImageBitmap()
             }
         } catch (e: Exception) { null }

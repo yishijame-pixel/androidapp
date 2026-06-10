@@ -10,6 +10,12 @@ plugins {
 val googleServicesFile = file("google-services.json")
 val fcmEnabled = googleServicesFile.exists()
 
+val localPropsFile = File(rootProject.projectDir, "local.properties")
+val localProps = Properties().apply {
+    if (localPropsFile.exists()) load(FileInputStream(localPropsFile))
+}
+val fastDevInstall = localProps.getProperty("FAST_DEV_INSTALL", "false") == "true"
+
 android {
     namespace = "com.example.funlife"
     compileSdk = 34
@@ -27,10 +33,7 @@ android {
         }
 
         // 配置从 local.properties 注入（该文件不进 git）
-        val localProps = File(rootProject.projectDir, "local.properties")
-        val props = Properties().apply {
-            if (localProps.exists()) load(FileInputStream(localProps))
-        }
+        val props = localProps
         buildConfigField("String", "AI_API_KEY", "\"${props.getProperty("AI_API_KEY", "")}\"")
         // 🔒 AI 提供商技术参数从 local.properties 注入，不在源码 / 不在编译产物里硬编码厂商名
         //   必须在 local.properties 配置：
@@ -70,6 +73,11 @@ android {
         // 你画我猜笔画 WebSocket（留空则走 PocketBase 分片同步）
         buildConfigField("String", "DRAW_WS_URL", "\"${props.getProperty("DRAW_WS_URL", "")}\"")
         buildConfigField("boolean", "FCM_ENABLED", fcmEnabled.toString())
+
+        // 真机调试只打包 arm64，减少 lib 体积（约省 15–20MB）
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -224,4 +232,37 @@ if (fcmEnabled) {
     apply(plugin = "com.google.gms.google-services")
 } else {
     logger.lifecycle("FCM disabled: place google-services.json in app/ to enable push")
+}
+
+// 快速调试安装：local.properties 设 FAST_DEV_INSTALL=true 时，debug 包剔除大体积装饰资源
+// （头像框/宠物/登录动画等），APK 从 ~700MB 降到 ~45MB，adb 安装约 30 秒。
+if (fastDevInstall) {
+    logger.lifecycle("FAST_DEV_INSTALL=true → debug APK 将剔除 xiangkuang/pet/login 等大资源")
+    afterEvaluate {
+        tasks.matching { it.name == "mergeDebugAssets" }.configureEach {
+            doLast {
+                val assetDir = outputs.files.firstOrNull() ?: return@doLast
+                listOf(
+                    "xiangkuang", "pet", "login", "renge", "dibu", "wheel",
+                    "environments", "materials",
+                ).forEach { folder ->
+                    val target = assetDir.resolve(folder)
+                    if (target.exists()) {
+                        delete(target)
+                        logger.lifecycle("  stripped assets/$folder")
+                    }
+                }
+                listOf(
+                    "xiangkuang.zip", "pet.zip", "login.zip", "renge.zip",
+                    "dibu.zip", "wheel.zip",
+                ).forEach { zip ->
+                    val target = assetDir.resolve(zip)
+                    if (target.exists()) {
+                        delete(target)
+                        logger.lifecycle("  stripped assets/$zip")
+                    }
+                }
+            }
+        }
+    }
 }

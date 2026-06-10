@@ -5,6 +5,8 @@ import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 
+import com.example.funlife.resource.ResourceStore
+
 object ImageCache {
     // 🔥 LruCache：自动淘汰最少使用的图，防止内存累积导致 OOM
     // 上限 = min(应用可用内存的 1/8, 48MB)，对中低端设备友好
@@ -33,7 +35,7 @@ object ImageCache {
         val key = if (sampleSize <= 1) assetPath else "$assetPath@$sampleSize"
         cache.get(key)?.let { return it }
         return try {
-            context.assets.open(assetPath).use { input ->
+            ResourceStore.openInputStream(assetPath)?.use { input ->
                 val opts = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize.coerceAtLeast(1)
                     inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888

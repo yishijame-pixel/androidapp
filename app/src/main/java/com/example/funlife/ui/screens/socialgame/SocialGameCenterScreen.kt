@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.social.game.catalog.GameCatalogStatus
 import com.example.funlife.social.game.catalog.GameCategory
+import com.example.funlife.social.game.catalog.SocialGameCatalog
 import com.example.funlife.social.game.catalog.SocialGameEntry
 import com.example.funlife.social.game.model.GameCenterTab
 import com.example.funlife.social.game.model.GameRoomStatus
@@ -111,7 +112,15 @@ fun SocialGameCenterScreen(
                         onJoinCodeChange = viewModel::onJoinCodeChange,
                         onJoinClick = viewModel::joinByCode,
                         games = onlineGames,
-                        onGameClick = onNavigateToDetail,
+                        onGameClick = { gameId ->
+                            val entry = SocialGameCatalog.find(gameId)
+                            val localRoute = entry?.localRoute
+                            if (localRoute != null) {
+                                onNavigateToLocalGame(localRoute)
+                            } else {
+                                onNavigateToDetail(gameId)
+                            }
+                        },
                     )
                     GameCenterTab.LOCAL -> LocalTabContent(
                         games = com.example.funlife.social.game.catalog.SocialGameCatalog.localPartyGames(),

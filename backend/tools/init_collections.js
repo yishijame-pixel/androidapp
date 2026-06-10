@@ -32,6 +32,7 @@ const COLLECTIONS = [
   // 金币
   "vip_coin_logs",
   "vip_coin_snapshots",
+  "vip_recover_log",
   // 防重放
   "vip_nonce_logs",
   // 审计 / 封禁

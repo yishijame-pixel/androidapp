@@ -2,6 +2,7 @@
 package com.example.funlife.ui.screens
 
 import android.graphics.BitmapFactory
+import com.example.funlife.resource.ResourceStore
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -70,7 +71,7 @@ fun RegisterScreen(
     // 加载背景图片 - 使用高质量设置
     val backgroundBitmap = remember {
         try {
-            context.assets.open("login/zhuce.png").use { inputStream ->
+            ResourceStore.openInputStream("login/zhuce.png")?.use { inputStream ->
                 val options = BitmapFactory.Options().apply {
                     inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
                     inScaled = false
@@ -86,7 +87,7 @@ fun RegisterScreen(
     // 加载图标图片
     val icon1Bitmap = remember {
         try {
-            context.assets.open("login/tubiao_1.png").use { inputStream ->
+            ResourceStore.openInputStream("login/tubiao_1.png")?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
             }
         } catch (e: Exception) {
@@ -96,7 +97,7 @@ fun RegisterScreen(
     
     val icon2Bitmap = remember {
         try {
-            context.assets.open("login/tubiao_2.png").use { inputStream ->
+            ResourceStore.openInputStream("login/tubiao_2.png")?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
             }
         } catch (e: Exception) {
@@ -106,7 +107,7 @@ fun RegisterScreen(
     
     val icon3Bitmap = remember {
         try {
-            context.assets.open("login/tubiao_3.png").use { inputStream ->
+            ResourceStore.openInputStream("login/tubiao_3.png")?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
             }
         } catch (e: Exception) {

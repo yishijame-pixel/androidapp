@@ -6,23 +6,48 @@ import com.example.funlife.data.model.User
 import kotlinx.coroutines.flow.Flow
 
 class UserRepository(private val userDao: UserDao) {
-    
+
     suspend fun login(username: String, password: String): User? {
         val user = userDao.getUserByUsername(username) ?: return null
-        
-        // 🔥 新增：使用密码哈希验证
         return if (com.example.funlife.utils.PasswordHasher.verifyPassword(password, user.password)) {
             user
         } else {
             null
         }
     }
-    
-    // 🔥 新增：检查用户名是否存在（用于精确错误提示）
-    suspend fun getUserByUsername(username: String): User? {
-        return userDao.getUserByUsername(username)
+
+    suspend fun getUserByUsername(username: String): User? = userDao.getUserByUsername(username)
+
+    /**
+     * 云端验密通过后在本机重建账号（清数据场景）。
+     */
+    suspend fun recreateLocalAccount(username: String, password: String, nickname: String): User {
+        val existing = userDao.getUserByUsername(username)
+        if (existing != null) {
+            return resetLocalPassword(existing, password, nickname)
+        }
+        val hashed = com.example.funlife.utils.PasswordHasher.hashPassword(password)
+        val user = User(
+            username = username,
+            password = hashed,
+            nickname = nickname.ifBlank { username },
+        )
+        val id = userDao.insert(user)
+        return user.copy(id = id)
     }
-    
+
+    /** 本地残留错误密码哈希时，用云端验密结果覆盖。 */
+    suspend fun resetLocalPassword(user: User, password: String, nickname: String): User {
+        val hashed = com.example.funlife.utils.PasswordHasher.hashPassword(password)
+        val updated = user.copy(
+            password = hashed,
+            nickname = nickname.ifBlank { user.nickname },
+            lastLoginAt = System.currentTimeMillis(),
+        )
+        userDao.update(updated)
+        return updated
+    }
+
     suspend fun register(username: String, password: String, nickname: String): Result<Long> {
         return try {
             // 检查用户名是否已存在

@@ -107,6 +107,31 @@ class CoinRepository(
     // 商城积分相关方法
     suspend fun getShopPoints(userId: Long): Int = coinDao.getShopPoints(userId) ?: 0
 
+    /** 从云端 account_recover 钱包快照写回本机（清数据恢复）。 */
+    suspend fun restoreWalletFromCloudSnapshot(
+        userId: Long,
+        wallet: com.example.funlife.account.CloudWalletSnapshot,
+    ) {
+        coinDao.initializeCoins(userId)
+        if (!wallet.hasSnapshot && wallet.balance == 0 && wallet.pointsBalance == 0) return
+        val updated = coinDao.setWalletSnapshot(
+            userId = userId,
+            coins = wallet.balance.coerceAtLeast(0),
+            totalEarned = wallet.totalEarned.coerceAtLeast(0),
+            shopPoints = wallet.pointsBalance.coerceAtLeast(0),
+        )
+        if (updated == 0) {
+            coinDao.insertUserCoins(
+                UserCoins(
+                    userId = userId,
+                    coins = wallet.balance.coerceAtLeast(0),
+                    totalEarned = wallet.totalEarned.coerceAtLeast(0),
+                    shopPoints = wallet.pointsBalance.coerceAtLeast(0),
+                ),
+            )
+        }
+    }
+
     /** 异步上报积分变动到云端（fire-and-forget） */
     private suspend fun reportPointsToCloud(userId: Long, op: String, amount: Int, reason: String) {
         val ctx = context ?: return

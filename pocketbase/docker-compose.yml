@@ -1,0 +1,127 @@
+# FunLife 社交服务 — Docker Compose
+#
+# 核心服务（默认启动）:
+#   docker compose up -d
+#
+# 含 FCM 推送中继:
+#   docker compose --profile push up -d
+#
+# 含 Cloudflare 隧道:
+#   docker compose --profile tunnel up -d
+#
+# 完整生产栈:
+#   docker compose --profile push --profile tunnel up -d
+
+name: funlife
+
+services:
+  pocketbase:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pocketbase
+      args:
+        PB_VERSION: ${PB_VERSION:-0.39.0}
+    container_name: funlife-pocketbase
+    restart: unless-stopped
+    ports:
+      - "${PB_HOST_PORT:-8090}:8090"
+    volumes:
+      - ./pb_data:/pb/pb_data
+      - ./pb_hooks:/pb/pb_hooks:ro
+      - ./pb_migrations:/pb/pb_migrations:ro
+    environment:
+      # 仅在使用 --profile push 时于 .env 中设置 FCM_RELAY_URL=http://fcm-relay:8787/push
+      FCM_RELAY_URL: ${FCM_RELAY_URL:-}
+      FCM_RELAY_KEY: ${FCM_RELAY_KEY:-}
+    networks:
+      - funlife
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  draw-ws:
+    build:
+      context: ./tools/draw_ws
+      dockerfile: ../../docker/Dockerfile.draw-ws
+    container_name: funlife-draw-ws
+    restart: unless-stopped
+    ports:
+      - "${DRAW_WS_HOST_PORT:-8790}:8790"
+    environment:
+      PB_BASE_URL: http://pocketbase:8090
+      PORT: "8790"
+      DRAW_WS_RELAY_KEY: ${DRAW_WS_RELAY_KEY:-}
+      RING_SIZE: ${RING_SIZE:-400}
+      MAX_MSG_PER_SEC: ${MAX_MSG_PER_SEC:-240}
+      PB_AUTH_TIMEOUT_MS: ${PB_AUTH_TIMEOUT_MS:-4000}
+      DRAW_WS_REPLAY_TAIL: ${DRAW_WS_REPLAY_TAIL:-320}
+      DRAW_WS_ROOM_GO_MS: ${DRAW_WS_ROOM_GO_MS:-8000}
+      DRAW_WS_LOG_CHUNKS: ${DRAW_WS_LOG_CHUNKS:-0}
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    networks:
+      - funlife
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8790/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  fcm-relay:
+    profiles: ["push"]
+    build:
+      context: ./tools/fcm_relay
+      dockerfile: ../../docker/Dockerfile.fcm-relay
+    container_name: funlife-fcm-relay
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      FCM_RELAY_KEY: ${FCM_RELAY_KEY:?FCM_RELAY_KEY is required when using push profile}
+      FCM_SERVICE_ACCOUNT: /run/secrets/firebase-adminsdk.json
+    volumes:
+      - ./secrets/firebase-adminsdk.json:/run/secrets/firebase-adminsdk.json:ro
+    networks:
+      - funlife
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    container_name: funlife-cloudflared
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./docker/cloudflared:/etc/cloudflared:ro
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+      draw-ws:
+        condition: service_healthy
+    networks:
+      - funlife
+
+networks:
+  funlife:
+    name: funlife-net

@@ -151,9 +151,9 @@ fun GameDetailScreen(
             }
 
             when {
-                entry.category == GameCategory.LOCAL_PARTY && entry.localRoute != null -> {
+                entry.localRoute != null -> {
                     HubPrimaryButton(
-                        text = "开始同屏玩",
+                        text = if (entry.category == GameCategory.LOCAL_PARTY) "开始同屏玩" else "开始试玩",
                         onClick = {
                             viewModel.touchGame(entry.gameId)
                             onNavigateToLocalGame(entry.localRoute)
@@ -207,5 +207,12 @@ private fun gameRulesText(gameId: String): String = when (gameId) {
     """.trimIndent()
     "draw_guess" -> "共 3 轮。每轮一人作画 60 秒，另一人猜词，猜对得分。轮结束后互换角色，总分高者胜。"
     "dice_duel" -> "双方各掷一次骰子，点数大者胜。平局则加赛，最多 3 次。"
+    "pac_maze" -> """
+        经典迷宫吃豆玩法，横屏左摇杆控制方向。
+        
+        · 闯关 13 关 · 无尽波次 · 程序迷宫
+        · 能量豆可短暂反杀幽灵
+        · 当前为单机试玩，好友联机对战即将上线
+    """.trimIndent()
     else -> "与好友在线对战，享受轻松社交时光。"
 }

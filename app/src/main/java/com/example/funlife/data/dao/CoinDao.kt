@@ -28,6 +28,11 @@ interface CoinDao {
     
     @Query("INSERT OR IGNORE INTO user_coins (userId, coins, totalEarned, shopPoints) VALUES (:userId, 0, 0, 0)")
     suspend fun initializeCoins(userId: Long)
+
+    @Query(
+        "UPDATE user_coins SET coins = :coins, totalEarned = :totalEarned, shopPoints = :shopPoints WHERE userId = :userId",
+    )
+    suspend fun setWalletSnapshot(userId: Long, coins: Int, totalEarned: Int, shopPoints: Int): Int
     
     @Query("SELECT shopPoints FROM user_coins WHERE userId = :userId")
     suspend fun getShopPoints(userId: Long): Int?

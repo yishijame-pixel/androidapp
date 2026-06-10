@@ -23,6 +23,7 @@ import coil.compose.SubcomposeAsyncImage
 import com.example.funlife.utils.AvatarImageLoader
 import com.example.funlife.utils.AvatarStorageHelper
 import com.example.funlife.utils.UserAvatarBitmapCache
+import com.example.funlife.resource.ResourceStore
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlin.math.cos
 import kotlin.math.sin
@@ -47,7 +48,7 @@ fun warmAvatarFrameAsset(context: android.content.Context, frameAssetPath: Strin
     val path = frameAssetPath?.trim()?.takeIf { it.isNotEmpty() } ?: return
     if (frameAnalysisCache.get(path) != null) return
     runCatching {
-        context.assets.open(path).use { inputStream ->
+        ResourceStore.openInputStream(path)?.use { inputStream ->
             val bmp = BitmapFactory.decodeStream(inputStream) ?: return@runCatching
             loadAndAnalyzeFrame(bmp).also { frameAnalysisCache.put(path, it) }
         }

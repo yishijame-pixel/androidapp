@@ -2,6 +2,7 @@ package com.example.funlife.vip
 
 import android.content.Context
 import com.example.funlife.BuildConfig
+import com.example.funlife.account.CloudWalletSnapshot
 import com.example.funlife.security.SecurityManager
 import com.google.gson.Gson
 import okhttp3.MediaType.Companion.toMediaType
@@ -39,6 +40,98 @@ class UserCloudRepository(private val context: Context) {
         /** 服务端业务拒绝（用户名已注册、密码不对、设备冲突等），msg 可直接给用户看 */
         data class Rejected(val code: String, val msg: String) : RegisterResult()
         object NetworkError : RegisterResult()
+    }
+
+    /** 清数据后云端验密恢复本地账号 */
+    sealed class RecoverResult {
+        data class Ok(
+            val nickname: String,
+            val deviceToken: String?,
+            val wallet: CloudWalletSnapshot,
+        ) : RecoverResult()
+
+        /** 用户名不存在或密码错误（统一码，防枚举） */
+        object CredentialsInvalid : RecoverResult()
+
+        data class Rejected(val code: String, val msg: String) : RecoverResult()
+        object NetworkError : RecoverResult()
+    }
+
+    /**
+     * 云端验密恢复：清本机数据后，凭 passwordProof 重建登录身份并拉取钱包快照。
+     */
+    fun recoverAccount(username: String, password: String): RecoverResult {
+        val baseUrl = BuildConfig.VIP_BACKEND_URL
+        if (baseUrl.isNullOrBlank()) return RecoverResult.NetworkError
+        return try {
+            val deviceId = SecurityManager.getDeviceFingerprint(context)
+            val passwordProof = computePasswordProof(username, password)
+            val body = mapOf(
+                "username" to username,
+                "passwordProof" to passwordProof,
+                "deviceId" to deviceId,
+            )
+            val req = Request.Builder()
+                .url(baseUrl.trimEnd('/') + "/account_recover")
+                .post(gson.toJson(body).toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (text.isBlank()) return RecoverResult.NetworkError
+                val r = gson.fromJson(text, Map::class.java) as? Map<*, *>
+                    ?: return RecoverResult.NetworkError
+                val ok = r["ok"] as? Boolean ?: false
+                if (!ok) {
+                    val code = (r["code"] as? String) ?: "UNKNOWN"
+                    if (code == "CREDENTIALS_INVALID" || code == "WRONG_PASSWORD") {
+                        return RecoverResult.CredentialsInvalid
+                    }
+                    val msg = (r["msg"] as? String) ?: defaultRecoverRejectMsg(code)
+                    return RecoverResult.Rejected(code, msg)
+                }
+                val token = r["deviceToken"] as? String
+                if (!token.isNullOrBlank()) {
+                    DeviceTokenStore(context).save(username, token)
+                }
+                val nickname = (r["nickname"] as? String)?.takeIf { it.isNotBlank() } ?: username
+                @Suppress("UNCHECKED_CAST")
+                val walletMap = r["wallet"] as? Map<String, Any>
+                RecoverResult.Ok(
+                    nickname = nickname,
+                    deviceToken = token,
+                    wallet = parseWallet(walletMap),
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("UserCloudRepository", "recoverAccount failed: ${e.message}")
+            RecoverResult.NetworkError
+        }
+    }
+
+    private fun parseWallet(map: Map<String, Any>?): CloudWalletSnapshot {
+        if (map == null) return CloudWalletSnapshot()
+        fun num(key: String): Int = (map[key] as? Number)?.toInt() ?: 0
+        return CloudWalletSnapshot(
+            balance = num("balance"),
+            totalEarned = num("totalEarned"),
+            totalSpent = num("totalSpent"),
+            pointsBalance = num("pointsBalance"),
+            hasSnapshot = map["hasSnapshot"] as? Boolean ?: (num("balance") > 0 || num("pointsBalance") > 0),
+        )
+    }
+
+    private fun defaultRecoverRejectMsg(code: String): String = when (code) {
+        "BANNED" -> "该账号已被封禁"
+        "DEVICE_CONFLICT" -> "该账号已在其他设备注册，请使用 VIP 迁移或在原设备恢复"
+        "PROOF_REQUIRED" -> "请升级 App 后重新登录"
+        "RATE_LIMITED" -> "请求过于频繁，请稍后再试"
+        "INVALID" -> "请求参数无效，请检查输入"
+        "BAD_REQUEST" -> "请求格式错误，请重试"
+        "DB_ERROR" -> "服务繁忙，请稍后再试"
+        else -> {
+            android.util.Log.w("UserCloudRepository", "Unmapped recover reject code: $code")
+            "账号恢复失败，请稍后重试"
+        }
     }
 
     /**

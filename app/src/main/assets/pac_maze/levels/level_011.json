@@ -1,0 +1,35 @@
+{
+  "id": 11,
+  "name": "古风-四合院",
+  "width": 21,
+  "height": 17,
+  "grid": [
+    "bbbbbbbbbbbbbbbbbbbbb",
+    "b*.................*b",
+    "b=b................=b",
+    "b.b.####.....####.b.b",
+    "b.b.b...........b.b.b",
+    "b.b.b.###G###.b.b.b.b",
+    "b.b.b.b..>..b.b.b.b.b",
+    "b=b.b.b.@...b.b.b..=b",
+    "b.b.b.b..<..b.b.b.b.b",
+    "b.b.b.###G###.b.b.b.b",
+    "b.b.b...........b.b.b",
+    "b.b.####.....####.b.b",
+    "b.b...............b.b",
+    "b=b................=b",
+    "b*.................*b",
+    "b...................b",
+    "bbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "spawn": {
+    "pac": [10, 15],
+    "ghosts": [[8, 4], [9, 4], [10, 4], [11, 4], [12, 4]]
+  },
+  "markers": [
+    { "type": "start", "x": 10, "y": 15 },
+    { "type": "checkpoint", "x": 1, "y": 7, "label": "东厢", "tag": "LINK" },
+    { "type": "checkpoint", "x": 19, "y": 7, "label": "西厢", "tag": "LINK" }
+  ],
+  "difficulty": { "ghost_speed_mul": 0.75, "ai_aggression": 0.72 }
+}

@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.funlife.data.model.GrowthStage
 import com.example.funlife.data.model.PetType
 import com.example.funlife.viewmodel.AnimationState
+import com.example.funlife.resource.ResourceStore
 
 object PetImageLoader {
     
@@ -210,7 +211,7 @@ object PetImageLoader {
     // 从 assets 加载图片
     fun loadImageFromAssets(context: Context, path: String): Bitmap? {
         return try {
-            context.assets.open(path).use { inputStream ->
+            ResourceStore.openInputStream(path)?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream)
             }
         } catch (e: Exception) {

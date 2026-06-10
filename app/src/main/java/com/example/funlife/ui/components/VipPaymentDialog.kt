@@ -1,6 +1,7 @@
 package com.example.funlife.ui.components
 
 import android.graphics.BitmapFactory
+import com.example.funlife.resource.ResourceStore
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -137,7 +138,7 @@ private fun PaymentQRCodePage(
     // 从assets加载图片
     val qrBitmap = remember {
         try {
-            context.assets.open("login/zhifu.png").use { inputStream ->
+            ResourceStore.openInputStream("login/zhifu.png")?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream)
             }
         } catch (e: Exception) {

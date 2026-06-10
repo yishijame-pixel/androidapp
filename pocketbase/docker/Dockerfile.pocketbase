@@ -1,0 +1,21 @@
+# FunLife PocketBase — Linux 容器镜像
+# 版本与 CHANGELOG.md 对齐，可通过 build-arg PB_VERSION 覆盖
+ARG PB_VERSION=0.39.0
+
+FROM alpine:3.20
+
+ARG PB_VERSION
+RUN apk add --no-cache ca-certificates unzip wget \
+    && wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip" -O /tmp/pb.zip \
+    && unzip /tmp/pb.zip -d /usr/local/bin \
+    && chmod +x /usr/local/bin/pocketbase \
+    && rm /tmp/pb.zip
+
+WORKDIR /pb
+
+EXPOSE 8090
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8090/api/health || exit 1
+
+CMD ["pocketbase", "serve", "--http=0.0.0.0:8090"]

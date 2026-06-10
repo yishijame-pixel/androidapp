@@ -42,6 +42,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.funlife.resource.ResourceStore
 import com.example.funlife.viewmodel.AuthState
 import com.example.funlife.viewmodel.AuthViewModel
 import kotlinx.coroutines.delay
@@ -70,7 +71,7 @@ fun LoginScreen(
     // 加载背景图片 - 使用高质量设置
     val backgroundBitmap = remember {
         try {
-            context.assets.open("login/login_1.png").use { inputStream ->
+            ResourceStore.openInputStream("login/login_1.png")?.use { inputStream ->
                 val options = BitmapFactory.Options().apply {
                     inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
                     inScaled = false
@@ -93,11 +94,15 @@ fun LoginScreen(
         when (authState) {
             is AuthState.Success -> {
                 isLoading = false
-                // ✅ 登录成功提示
+                val recovered = (authState as AuthState.Success).recoveredFromCloud
                 android.widget.Toast.makeText(
                     context,
-                    "登录成功 🎉 欢迎回来！",
-                    android.widget.Toast.LENGTH_SHORT
+                    if (recovered) {
+                        "已从云端恢复账号，金币/积分已同步（个人数据需备份恢复）"
+                    } else {
+                        "登录成功 🎉 欢迎回来！"
+                    },
+                    android.widget.Toast.LENGTH_LONG,
                 ).show()
                 onLoginSuccess()
                 viewModel.resetAuthState()

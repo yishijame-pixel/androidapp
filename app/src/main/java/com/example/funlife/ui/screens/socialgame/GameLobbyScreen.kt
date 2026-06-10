@@ -54,6 +54,7 @@ fun GameLobbyScreen(
     onNavigateToGameCenter: () -> Unit = onNavigateBack,
     onNavigateToRoom: (roomId: String) -> Unit = {},
     onStartGame: (roomId: String) -> Unit,
+    onNavigateToLocalPacMaze: () -> Unit = {},
 ) {
     val rooms by viewModel.rooms.collectAsState()
     val acceptedFriends by viewModel.acceptedFriends.collectAsState()
@@ -92,10 +93,15 @@ fun GameLobbyScreen(
             onNavigateToGameCenter()
         }
     }
-    LaunchedEffect(room?.status, roomId) {
+    LaunchedEffect(room?.status, room?.gameId, roomId) {
         if (room?.status == GameRoomStatus.PLAYING) {
             viewModel.clearStartingGame()
-            onStartGame(roomId)
+            val isLocalPacMaze = room.gameId == "pac_maze" || room.gameId == "pac_maze_local"
+            if (isLocalPacMaze) {
+                onNavigateToLocalPacMaze()
+            } else {
+                onStartGame(roomId)
+            }
         }
     }
     LaunchedEffect(room?.gameId, roomId, pbAuthToken) {

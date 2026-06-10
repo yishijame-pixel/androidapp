@@ -1,0 +1,50 @@
+# Nginx 反代示例 — 适用于 VPS 自建 HTTPS（不用 Cloudflare 隧道时）
+#
+# 安装 certbot 后替换 your.domain 与证书路径。
+# draw_ws 与 PocketBase 在同一台机器、由 Nginx 统一入口。
+
+upstream funlife_pocketbase {
+    server 127.0.0.1:8090;
+}
+
+upstream funlife_draw_ws {
+    server 127.0.0.1:8790;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name pb.yishi.site;
+
+    ssl_certificate     /etc/letsencrypt/live/pb.yishi.site/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pb.yishi.site/privkey.pem;
+
+    # draw_ws WebSocket 热路径
+    location /draw-ws/ {
+        proxy_pass http://funlife_draw_ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+
+    # PocketBase API + 管理后台
+    location / {
+        proxy_pass http://funlife_pocketbase;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name pb.yishi.site;
+    return 301 https://$host$request_uri;
+}

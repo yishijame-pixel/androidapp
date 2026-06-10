@@ -317,7 +317,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(
                     com.example.funlife.ui.utils.LocalScreenAdapter provides screenAdapter
                 ) {
-                    var showSplash by remember { mutableStateOf(true) }
+                    var showSplash by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
 
                     if (showSplash) {
                         com.example.funlife.ui.screens.SplashScreen(
@@ -492,6 +492,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
         Screen.DiaryBookFull.route,
         Screen.DiaryBookFull.route + "?openEditor={openEditor}",
         "riddle_game",
+        "pac_maze",
         "dice_game",
         // 好友页沉浸式（Phase 1 Beta）
         Screen.Friends.route,
@@ -508,6 +509,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
         immersiveRoute?.startsWith("social_game_detail/") != true &&
         immersiveRoute?.startsWith("social_game_lobby/") != true &&
         immersiveRoute?.startsWith("social_game_play/") != true &&
+        immersiveRoute?.startsWith("pac_maze") != true &&
         immersiveRoute?.startsWith("social_game_center") != true
 
     com.example.funlife.ui.components.topdrawer.TopDrawerHost(

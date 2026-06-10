@@ -125,8 +125,9 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.SocialConversationCache::class, // 🆕 v58：私聊会话缓存
         com.example.funlife.data.model.SocialMessageCache::class,      // 🆕 v58：私聊消息缓存
         com.example.funlife.data.model.SocialGameRoomCache::class,     // 🆕 v59：趣玩中心房间缓存
+        com.example.funlife.data.model.PacMazeProgress::class,         // 🆕 v64：豆人迷宫进度
     ],
-    version = 63,  // 🆕 v63 - social_friend_cache 在线状态
+    version = 65,  // 🆕 v65 - pac_maze endless/maze stats
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -178,6 +179,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun bookChatSessionDao(): com.example.funlife.data.dao.BookChatSessionDao      // 🆕 v54
     abstract fun diaryDao(): com.example.funlife.data.dao.DiaryDao                          // 🆕 v55
     abstract fun socialDao(): com.example.funlife.data.dao.SocialDao                        // 🆕 v57
+    abstract fun pacMazeProgressDao(): com.example.funlife.data.dao.PacMazeProgressDao      // 🆕 v64
 
     companion object {
         @Volatile
@@ -1685,6 +1687,40 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_64_65 = object : Migration(64, 65) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `pac_maze_progress` ADD COLUMN `endlessBestScore` INTEGER NOT NULL DEFAULT 0",
+                )
+                database.execSQL(
+                    "ALTER TABLE `pac_maze_progress` ADD COLUMN `endlessBestWave` INTEGER NOT NULL DEFAULT 0",
+                )
+                database.execSQL(
+                    "ALTER TABLE `pac_maze_progress` ADD COLUMN `mazeBestTimeMs` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        private val MIGRATION_63_64 = object : Migration(63, 64) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pac_maze_progress` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `userId` INTEGER NOT NULL,
+                        `maxLevelReached` INTEGER NOT NULL,
+                        `highScore` INTEGER NOT NULL,
+                        `starsBitmask` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_pac_maze_progress_userId` ON `pac_maze_progress` (`userId`)",
+                )
+            }
+        }
+
         private val MIGRATION_62_63 = object : Migration(62, 63) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
@@ -1998,6 +2034,8 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_60_61,
                 MIGRATION_61_62,
                 MIGRATION_62_63,
+                MIGRATION_63_64,
+                MIGRATION_64_65,
             )
             // Release 禁止 destructive migration，避免升级误删全库
             if (BuildConfig.DEBUG) {

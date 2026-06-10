@@ -9,6 +9,7 @@ package com.example.funlife.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import android.graphics.BitmapFactory
+import com.example.funlife.resource.ResourceStore
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1269,7 +1270,7 @@ fun PurchaseDialog(
                     val panelIndex = product.id - 20
                     val panelBitmap = remember(product.id) {
                         try {
-                            context.assets.open("login/js_$panelIndex.png").use { inputStream ->
+                            ResourceStore.openInputStream("login/js_$panelIndex.png")?.use { inputStream ->
                                 android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
                             }
                         } catch (e: Exception) {
@@ -2161,7 +2162,7 @@ fun ShopItemPurchaseDialog(
                         }
                         
                         imagePath?.let { path ->
-                            context.assets.open(path).use { inputStream ->
+                            ResourceStore.openInputStream(path)?.use { inputStream ->
                                 android.graphics.BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
                             }
                         }

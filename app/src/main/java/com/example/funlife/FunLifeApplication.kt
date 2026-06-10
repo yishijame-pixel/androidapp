@@ -27,6 +27,7 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
         super.onCreate()
 
         com.example.funlife.utils.UserAvatarBitmapCache.install(this)
+        com.example.funlife.resource.ResourceStore.init(this)
 
         // 🛡️ 全局崩溃兜底：必须最早安装，才能捕获后续初始化中的异常
         com.example.funlife.utils.CrashHandler.install(this)
@@ -77,6 +78,11 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
             com.example.funlife.vip.VipRuntimeConfig.bootstrapAsync(this)
         } catch (e: Exception) {
             android.util.Log.w("FunLifeApplication", "VipRuntimeConfig 初始化失败", e)
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { com.example.funlife.resource.ResourceStore.syncAndPrefetchOnLaunch() }
+                .onFailure { android.util.Log.w("FunLifeApplication", "ResourceStore prefetch failed", it) }
         }
 
         // 🔄 进程级前台监听：App 从后台回到前台时刷新 VIP 配置

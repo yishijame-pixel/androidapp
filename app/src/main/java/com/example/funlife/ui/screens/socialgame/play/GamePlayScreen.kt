@@ -46,12 +46,27 @@ fun GamePlayScreen(
     onNavigateBack: () -> Unit,
     onNavigateToLobby: () -> Unit,
     onNavigateToGameCenter: () -> Unit,
+    onNavigateToLocalPacMaze: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsState()
     var guessInput by remember(roomId) { mutableStateOf("") }
     var showExitConfirm by remember(roomId) { mutableStateOf(false) }
     val entry = remember(ui.gameId) { SocialGameCatalog.find(ui.gameId) }
     val title = entry?.title ?: "对局中"
+    val isLocalPacMaze = ui.gameId == "pac_maze" || ui.gameId == "pac_maze_local"
+    LaunchedEffect(isLocalPacMaze) {
+        if (isLocalPacMaze) onNavigateToLocalPacMaze()
+    }
+    if (isLocalPacMaze) {
+        SocialGameEnterLoading(
+            gameId = ui.gameId,
+            gameTitle = title,
+            gameEmoji = entry?.iconEmoji ?: "👾",
+            headline = "正在进入$title",
+            subtitle = "单机闯关模式",
+        )
+        return
+    }
     val identityOk = ui.identityReady || !ui.myPbId.isNullOrBlank()
     val playReady = when (ui.gameId) {
         "gomoku" -> ui.gomoku != null && identityOk

@@ -24,9 +24,14 @@ const SYNC_MAP = {
     "functions/redeem", "functions/migrate", "functions/verify",
     "functions/beta_validate", "functions/register_log",
     "functions/user_status", "functions/coin_log",
+    "functions/account_recover",
   ],
   "identity.js": [
     "functions/register_log", "functions/coin_log", "functions/migrate",
+    "functions/account_recover",
+  ],
+  "account-recover-core.js": [
+    "functions/account_recover",
   ],
 };
 

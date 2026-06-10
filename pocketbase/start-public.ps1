@@ -42,7 +42,7 @@ if ((Test-Path $adminSdk) -and (Test-Path (Join-Path $relayDir 'server.js'))) {
         $relayCmd = @"
 `$env:FCM_SERVICE_ACCOUNT='$adminSdk'; `$env:FCM_RELAY_KEY='$relayKey'; `$env:PORT='8787'; Set-Location '$relayDir'; node server.js
 "@
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", $relayCmd -WindowStyle Minimized
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", $relayCmd -WindowStyle Normal
         $relayOk = $false
         for ($i = 1; $i -le 8; $i++) {
             Start-Sleep -Seconds 1
@@ -68,7 +68,7 @@ if (Test-Path (Join-Path $drawWsDir 'server.js')) {
         $drawWsCmd = @"
 `$env:PB_BASE_URL='$pbUrl'; `$env:PORT='8790'; Set-Location '$drawWsDir'; node server.js
 "@
-        Start-Process powershell -ArgumentList "-NoWindow", "-Command", $drawWsCmd -WindowStyle Hidden
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", $drawWsCmd -WindowStyle Normal
     }
     $drawWsOk = $false
     for ($i = 1; $i -le 12; $i++) {
@@ -111,7 +111,7 @@ Set-Location '$pbDir'
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$pbDir'; & '$pbExe' serve --http=0.0.0.0:8090" -WindowStyle Normal
 }
 Start-Sleep -Seconds 2
-Start-Process -FilePath "cloudflared" -ArgumentList "tunnel", "run", "funlife-pb" -WindowStyle Minimized
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cloudflared tunnel run funlife-pb" -WindowStyle Normal
 
 Write-Host "Started PocketBase :8090 + tunnel funlife-pb" -ForegroundColor Green
 Write-Host "Verify: https://pb.yishi.site/api/health" -ForegroundColor Cyan
