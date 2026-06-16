@@ -1,36 +1,91 @@
 {
   "id": 12,
   "name": "花园-江南园林",
-  "width": 21,
-  "height": 15,
+  "width": 23,
+  "height": 21,
   "grid": [
-    "#####################",
-    "#*.................*#",
-    "#=#...............=.#",
-    "#.#.###.......###.#.#",
-    "#.#.#...........#.#.#",
-    "#.#.#.###G###.#.#.#.#",
-    "#...#....H....#.....#",
-    "#=..#.........#..=..#",
-    "#...#....>....#.....#",
-    "#.#.#.###G###.#.#.#.#",
-    "#.#.#...........#.#.#",
-    "#.#.###.......###.#.#",
-    "#=#...............=.#",
-    "#*.................*#",
-    "#####################"
+    "bbbbbbbbbbbbbbbbbbbbbbb",
+    "b*...................*b",
+    "b.bbbbbbbb...bbbbbbbb.b",
+    "b.b.................b.b",
+    "b.b.wwww.......wwww.b.b",
+    "b.b.w.............w.b.b",
+    "b.b.w.www.....www.w.b.b",
+    "b.b.w.w...........w.b.b",
+    "b.b.w.w.ooooooooo.w.b.b",
+    "b.b.w.w.ooooooooo.w.b.b",
+    "b=..w.w.ooo@oooo.w.w.=b",
+    "b.b.w.w.ooooooooo.w.b.b",
+    "b.b.w.w.ooooooooo.w.b.b",
+    "b.b.w.w...........w.b.b",
+    "b.b.w.www.....www.w.b.b",
+    "b.b.w.............w.b.b",
+    "b.b.wwww.......wwww.b.b",
+    "b.b.................b.b",
+    "b.bbbbbbbb...bbbbbbbb.b",
+    "b*...................*b",
+    "bbbbbbbbbbbbbbbbbbbbbbb"
   ],
   "spawn": {
-    "pac": [10, 12],
-    "ghosts": [[8, 6], [9, 6], [10, 6], [11, 6], [12, 6]]
+    "pac": [
+      11,
+      17
+    ],
+    "ghosts": [
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        10
+      ],
+      [
+        11,
+        10
+      ],
+      [
+        12,
+        10
+      ],
+      [
+        13,
+        10
+      ]
+    ]
   },
   "markers": [
-    { "type": "start", "x": 10, "y": 12 },
-    { "type": "checkpoint", "x": 1, "y": 7, "label": "曲桥", "tag": "LINK" },
-    { "type": "checkpoint", "x": 19, "y": 7, "label": "亭台", "tag": "LINK" }
+    {
+      "type": "start",
+      "x": 11,
+      "y": 17
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 10,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 21,
+      "y": 10,
+      "label": "002",
+      "tag": "LINK"
+    }
   ],
   "hazards": [
-    { "type": "laser_h", "y": 7, "x1": 6, "x2": 14, "id": "willow_mist" }
+    {
+      "type": "laser_h",
+      "y": 10,
+      "x1": 5,
+      "x2": 17,
+      "id": "willow_mist"
+    }
   ],
-  "difficulty": { "ghost_speed_mul": 0.65, "ai_aggression": 0.66 }
+  "difficulty": {
+    "ghost_speed_mul": 0.65,
+    "ai_aggression": 0.66
+  }
 }

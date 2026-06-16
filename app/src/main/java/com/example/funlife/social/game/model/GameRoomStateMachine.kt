@@ -53,13 +53,19 @@ object GameRoomStateMachine {
     }
 
     /** 开始游戏前：人数达标且无进行中的邀请 */
-    fun requireReadyToStart(state: GameRoomStatePayload) {
+    fun requireReadyToStart(state: GameRoomStatePayload, gameType: String = "") {
         requireCanStart(state)
         if (!state.pendingInvitePbId.isNullOrBlank()) {
             throw IllegalStateException("仍有进行中的邀请，请稍后再试")
         }
         if (state.members.any { it.status == LobbyMemberStatus.PENDING.wire }) {
             throw IllegalStateException("仍有好友未回应邀请")
+        }
+        if (gameType == "pac_maze") {
+            val pac = state.pacMaze
+            if (pac == null || !pac.bothReady()) {
+                throw IllegalStateException("双方准备就绪后才能开始")
+            }
         }
     }
 

@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -27,233 +29,483 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 选模式：主推单人闯关大卡片 + 次要模式横排。 */
+/** 横屏大厅右栏：尺寸来自 [LocalPacMazeHubLayout]。 */
 @Composable
 fun PacMazeModeSelectPanel(
-    highScore: Int,
     maxLevelReached: Int,
     totalLevels: Int,
+    endlessBestScore: Int,
+    endlessBestWave: Int,
+    mazeBestTimeMs: Long,
     onSelectMode: (PacMazePlayMode) -> Unit,
 ) {
-    val solo = PacMazePlayMode.SOLO
-    val secondaryPlayable = listOf(PacMazePlayMode.ENDLESS, PacMazePlayMode.MAZE)
+    val layout = currentPacMazeHubLayout()
+
+    if (layout.modeSelectStacked) {
+        PacMazeModeSelectScrollLayout(
+                layout = layout,
+                maxLevelReached = maxLevelReached,
+                totalLevels = totalLevels,
+                endlessBestScore = endlessBestScore,
+                endlessBestWave = endlessBestWave,
+                mazeBestTimeMs = mazeBestTimeMs,
+                onSelectMode = onSelectMode,
+        )
+    } else {
+        PacMazeModeSelectGridLayout(
+            layout = layout,
+            maxLevelReached = maxLevelReached,
+            totalLevels = totalLevels,
+            endlessBestScore = endlessBestScore,
+            endlessBestWave = endlessBestWave,
+            mazeBestTimeMs = mazeBestTimeMs,
+            onSelectMode = onSelectMode,
+        )
+    }
+}
+
+@Composable
+private fun PacMazeModeSelectGridLayout(
+    layout: PacMazeHubLayoutSpec,
+    maxLevelReached: Int,
+    totalLevels: Int,
+    endlessBestScore: Int,
+    endlessBestWave: Int,
+    mazeBestTimeMs: Long,
+    onSelectMode: (PacMazePlayMode) -> Unit,
+) {
+    val mainRowHeight = layout.contentAreaHeight * 0.58f
+    val onlineRowMin = layout.dp(52.dp)
 
     Column(
-        modifier = Modifier.fillMaxHeight(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(layout.gap),
     ) {
-        Text(
-            "选择游戏模式",
-            color = PacMazePalette.inkPrimary,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "横屏游玩 · 左下摇杆 · 右下攻击",
-            color = PacMazePalette.inkSecondary,
-            fontSize = 13.sp,
-        )
-
-        PacMazeFeaturedModeCard(
-            mode = solo,
-            onClick = { onSelectMode(solo) },
-        )
-
-        Text(
-            "更多模式",
-            color = PacMazePalette.inkMuted,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(mainRowHeight),
+            horizontalArrangement = Arrangement.spacedBy(layout.gap),
         ) {
-            secondaryPlayable.forEach { mode ->
-                PacMazeCompactModeCard(
-                    mode = mode,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onSelectMode(mode) },
+            PacMazeFeaturedModeCard(
+                mode = PacMazePlayMode.SOLO,
+                statLine = "进度 $maxLevelReached / $totalLevels",
+                footnote = PacMazeLevelCatalog.find(maxLevelReached)?.name ?: "第 $maxLevelReached 关",
+                layout = layout,
+                modifier = Modifier
+                    .weight(layout.featuredWeight)
+                    .fillMaxHeight(),
+                onClick = { onSelectMode(PacMazePlayMode.SOLO) },
+            )
+
+            Column(
+                modifier = Modifier
+                    .weight(layout.secondaryColumnWeight)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(layout.gap),
+            ) {
+                PacMazeSecondaryModeCard(
+                    mode = PacMazePlayMode.ENDLESS,
+                    statLine = when {
+                        maxLevelReached >= PacMazeLevelCatalog.TOTAL_LEVELS ->
+                            "熔炉无尽 · 最佳 $endlessBestScore"
+                        endlessBestScore > 0 ->
+                            "最佳 $endlessBestScore · W$endlessBestWave"
+                        else -> "W1–7 基础 · 通关 L23 解锁"
+                    },
+                    layout = layout,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onSelectMode(PacMazePlayMode.ENDLESS) },
+                )
+                PacMazeSecondaryModeCard(
+                    mode = PacMazePlayMode.MAZE,
+                    statLine = "最佳 ${pacMazeFormatBestTime(mazeBestTimeMs)}",
+                    layout = layout,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onSelectMode(PacMazePlayMode.MAZE) },
                 )
             }
         }
 
-        Spacer(Modifier.weight(1f))
-
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .heightIn(min = onlineRowMin),
+            horizontalArrangement = Arrangement.spacedBy(layout.gap),
         ) {
-            PacMazeStatPill(
-                label = "最高得分",
-                value = highScore.toString(),
-                valueColor = PacMazePalette.accentGold,
+            PacMazeSecondaryModeCard(
+                mode = PacMazePlayMode.ONLINE_VERSUS,
+                statLine = "邀请好友 · 大厅内开房",
+                layout = layout,
                 modifier = Modifier.weight(1f),
+                onClick = { onSelectMode(PacMazePlayMode.ONLINE_VERSUS) },
             )
-            PacMazeStatPill(
-                label = "闯关进度",
-                value = "$maxLevelReached / $totalLevels",
+            PacMazeSecondaryModeCard(
+                mode = PacMazePlayMode.ONLINE_COOP,
+                statLine = "合作 L1–L8 · 大厅内开房",
+                layout = layout,
                 modifier = Modifier.weight(1f),
+                onClick = { onSelectMode(PacMazePlayMode.ONLINE_COOP) },
             )
         }
     }
 }
 
 @Composable
-fun PacMazeModeHero(highScore: Int, maxLevelReached: Int) {
+private fun PacMazeModeSelectScrollLayout(
+    layout: PacMazeHubLayoutSpec,
+    maxLevelReached: Int,
+    totalLevels: Int,
+    endlessBestScore: Int,
+    endlessBestWave: Int,
+    mazeBestTimeMs: Long,
+    onSelectMode: (PacMazePlayMode) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(layout.gap),
+    ) {
+        PacMazeFeaturedModeCard(
+            mode = PacMazePlayMode.SOLO,
+            statLine = "进度 $maxLevelReached / $totalLevels",
+            footnote = PacMazeLevelCatalog.find(maxLevelReached)?.name ?: "第 $maxLevelReached 关",
+            layout = layout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = layout.dp(88.dp)),
+            onClick = { onSelectMode(PacMazePlayMode.SOLO) },
+        )
+        PacMazeSecondaryModeCard(
+            mode = PacMazePlayMode.ENDLESS,
+            statLine = when {
+                endlessBestScore > 0 -> "最佳 $endlessBestScore · W$endlessBestWave"
+                else -> "W1–7 基础 · 通关 L23 解锁熔炉"
+            },
+            layout = layout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = layout.dp(56.dp)),
+            onClick = { onSelectMode(PacMazePlayMode.ENDLESS) },
+        )
+        PacMazeSecondaryModeCard(
+            mode = PacMazePlayMode.MAZE,
+            statLine = "最佳 ${pacMazeFormatBestTime(mazeBestTimeMs)}",
+            layout = layout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = layout.dp(56.dp)),
+            onClick = { onSelectMode(PacMazePlayMode.MAZE) },
+        )
+        PacMazeSecondaryModeCard(
+            mode = PacMazePlayMode.ONLINE_VERSUS,
+            statLine = "邀请好友 · 大厅内开房",
+            layout = layout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = layout.dp(56.dp)),
+            onClick = { onSelectMode(PacMazePlayMode.ONLINE_VERSUS) },
+        )
+        PacMazeSecondaryModeCard(
+            mode = PacMazePlayMode.ONLINE_COOP,
+            statLine = "合作 L1–L8 · 大厅内开房",
+            layout = layout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = layout.dp(56.dp)),
+            onClick = { onSelectMode(PacMazePlayMode.ONLINE_COOP) },
+        )
+    }
+}
+
+@Composable
+fun PacMazeModeHero(
+    continueLevelId: Int,
+    onContinueCampaign: () -> Unit,
+) {
+    val layout = currentPacMazeHubLayout()
+    val levelMeta = PacMazeLevelCatalog.find(continueLevelId)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(layout.gap),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = layout.dp(4.dp)),
     ) {
-        Spacer(Modifier.weight(0.15f))
-        PacMazeHeroBadge(modifier = Modifier.size(100.dp))
+        PacMazeHeroBadge(modifier = Modifier.size(layout.heroBadgeSize))
         Text(
             "豆人迷宫",
             color = PacMazePalette.accentGold,
-            fontSize = 30.sp,
+            fontSize = layout.titleSp,
             fontWeight = FontWeight.Black,
+            maxLines = 1,
         )
         Text(
-            "街机风迷宫吃豆",
+            "街机风 · 横屏吃豆",
             color = PacMazePalette.inkSecondary,
-            fontSize = 14.sp,
+            fontSize = layout.subtitleSp,
+            maxLines = 1,
         )
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1A2236))
-                .border(1.dp, PacMazePalette.accentGold.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                .padding(16.dp),
+                .clip(RoundedCornerShape(layout.dp(14.dp)))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF2A3550), Color(0xFF1A2236)),
+                    ),
+                )
+                .border(1.5.dp, PacMazePalette.accentOrange.copy(alpha = 0.45f), RoundedCornerShape(layout.dp(14.dp)))
+                .padding(horizontal = layout.dp(10.dp), vertical = layout.dp(10.dp)),
+            verticalArrangement = Arrangement.spacedBy(layout.dp(6.dp)),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("历史最高", color = PacMazePalette.inkMuted, fontSize = 12.sp)
             Text(
-                highScore.toString(),
-                color = PacMazePalette.accentGold,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
+                "快速继续",
+                color = PacMazePalette.inkMuted,
+                fontSize = layout.captionSp,
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "已解锁 $maxLevelReached 关",
+                levelMeta?.let { "L${it.id} · ${it.name}" } ?: "L$continueLevelId",
                 color = PacMazePalette.inkPrimary,
-                fontSize = 13.sp,
+                fontSize = layout.bodySp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = (layout.bodySp.value * 1.2f).sp,
+            )
+            PacMazePrimaryButton(
+                text = "继续第 $continueLevelId 关",
+                onClick = onContinueCampaign,
+                compact = true,
             )
         }
-        Spacer(Modifier.weight(1f))
+
+        if (!layout.isVeryCompactHeight) {
+            Text(
+                "下方可选对决 / 合作联机",
+                color = PacMazePalette.inkHint,
+                fontSize = layout.captionSp,
+                maxLines = 1,
+            )
+        }
     }
 }
 
 @Composable
 private fun PacMazeFeaturedModeCard(
     mode: PacMazePlayMode,
+    statLine: String,
+    footnote: String,
+    layout: PacMazeHubLayoutSpec,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val accent = PacMazePalette.accentOrange
+    val shape = RoundedCornerShape(layout.cardRadius)
+    val emojiSp = (if (layout.isCompactHeight) 22f else 28f) * layout.scale
+    val titleSp = (if (layout.isCompactHeight) 15f else 17f) * layout.scale
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(132.dp)
+        modifier = modifier
             .clip(shape)
-            .background(PacMazePalette.ctaGradient)
-            .border(2.dp, Color.White.copy(alpha = 0.28f), shape)
-            .clickable(onClick = onClick)
-            .padding(18.dp),
+            .background(
+                Brush.verticalGradient(
+                    listOf(accent.copy(alpha = 0.24f), Color(0xFF1A2236)),
+                ),
+            )
+            .border(1.5.dp, accent.copy(alpha = 0.55f), shape)
+            .pacMazeClickable(sound = PacMazeUiSoundId.ModeFeatured, onClick = onClick)
+            .padding(layout.cardPad),
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(layout.gap),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(layout.dp(4.dp)),
             ) {
-                Text(mode.emoji, fontSize = 40.sp)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ModeAccentBar(accent = accent, height = layout.dp(3.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(layout.dp(6.dp)),
+                ) {
+                    Text(mode.emoji, fontSize = emojiSp.sp)
                     Text(
                         mode.title,
                         color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        mode.subtitle,
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 13.sp,
-                    )
-                    Text(
-                        "点击开始闯关",
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 11.sp,
+                        fontSize = titleSp.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
+                Text(
+                    mode.subtitle,
+                    color = PacMazePalette.inkSecondary,
+                    fontSize = layout.captionSp,
+                    maxLines = if (layout.isCompactHeight) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = (layout.captionSp.value * 1.15f).sp,
+                )
             }
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.25f)),
-                contentAlignment = Alignment.Center,
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(layout.dp(4.dp)),
             ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                Box(
+                    modifier = Modifier
+                        .size(layout.playIconLarge)
+                        .clip(CircleShape)
+                        .background(PacMazePalette.ctaGradient),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(layout.playIconLarge * 0.58f),
+                    )
+                }
+                Text(
+                    statLine,
+                    color = PacMazePalette.accentGold,
+                    fontSize = layout.captionSp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                Text(
+                    footnote,
+                    color = PacMazePalette.inkMuted,
+                    fontSize = layout.captionSp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PacMazeCompactModeCard(
+private fun PacMazeSecondaryModeCard(
     mode: PacMazePlayMode,
+    statLine: String,
+    layout: PacMazeHubLayoutSpec,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(14.dp)
-    val playable = true
+    val accent = when (mode) {
+        PacMazePlayMode.ENDLESS -> PacMazePalette.modeEndless
+        PacMazePlayMode.MAZE -> PacMazePalette.modeMaze
+        PacMazePlayMode.ONLINE_VERSUS -> PacMazePalette.accentOrange
+        PacMazePlayMode.ONLINE_COOP -> PacMazePalette.accentMint
+        else -> PacMazePalette.accentMint
+    }
+    val shape = RoundedCornerShape(layout.dp(14.dp))
+    val emojiSp = (if (layout.isCompactHeight) 15f else 18f) * layout.scale
+    val titleSp = (if (layout.isCompactHeight) 12f else 13f) * layout.scale
+    val iconSize = if (layout.isCompactHeight) layout.dp(26.dp) else layout.playIconSmall
+    val vPad = if (layout.isCompactHeight) layout.dp(6.dp) else layout.dp(8.dp)
     Box(
         modifier = modifier
-            .height(96.dp)
             .clip(shape)
             .background(
-                if (playable) {
-                    Brush.linearGradient(listOf(Color(0xFF243047), Color(0xFF1A2236)))
-                } else {
-                    Brush.linearGradient(listOf(Color(0xFF1E2638), Color(0xFF171D2C)))
-                },
+                Brush.verticalGradient(
+                    listOf(accent.copy(alpha = 0.18f), Color(0xFF1A2236)),
+                ),
             )
-            .border(
-                width = if (playable) 1.5.dp else 1.dp,
-                color = if (playable) PacMazePalette.accentMint.copy(alpha = 0.45f) else PacMazePalette.cardBorder,
-                shape = shape,
-            )
-            .clickable(onClick = onClick)
-            .padding(10.dp),
+            .border(1.5.dp, accent.copy(alpha = 0.5f), shape)
+            .pacMazeClickable(sound = PacMazeUiSoundId.ModeOption, onClick = onClick)
+            .padding(horizontal = layout.dp(10.dp), vertical = vPad),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(mode.emoji, fontSize = 22.sp)
-            Column {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = layout.dp(4.dp)),
+                verticalArrangement = Arrangement.spacedBy(layout.dp(2.dp)),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(layout.dp(5.dp)),
+                ) {
+                    Text(mode.emoji, fontSize = emojiSp.sp)
+                    Text(
+                        mode.title,
+                        color = PacMazePalette.inkPrimary,
+                        fontSize = titleSp.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (layout.tier != PacMazeHubLayoutTier.Compact) {
+                    Text(
+                        mode.subtitle,
+                        color = PacMazePalette.inkSecondary,
+                        fontSize = layout.captionSp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = (layout.captionSp.value * 1.1f).sp,
+                    )
+                }
                 Text(
-                    mode.title,
-                    color = if (playable) PacMazePalette.inkPrimary else PacMazePalette.inkHint,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
+                    statLine,
+                    color = accent,
+                    fontSize = layout.captionSp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = (layout.captionSp.value * 1.15f).sp,
                 )
-                Text(
-                    if (playable) "点击开始" else "即将上线",
-                    color = if (playable) PacMazePalette.accentMint else PacMazePalette.inkHint.copy(alpha = 0.7f),
-                    fontSize = 10.sp,
+            }
+            Box(
+                modifier = Modifier
+                    .size(iconSize)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.32f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(iconSize * 0.56f),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun ModeAccentBar(
+    accent: Color,
+    height: androidx.compose.ui.unit.Dp,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(0.36f)
+            .height(height)
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(accent, accent.copy(alpha = 0.35f)),
+                ),
+            ),
+    )
 }

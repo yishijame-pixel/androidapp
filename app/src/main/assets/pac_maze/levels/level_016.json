@@ -1,0 +1,205 @@
+{
+  "id": 16,
+  "name": "花园-机关园林",
+  "width": 25,
+  "height": 21,
+  "grid": [
+    "bbbbbbbbbbbbbbbbbbbbbbbbb",
+    "b*.....................*b",
+    "b.bbbbbbbbb...bbbbbbbbb.b",
+    "b.bbbbbbbbb...bbbbbbbbb.b",
+    "b.bbbbbbb.......bbbbbbb.b",
+    "b.bbbbb...........bbbbb.b",
+    "b.bbbb.b...........bbbb.b",
+    "b.bbb...............bbb.b",
+    "b.bb..............b..bb.b",
+    "b.bb.....bbbHbbb.....bb.b",
+    "b=bb.....b.I@..b.....bb=b",
+    "b.bb.....b.....b.....bb.b",
+    "b.bb.....bb...bb.....bb.b",
+    "b.bbb...........b...bbb.b",
+    "b.bbbb.............bbbb.b",
+    "b.bbbbb...........bbbbb.b",
+    "b.bbbbbbb.......bbbbbbb.b",
+    "b.bbbbbbbbbb.bbbbbbbbbb.b",
+    "b.bbbbbbbb.....bbbbbbbb.b",
+    "b*.....................*b",
+    "bbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "spawn": {
+    "pac": [
+      12,
+      18
+    ],
+    "ghosts": [
+      [
+        10,
+        4
+      ],
+      [
+        11,
+        4
+      ],
+      [
+        12,
+        4
+      ],
+      [
+        13,
+        4
+      ]
+    ]
+  },
+  "markers": [
+    {
+      "type": "start",
+      "x": 12,
+      "y": 18
+    },
+    {
+      "type": "checkpoint",
+      "x": 8,
+      "y": 10,
+      "label": "西闸",
+      "tag": "L16-W"
+    },
+    {
+      "type": "checkpoint",
+      "x": 16,
+      "y": 10,
+      "label": "东闸",
+      "tag": "L16-E"
+    },
+    {
+      "type": "checkpoint",
+      "x": 12,
+      "y": 10,
+      "label": "核心",
+      "tag": "L16-CORE"
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 10,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 23,
+      "y": 10,
+      "label": "002",
+      "tag": "LINK"
+    }
+  ],
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 9,
+      "x1": 4,
+      "x2": 20,
+      "id": "l16_h_main"
+    },
+    {
+      "type": "laser_v",
+      "x": 12,
+      "y1": 4,
+      "y2": 16,
+      "id": "l16_v_main"
+    },
+    {
+      "type": "laser_h",
+      "y": 12,
+      "x1": 6,
+      "x2": 18,
+      "id": "l16_h_sub"
+    },
+    {
+      "type": "laser_v",
+      "x": 7,
+      "y1": 5,
+      "y2": 15,
+      "id": "l16_v_west"
+    },
+    {
+      "type": "laser_v",
+      "x": 17,
+      "y1": 5,
+      "y2": 15,
+      "id": "l16_v_east"
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 0.95,
+    "ai_aggression": 0.93
+  },
+  "itemSpawners": [
+    {
+      "id": "factory_16_00",
+      "x": 8,
+      "y": 10,
+      "intervalTicks": 480,
+      "pool": [
+        "frost",
+        "charge",
+        "double"
+      ]
+    },
+    {
+      "id": "factory_16_01",
+      "x": 16,
+      "y": 10,
+      "intervalTicks": 480,
+      "pool": [
+        "magnet",
+        "shield",
+        "charge"
+      ]
+    },
+    {
+      "id": "factory_16_02",
+      "x": 8,
+      "y": 8,
+      "intervalTicks": 480,
+      "pool": [
+        "speed",
+        "double",
+        "frost"
+      ]
+    },
+    {
+      "id": "factory_16_03",
+      "x": 16,
+      "y": 12,
+      "intervalTicks": 480,
+      "pool": [
+        "shield",
+        "charge",
+        "magnet"
+      ]
+    },
+    {
+      "id": "factory_16_04",
+      "x": 1,
+      "y": 10,
+      "intervalTicks": 480,
+      "pool": [
+        "frost",
+        "double",
+        "speed",
+        "charge"
+      ]
+    }
+  ],
+  "starCriteria": {
+    "twoStarMinScore": 3320,
+    "threeStarMinScore": 4120,
+    "threeStarMaxSeconds": 228,
+    "threeStarNoDeath": true,
+    "threeStarRequiredTags": [
+      "L16-W",
+      "L16-E",
+      "L16-CORE"
+    ]
+  }
+}

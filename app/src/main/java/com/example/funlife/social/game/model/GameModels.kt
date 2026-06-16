@@ -59,6 +59,9 @@ data class LocalGameRoomDraft(
     val createdAtMs: Long,
     /** PocketBase `updated`；同一房间再次邀请时递增，用于重新推送通知 */
     val updatedAtMs: Long = 0L,
+    val hostReady: Boolean = true,
+    val guestReady: Boolean = false,
+    val pacMaze: PacMazePlayState? = null,
 ) {
     val joinedMembers: List<LobbyMember>
         get() = members.filter { it.status == LobbyMemberStatus.JOINED }
@@ -91,7 +94,8 @@ data class LocalGameRoomDraft(
 
     val canStartGame: Boolean
         get() = joinedCount >= minPlayers &&
-            status in setOf(GameRoomStatus.WAITING, GameRoomStatus.ACCEPTED)
+            status in setOf(GameRoomStatus.WAITING, GameRoomStatus.ACCEPTED) &&
+            (gameId != "pac_maze" || (hostReady && guestReady && pacMaze?.bothReady() != false))
 }
 
 data class MyGameItemUi(

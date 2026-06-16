@@ -44,6 +44,18 @@ if ($Tunnel) {
 
 $args = @("compose")
 foreach ($p in $profiles) { $args += @("--profile", $p) }
+
+if ($Build) {
+    $distBin = "..\pac-maze-server\build\install\pac-maze-server\bin\pac-maze-server"
+    if (-not (Test-Path $distBin)) {
+        Write-Host "Gradle :pac-maze-server:installDist ..." -ForegroundColor Cyan
+        Push-Location (Split-Path $pbDir -Parent)
+        & .\gradlew.bat :pac-maze-server:installDist --no-daemon -q
+        if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
+        Pop-Location
+    }
+}
+
 if ($Build) { $args += "build" }
 $args += @("up", "-d")
 
@@ -55,7 +67,8 @@ Start-Sleep -Seconds 3
 Write-Host ""
 Write-Host "健康检查:" -ForegroundColor Green
 try { Invoke-RestMethod "http://127.0.0.1:8090/api/health" -TimeoutSec 5 | Out-Null; Write-Host "  PocketBase :8090 OK" -ForegroundColor Green } catch { Write-Host "  PocketBase :8090 未就绪" -ForegroundColor Yellow }
-try { Invoke-RestMethod "http://127.0.0.1:8790/health" -TimeoutSec 5 | Out-Null; Write-Host "  draw_ws    :8790 OK" -ForegroundColor Green } catch { Write-Host "  draw_ws    :8790 未就绪" -ForegroundColor Yellow }
+try { Invoke-RestMethod "http://127.0.0.1:8790/health" -TimeoutSec 5 | Out-Null; Write-Host "  draw_ws     :8790 OK" -ForegroundColor Green } catch { Write-Host "  draw_ws     :8790 未就绪" -ForegroundColor Yellow }
+try { Invoke-RestMethod "http://127.0.0.1:8791/health" -TimeoutSec 5 | Out-Null; Write-Host "  pac-maze-ws :8791 OK" -ForegroundColor Green } catch { Write-Host "  pac-maze-ws :8791 未就绪" -ForegroundColor Yellow }
 
 if ($Logs) {
     $logArgs = @("compose")

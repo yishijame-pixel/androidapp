@@ -15,39 +15,69 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.example.funlife.social.game.engine.pacmaze.Direction
+import com.example.funlife.social.game.engine.pacmaze.GhostKind
 import com.example.funlife.social.game.engine.pacmaze.GhostMode
-import com.example.funlife.social.game.engine.pacmaze.PacMazeConstants
+import com.example.funlife.social.game.engine.pacmaze.GhostSpecialty
 import com.example.funlife.social.game.engine.pacmaze.PacMazeEntity
+import com.example.funlife.social.game.engine.pacmaze.ghostReleaseHintEntityId
+import com.example.funlife.social.game.engine.pacmaze.ghostReleaseSecondsCeil
+import com.example.funlife.social.game.engine.pacmaze.isPlayerPac
 import com.example.funlife.social.game.engine.pacmaze.PacMazeWorldState
 import com.example.funlife.ui.screens.pacmaze.PacMazePalette
-import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterDraw
+import com.example.funlife.ui.screens.pacmaze.components.PacMazeEntityComfortScale
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeCosmeticCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazePlayerCosmeticDraw
+import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinBitmapDraw
+import com.example.funlife.ui.screens.pacmaze.pacMazeGhostAccent
+import kotlin.math.min
 import kotlin.math.sin
 
 internal object PacMazeEntityDraw {
 
     fun drawEntities(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
-        val cell = ctx.cell
+        val cell = ctx.entityCell
         val animPhase = ctx.animPhase
         val palette = ctx.config.palette
 
         world.entities.filter { it.role == "ghost" }.forEach { entity ->
             val center = ctx.entityCenter(entity)
-            val radius = cell * 0.34f
+            val radius = PacMazeEntityComfortScale.resolveGhostRadius(
+                entityCell = cell,
+                boost = ctx.entityDrawBoost,
+                minRadiusPx = ctx.minGhostRadiusPx,
+            )
             val idx = entity.id.removePrefix("ghost_").toIntOrNull() ?: 0
+            val baseColor = palette.ghostColors[idx % palette.ghostColors.size]
+            val frozen = world.frostTicksLeft > 0 && entity.ghostMode != GhostMode.EATEN
+            val frostRatio = if (frozen) {
+                (world.frostTicksLeft.toFloat() / com.example.funlife.social.game.engine.pacmaze.PacMazeItemConstants.FROST_DURATION_TICKS)
+                    .coerceIn(0.35f, 1f)
+            } else {
+                0f
+            }
             scope.drawGhost(
                 center = center,
                 radius = radius,
-                baseColor = palette.ghostColors[idx % palette.ghostColors.size],
+                corridorCellPx = cell,
+                baseColor = baseColor,
+                kind = entity.ghostKind,
+                specialty = entity.ghostSpecialty,
                 mode = entity.ghostMode,
                 direction = entity.direction ?: entity.facing,
                 animPhase = animPhase + idx,
+                ghostsFrozen = frozen,
+                frostRatio = frostRatio,
+                hitStunTicksLeft = entity.hitStunTicksLeft,
+                powerTicksLeft = world.powerTicksLeft,
+                burstActive = entity.opportunistBurstTicksLeft > 0,
+                moving = entity.velX != 0f || entity.velY != 0f,
             )
         }
 
         world.projectiles.forEach { projectile ->
-            val center = ctx.gridToScreen(projectile.x, projectile.y)
-            val radius = cell * 0.14f
+            val center = ctx.projectileCenter(projectile)
+            val radius = cell * 0.14f * ctx.entityDrawBoost
             scope.drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(palette.powerCore, palette.powerGlow, Color.Transparent),
@@ -60,39 +90,66 @@ internal object PacMazeEntityDraw {
             scope.drawCircle(color = Color.White, radius = radius, center = center)
         }
 
-        val pacEntity = world.entities.firstOrNull { it.role == "pac" }
-        val showPlayerHint = world.ghostReleaseTicksLeft > 0
-        pacEntity?.let { entity ->
-            val center = ctx.entityCenter(entity)
-            val radius = cell * 0.44f * ctx.playerDrawScale.coerceIn(0.5f, 1.5f)
-            val pulse = 0.45f + 0.35f * sin(animPhase * 2.2f)
-            scope.drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        palette.frameAccent.themeAlpha(0.4f * pulse),
-                        Color.Transparent,
-                    ),
+        drawPlayerPacs(scope, ctx)
+    }
+
+    /** 绘制所有玩家豆（pac / pac_a / pac_b）；在线对战共用。 */
+    fun drawPlayerPacs(scope: DrawScope, ctx: PacMazeMapRenderContext) {
+        val world = ctx.world
+        val cell = ctx.entityCell
+        val animPhase = ctx.animPhase
+        val palette = ctx.config.palette
+        val pacEntities = world.entities.filter { it.isPlayerPac() }
+        if (pacEntities.isEmpty()) return
+        val hintEntityId = world.ghostReleaseHintEntityId(ctx.onlineLocalEntityId)
+        var trailDrawn = false
+        pacEntities.forEach { entity ->
+            val skinId = ctx.avatarLoadout.skinId
+            val center = ctx.playerDrawCenter(entity, skinId)
+            val visualCell = min(ctx.cellX, ctx.cellY)
+            val radius = PacMazeCosmeticCatalog.visualRadius(
+                cell = visualCell,
+                loadout = ctx.avatarLoadout,
+                userDrawScale = ctx.playerDrawScale,
+                entityDrawBoost = ctx.entityDrawBoost,
+                minRadiusPx = ctx.minPlayerRadiusPx,
+            ).coerceAtLeast(ctx.minPlayerRadiusPx)
+            val markerCenter = center
+            val isLocal = ctx.onlineLocalEntityId.isNotBlank() && entity.id == ctx.onlineLocalEntityId
+            val showReleaseHint = hintEntityId != null && entity.id == hintEntityId
+            if (showReleaseHint) {
+                scope.drawGhostReleaseSafeRing(
+                    center = markerCenter,
+                    radius = radius,
+                    animPhase = animPhase,
+                )
+            }
+            if (pacEntities.size > 1) {
+                val roleTint = when {
+                    isLocal -> PacMazePalette.accentMint
+                    entity.role == "pac_b" -> PacMazePalette.accentOrange
+                    entity.role == "pac_a" -> PacMazePalette.accentMint
+                    else -> palette.frameAccent
+                }
+                scope.drawCircle(
+                    color = roleTint.copy(alpha = 0.6f),
+                    radius = radius * 1.12f,
                     center = center,
-                    radius = radius * 1.35f,
-                ),
-                radius = radius * 1.35f,
-                center = center,
-            )
-            val pose = PacMazeCharacterDraw.poseFrom(entity, animPhase, world.powerTicksLeft)
-            PacMazeCharacterDraw.draw(
-                scope = scope,
-                characterId = ctx.playerCharacterId,
-                center = center,
-                radius = radius,
-                pose = pose,
-                themeId = ctx.config.id,
-            )
-            if (showPlayerHint) {
-                scope.drawPlayerMarker(
-                    center = Offset(center.x, center.y - radius * 1.2f),
+                    style = Stroke(width = (radius * 0.07f).coerceIn(2f, 4.5f)),
+                )
+            }
+            if (!trailDrawn && (isLocal || ctx.onlineLocalEntityId.isBlank())) {
+                PacMazePlayerCosmeticDraw.drawTrail(scope, ctx)
+                trailDrawn = true
+            }
+            PacMazePlayerCosmeticDraw.drawSkinSafe(scope, ctx, entity, center)
+            if (showReleaseHint) {
+                scope.drawPlayerReleaseMarker(
+                    playerCenter = markerCenter,
+                    radius = radius,
                     cell = cell,
-                    secondsLeft = (world.ghostReleaseTicksLeft / PacMazeConstants.TICKS_PER_SECOND.toFloat())
-                        .coerceAtLeast(0f),
+                    secondsLeft = world.ghostReleaseSecondsCeil(),
+                    animPhase = animPhase,
                 )
             }
         }
@@ -111,86 +168,205 @@ internal object PacMazeEntityDraw {
     private fun DrawScope.drawGhost(
         center: Offset,
         radius: Float,
+        corridorCellPx: Float,
         baseColor: Color,
+        kind: GhostKind,
+        specialty: GhostSpecialty,
         mode: GhostMode,
         direction: Direction?,
         animPhase: Float,
+        ghostsFrozen: Boolean = false,
+        frostRatio: Float = 0f,
+        hitStunTicksLeft: Int = 0,
+        powerTicksLeft: Int = 0,
+        burstActive: Boolean = false,
+        moving: Boolean = true,
     ) {
-        val bodyColor = when (mode) {
-            GhostMode.FRIGHTENED -> Color(0xFF3F51B5)
-            GhostMode.EATEN -> Color(0xFFB0BEC5).copy(alpha = 0.65f)
-            else -> baseColor
-        }
-        val wobble = sin(animPhase * 2.5f) * radius * 0.04f
+        val kindAccent = pacMazeGhostAccent(kind)
+        val bodyColor = PacMazeGhostVisualEffects.resolveBodyColor(
+            baseTint = baseColor,
+            mode = mode,
+            powerTicksLeft = powerTicksLeft,
+            hitStunTicksLeft = hitStunTicksLeft,
+            ghostsFrozen = ghostsFrozen,
+            kindAccent = kindAccent,
+        ).let { if (burstActive) it.copy(alpha = 1f) else it }
+        val wobbleScale = if (moving && !ghostsFrozen && hitStunTicksLeft <= 0) 0.012f else 0f
+        val wobble = sin(animPhase * 1.4f) * radius * wobbleScale
         val top = center.y - radius + wobble
-        val left = center.x - radius
-        val width = radius * 2f
-        val height = radius * 2.1f
-        val bodyPath = Path().apply {
-            moveTo(left, top + radius)
-            arcTo(
-                rect = Rect(left, top, left + width, top + radius * 2f),
-                startAngleDegrees = 180f,
-                sweepAngleDegrees = 180f,
-                forceMoveTo = false,
-            )
-            val waveH = radius * 0.22f
-            val seg = width / 3f
-            cubicTo(left + seg * 0.5f, top + height, left + seg * 0.5f, top + height - waveH, left + seg, top + height)
-            cubicTo(left + seg * 1.5f, top + height + waveH * 0.5f, left + seg * 2f, top + height - waveH, left + width, top + height)
-            close()
-        }
-        drawPath(
-            bodyPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(bodyColor.copy(alpha = 0.95f), bodyColor.copy(alpha = 0.75f)),
-                startY = top,
-                endY = top + height,
-            ),
-        )
-        if (mode != GhostMode.EATEN) {
-            val eyeOffsetX = when (direction) {
-                Direction.LEFT -> -radius * 0.08f
-                Direction.RIGHT -> radius * 0.08f
-                else -> 0f
+        val stunActive = hitStunTicksLeft > 0 && mode != GhostMode.EATEN
+
+        PacMazeSkinBitmapDraw.clipCorridor(this, center, corridorCellPx) {
+            if (mode != GhostMode.EATEN) {
+                if (stunActive) {
+                    PacMazeGhostVisualEffects.drawHitStunAccent(
+                        this, center, radius, kindAccent, hitStunTicksLeft, animPhase,
+                    )
+                }
+                PacMazeGhostShapeDraw.drawBody(
+                    scope = this,
+                    center = center,
+                    radius = radius,
+                    kind = kind,
+                    bodyColor = bodyColor,
+                    animPhase = animPhase,
+                    wobble = wobble,
+                )
+                if (stunActive) {
+                    PacMazeGhostShapeDraw.drawBodyOutline(
+                        scope = this,
+                        center = center,
+                        radius = radius,
+                        kind = kind,
+                        outlineColor = Color.White.copy(alpha = 0.88f),
+                        strokeWidth = radius * 0.07f,
+                        animPhase = animPhase,
+                        wobble = wobble,
+                    )
+                    PacMazeGhostShapeDraw.drawBodyOutline(
+                        scope = this,
+                        center = center,
+                        radius = radius,
+                        kind = kind,
+                        outlineColor = kindAccent.copy(alpha = 0.95f),
+                        strokeWidth = radius * 0.11f,
+                        animPhase = animPhase,
+                        wobble = wobble,
+                    )
+                }
+                PacMazeGhostShapeDraw.drawEyes(
+                    scope = this,
+                    center = center,
+                    radius = radius,
+                    kind = kind,
+                    direction = direction,
+                    frightened = mode == GhostMode.FRIGHTENED,
+                    top = top,
+                    animPhase = animPhase,
+                )
+                PacMazeGhostShapeDraw.drawSpecialtyBadge(
+                    scope = this,
+                    center = center,
+                    radius = radius,
+                    specialty = specialty,
+                    animPhase = animPhase,
+                )
+                if (burstActive) {
+                    drawCircle(
+                        color = Color(0xFFFF9100).copy(alpha = 0.25f + 0.15f * sin(animPhase * 3f)),
+                        radius = radius * 1.15f,
+                        center = center,
+                    )
+                }
+            } else {
+                PacMazeGhostShapeDraw.drawEyes(
+                    scope = this,
+                    center = center,
+                    radius = radius * 0.55f,
+                    kind = kind,
+                    direction = direction,
+                    frightened = false,
+                    top = center.y - radius * 0.3f,
+                )
             }
-            val eyeY = top + radius * 0.55f
-            listOf(-radius * 0.28f, radius * 0.28f).forEach { dx ->
-                val eyeCenter = Offset(center.x + dx + eyeOffsetX, eyeY)
-                drawCircle(color = Color.White, radius = radius * 0.22f, center = eyeCenter)
-                drawCircle(
-                    color = if (mode == GhostMode.FRIGHTENED) Color(0xFFFF5252) else Color(0xFF1565C0),
-                    radius = radius * 0.11f,
-                    center = eyeCenter,
+
+            if (ghostsFrozen) {
+                PacMazeGhostVisualEffects.drawIceEncasement(
+                    this, center, radius, animPhase, frostRatio, FrozenGhostShape.ROUND_GHOST,
+                )
+                PacMazeGhostVisualEffects.drawFrozenFace(
+                    this, center, radius, frostRatio, FrozenGhostShape.ROUND_GHOST,
                 )
             }
         }
+
+        PacMazeGhostVisualEffects.drawStunSparks(this, center, radius, hitStunTicksLeft, animPhase)
     }
 
-    private fun DrawScope.drawPlayerMarker(center: Offset, cell: Float, secondsLeft: Float) {
-        val badgeW = cell * 1.6f
-        val badgeH = cell * 0.5f
-        val left = center.x - badgeW / 2f
-        val top = center.y - badgeH / 2f
+    private fun DrawScope.drawGhostReleaseSafeRing(
+        center: Offset,
+        radius: Float,
+        animPhase: Float,
+    ) {
+        val pulse = 0.92f + 0.08f * sin(animPhase * 4f)
+        drawCircle(
+            color = PacMazePalette.accentMint.copy(alpha = 0.42f + 0.18f * sin(animPhase * 3f)),
+            radius = radius * 1.22f * pulse,
+            center = center,
+            style = Stroke(width = (radius * 0.07f).coerceIn(2f, 5f)),
+        )
+        drawCircle(
+            color = PacMazePalette.accentGold.copy(alpha = 0.22f),
+            radius = radius * 1.08f,
+            center = center,
+            style = Stroke(width = (radius * 0.04f).coerceIn(1.5f, 3f)),
+        )
+    }
+
+    private fun DrawScope.drawPlayerReleaseMarker(
+        playerCenter: Offset,
+        radius: Float,
+        cell: Float,
+        secondsLeft: Int,
+        animPhase: Float,
+    ) {
+        val bob = sin(animPhase * 3.2f) * cell * 0.04f
+        val badgeCenter = Offset(playerCenter.x, playerCenter.y - radius * 1.55f - bob)
+        val badgeW = cell * 1.75f
+        val badgeH = cell * 0.58f
+        val left = badgeCenter.x - badgeW / 2f
+        val top = badgeCenter.y - badgeH / 2f
+
+        drawLine(
+            color = PacMazePalette.accentGold.copy(alpha = 0.55f),
+            start = badgeCenter,
+            end = Offset(playerCenter.x, playerCenter.y - radius * 0.92f),
+            strokeWidth = (cell * 0.05f).coerceIn(1.5f, 3f),
+        )
+
         drawRoundRect(
-            brush = Brush.horizontalGradient(listOf(PacMazePalette.accentOrange, PacMazePalette.accentGold)),
+            brush = Brush.horizontalGradient(
+                listOf(PacMazePalette.accentOrange, PacMazePalette.accentGold),
+            ),
             topLeft = Offset(left, top),
             size = Size(badgeW, badgeH),
             cornerRadius = CornerRadius(badgeH / 2f),
         )
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.28f),
+            topLeft = Offset(left + badgeW * 0.04f, top + badgeH * 0.08f),
+            size = Size(badgeW * 0.92f, badgeH * 0.38f),
+            cornerRadius = CornerRadius(badgeH / 2f),
+        )
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.85f),
+            topLeft = Offset(left - cell * 0.04f, top - cell * 0.04f),
+            size = Size(badgeW + cell * 0.08f, badgeH + cell * 0.08f),
+            cornerRadius = CornerRadius(badgeH / 2f),
+            style = Stroke(width = (cell * 0.05f).coerceIn(1.5f, 2.5f)),
+        )
+
+        val pinR = cell * 0.16f
+        drawCircle(
+            color = PacMazePalette.accentGold,
+            radius = pinR,
+            center = Offset(badgeCenter.x, top - pinR * 0.35f),
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = 0.9f),
+            radius = pinR * 0.55f,
+            center = Offset(badgeCenter.x, top - pinR * 0.35f),
+        )
+
         drawContext.canvas.nativeCanvas.apply {
+            val label = if (secondsLeft > 0) "你 · 安全 ${secondsLeft}s" else "你"
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.White.toArgb()
-                textSize = cell * 0.34f
+                textSize = cell * 0.31f
                 typeface = Typeface.DEFAULT_BOLD
                 textAlign = Paint.Align.CENTER
             }
-            drawText(
-                if (secondsLeft > 0.5f) "你 · ${secondsLeft.toInt()}s" else "你",
-                center.x,
-                center.y + cell * 0.12f,
-                paint,
-            )
+            drawText(label, badgeCenter.x, badgeCenter.y + cell * 0.11f, paint)
         }
     }
 }

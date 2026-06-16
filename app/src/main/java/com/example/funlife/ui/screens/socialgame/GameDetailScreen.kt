@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -50,6 +53,8 @@ fun GameDetailScreen(
     val navigateRoomId by viewModel.navigateToRoomId.collectAsState()
     val busyMessage by viewModel.busyMessage.collectAsState()
     var rulesExpanded by remember { mutableStateOf(false) }
+    var pacSubMode by remember { mutableStateOf("versus_duel") }
+    var pacCoopLevel by remember { mutableStateOf(1) }
 
     LaunchedEffect(navigateRoomId) {
         navigateRoomId?.let { roomId ->
@@ -148,6 +153,33 @@ fun GameDetailScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
+
+                if (entry.gameId == "pac_maze") {
+                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("选择玩法", color = SocialGamePalette.inkPrimary, fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PacModeChip("豆人对决", selected = pacSubMode == "versus_duel") {
+                                    pacSubMode = "versus_duel"
+                                }
+                                PacModeChip("并肩闯关", selected = pacSubMode == "coop_campaign") {
+                                    pacSubMode = "coop_campaign"
+                                }
+                            }
+                            if (pacSubMode == "coop_campaign") {
+                                Text("合作关卡 L1–L8", color = SocialGamePalette.inkMuted, fontSize = 12.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    (1..8).forEach { id ->
+                                        PacModeChip("L$id", selected = pacCoopLevel == id, compact = true) {
+                                            pacCoopLevel = id
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
             }
 
             when {
@@ -176,6 +208,8 @@ fun GameDetailScreen(
                             viewModel.createOpenRoom(
                                 gameId = entry.gameId,
                                 thenInviteGuestPbId = preselectedPeerPbId,
+                                pacSubMode = if (entry.gameId == "pac_maze") pacSubMode else null,
+                                pacLevelId = if (entry.gameId == "pac_maze" && pacSubMode == "coop_campaign") pacCoopLevel else null,
                             )
                         },
                         enabled = busyMessage == null,
@@ -208,11 +242,39 @@ private fun gameRulesText(gameId: String): String = when (gameId) {
     "draw_guess" -> "共 3 轮。每轮一人作画 60 秒，另一人猜词，猜对得分。轮结束后互换角色，总分高者胜。"
     "dice_duel" -> "双方各掷一次骰子，点数大者胜。平局则加赛，最多 3 次。"
     "pac_maze" -> """
-        经典迷宫吃豆玩法，横屏左摇杆控制方向。
+        在线双人豆人迷宫，各用各的手机横屏操控。
         
-        · 闯关 13 关 · 无尽波次 · 程序迷宫
-        · 能量豆可短暂反杀幽灵
-        · 当前为单机试玩，好友联机对战即将上线
+        · 豆人对决：对称竞技场竞速清豆，150 秒一局
+        · 并肩闯关：共享 5 命，合作通过 L1–L8
+        · 开房后邀请好友，双方就绪即可开始
     """.trimIndent()
     else -> "与好友在线对战，享受轻松社交时光。"
+}
+
+@Composable
+private fun PacModeChip(
+    label: String,
+    selected: Boolean,
+    compact: Boolean = false,
+    onClick: () -> Unit,
+) {
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(if (compact) 10.dp else 14.dp),
+        color = if (selected) SocialGamePalette.accentCoral.copy(alpha = 0.18f) else SocialGamePalette.bgElevated,
+        border = BorderStroke(
+            1.dp,
+            if (selected) SocialGamePalette.accentCoral else SocialGamePalette.inkMuted.copy(alpha = 0.35f),
+        ),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(
+                horizontal = if (compact) 8.dp else 14.dp,
+                vertical = if (compact) 6.dp else 10.dp,
+            ),
+            color = if (selected) SocialGamePalette.inkPrimary else SocialGamePalette.inkMuted,
+            fontSize = if (compact) 11.sp else 13.sp,
+        )
+    }
 }

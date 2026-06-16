@@ -2,6 +2,7 @@ package com.example.funlife.ui.screens.pacmaze
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,20 +11,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 
 /**
- * Hub 骨架：顶栏 + 主内容区。
- * - [hero] 非空：左品牌区 + 右操作区（选模式）
- * - [hero] 为空：主内容全宽（选关地图）
+ * Hub 骨架：顶栏 + 主内容区；在 [BoxWithConstraints] 内计算 [PacMazeHubLayoutSpec] 并注入子树。
  */
 @Composable
 fun PacMazeHubScaffold(
@@ -32,6 +34,8 @@ fun PacMazeHubScaffold(
     onBack: () -> Unit,
     hero: (@Composable () -> Unit)? = null,
     topBarTrailing: (@Composable (isWide: Boolean) -> Unit)? = null,
+    showTopBar: Boolean = true,
+    hubBanner: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -53,74 +57,97 @@ fun PacMazeHubScaffold(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .padding(top = 2.dp),
         ) {
-            val isWide = maxWidth > maxHeight * 1.2f
-            val horizontalPad = if (isWide) 20.dp else 14.dp
+            val layout = PacMazeHubLayoutSpec.computeScreen(maxWidth = maxWidth, maxHeight = maxHeight)
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = horizontalPad, vertical = 6.dp),
-            ) {
-                PacMazeArcadeHubTopBar(
-                    title = title,
-                    subtitle = subtitle,
-                    onBack = onBack,
-                    isWide = isWide,
-                    showBadge = hero == null,
-                    trailing = topBarTrailing?.let { trailing -> { trailing(isWide) } },
-                )
-
-                if (hero == null) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .padding(top = 8.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(PacMazePalette.contentPanelGradient)
-                            .border(1.5.dp, PacMazePalette.cardBorderStrong, RoundedCornerShape(20.dp))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            content()
+            CompositionLocalProvider(LocalPacMazeHubLayout provides layout) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = layout.horizontalPad, vertical = layout.dp(2.dp)),
+                ) {
+                    if (showTopBar) {
+                        PacMazeArcadeHubTopBar(
+                            title = title,
+                            subtitle = subtitle,
+                            onBack = onBack,
+                            layout = layout,
+                            showBadge = hero == null,
+                            trailing = topBarTrailing?.let { trailing -> { trailing(layout.isWide) } },
+                        )
+                    }
+                    if (hubBanner != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = if (showTopBar) layout.gap else layout.dp(0.dp)),
+                        ) {
+                            hubBanner()
                         }
                     }
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
+
+                    val contentTopPad = when {
+                        hubBanner != null -> layout.gap
+                        showTopBar -> layout.gap
+                        else -> layout.dp(0.dp)
+                    }
+                    if (hero == null) {
                         Box(
                             modifier = Modifier
-                                .weight(0.32f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(PacMazePalette.heroPanelGradient)
-                                .border(1.5.dp, PacMazePalette.cardBorderStrong, RoundedCornerShape(20.dp))
-                                .padding(12.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            hero()
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(0.68f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(20.dp))
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(top = contentTopPad)
+                                .clip(RoundedCornerShape(layout.panelRadius))
                                 .background(PacMazePalette.contentPanelGradient)
-                                .border(1.5.dp, PacMazePalette.cardBorderStrong, RoundedCornerShape(20.dp))
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .border(1.5.dp, PacMazePalette.cardBorderStrong, RoundedCornerShape(layout.panelRadius))
+                                .padding(layout.panelPad),
                         ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
+                            PacMazeAdaptiveHubPanel {
                                 content()
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(top = contentTopPad),
+                            horizontalArrangement = Arrangement.spacedBy(layout.gap),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(layout.heroWeight)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(layout.panelRadius))
+                                    .background(PacMazePalette.heroPanelGradient)
+                                    .border(1.5.dp, PacMazePalette.cardBorderStrong, RoundedCornerShape(layout.panelRadius))
+                                    .padding(layout.panelPad),
+                            ) {
+                                PacMazeAdaptiveHubPanel {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        hero()
+                                    }
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(layout.contentWeight)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(layout.panelRadius))
+                                    .background(PacMazePalette.contentPanelGradient)
+                                    .border(1.5.dp, PacMazePalette.cardBorderStrong, RoundedCornerShape(layout.panelRadius))
+                                    .padding(layout.panelPad),
+                            ) {
+                                PacMazeAdaptiveHubPanel {
+                                    content()
+                                }
                             }
                         }
                     }

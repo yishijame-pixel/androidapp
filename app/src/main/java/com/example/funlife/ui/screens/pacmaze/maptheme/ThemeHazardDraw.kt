@@ -54,7 +54,7 @@ internal object ThemeHazardDraw {
         }
 
         world.enemyBullets.forEach { bullet ->
-            val center = ctx.gridToScreen(bullet.x, bullet.y)
+            val center = ctx.enemyBulletCenter(bullet)
             drawBullet(scope, center, cell, bullet.direction, p.pelletGlow)
         }
     }
@@ -72,13 +72,13 @@ internal object ThemeHazardDraw {
         lethal: Boolean, warn: Color, lethalColor: Color, phase: Float,
     ) {
         val cell = ctx.cell
-        val y = ctx.offsetY + (row + 0.5f) * cell
-        val x1 = ctx.offsetX + (xStart + 0.5f) * cell
-        val x2 = ctx.offsetX + (xEnd + 0.5f) * cell
+        val y = ctx.offsetY + (row + 0.5f) * ctx.cellY
+        val x1 = ctx.offsetX + (xStart + 0.5f) * ctx.cellX
+        val x2 = ctx.offsetX + (xEnd + 0.5f) * ctx.cellX
         val color = if (lethal) lethalColor else warn
         val alpha = if (lethal) 0.9f else (0.5f + 0.2f * sin(phase * 4f)).coerceIn(0f, 1f)
         scope.drawLine(color.themeAlpha(alpha), Offset(x1, y), Offset(x2, y), strokeWidth = cell * 0.07f)
-        val scanCenter = Offset(ctx.offsetX + scanX * cell, y)
+        val scanCenter = Offset(ctx.offsetX + scanX * ctx.cellX, y)
         val glowR = cell * (if (lethal) 0.22f else 0.14f)
         scope.drawCircle(
             brush = Brush.radialGradient(
@@ -97,13 +97,13 @@ internal object ThemeHazardDraw {
         lethal: Boolean, warn: Color, lethalColor: Color, phase: Float,
     ) {
         val cell = ctx.cell
-        val x = ctx.offsetX + (col + 0.5f) * cell
-        val y1 = ctx.offsetY + (yStart + 0.5f) * cell
-        val y2 = ctx.offsetY + (yEnd + 0.5f) * cell
+        val x = ctx.offsetX + (col + 0.5f) * ctx.cellX
+        val y1 = ctx.offsetY + (yStart + 0.5f) * ctx.cellY
+        val y2 = ctx.offsetY + (yEnd + 0.5f) * ctx.cellY
         val color = if (lethal) lethalColor else warn
         val alpha = if (lethal) 0.9f else (0.5f + 0.2f * sin(phase * 4f)).coerceIn(0f, 1f)
         scope.drawLine(color.themeAlpha(alpha), Offset(x, y1), Offset(x, y2), strokeWidth = cell * 0.07f)
-        val scanCenter = Offset(x, ctx.offsetY + scanY * cell)
+        val scanCenter = Offset(x, ctx.offsetY + scanY * ctx.cellY)
         val glowR = cell * (if (lethal) 0.22f else 0.14f)
         scope.drawCircle(
             brush = Brush.radialGradient(

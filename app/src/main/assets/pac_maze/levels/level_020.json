@@ -1,0 +1,262 @@
+{
+  "id": 20,
+  "name": "花园-移动屏风",
+  "width": 27,
+  "height": 25,
+  "grid": [
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "b*.......................*b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b....b...b.......b...b....b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b.........................b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...H.^.b...b....b",
+    "b=.........&I@>..........=b",
+    "b....b...b.v.G...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b.........................b",
+    "b....b...b...b...b...b....b",
+    "b....b...b...b...b...b....b",
+    "b.........................b",
+    "b....b...b...b...b...b....b",
+    "b....b...b.......b...b....b",
+    "b....b...b.......b...b....b",
+    "b*.......................*b",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "spawn": {
+    "pac": [
+      13,
+      22
+    ],
+    "ghosts": [
+      [
+        11,
+        5
+      ],
+      [
+        12,
+        5
+      ],
+      [
+        13,
+        5
+      ],
+      [
+        14,
+        5
+      ],
+      [
+        15,
+        5
+      ],
+      [
+        16,
+        5
+      ]
+    ]
+  },
+  "markers": [
+    {
+      "type": "start",
+      "x": 13,
+      "y": 22
+    },
+    {
+      "type": "checkpoint",
+      "x": 9,
+      "y": 12,
+      "label": "西闸",
+      "tag": "L20-W"
+    },
+    {
+      "type": "checkpoint",
+      "x": 17,
+      "y": 12,
+      "label": "东闸",
+      "tag": "L20-E"
+    },
+    {
+      "type": "checkpoint",
+      "x": 13,
+      "y": 12,
+      "label": "核心",
+      "tag": "L20-CORE"
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 12,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 25,
+      "y": 12,
+      "label": "002",
+      "tag": "LINK"
+    }
+  ],
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 11,
+      "x1": 4,
+      "x2": 22,
+      "id": "l20_h_main"
+    },
+    {
+      "type": "laser_v",
+      "x": 13,
+      "y1": 4,
+      "y2": 20,
+      "id": "l20_v_main"
+    },
+    {
+      "type": "laser_h",
+      "y": 14,
+      "x1": 6,
+      "x2": 20,
+      "id": "l20_h_sub"
+    },
+    {
+      "type": "laser_v",
+      "x": 8,
+      "y1": 5,
+      "y2": 19,
+      "id": "l20_v_west"
+    },
+    {
+      "type": "laser_v",
+      "x": 18,
+      "y1": 5,
+      "y2": 19,
+      "id": "l20_v_east"
+    },
+    {
+      "type": "laser_h",
+      "y": 8,
+      "x1": 5,
+      "x2": 21,
+      "id": "l20_h_north"
+    },
+    {
+      "type": "laser_h",
+      "y": 16,
+      "x1": 5,
+      "x2": 21,
+      "id": "l20_h_south"
+    },
+    {
+      "type": "laser_v",
+      "x": 6,
+      "y1": 4,
+      "y2": 20,
+      "id": "l20_v_far_w"
+    },
+    {
+      "type": "laser_v",
+      "x": 20,
+      "y1": 4,
+      "y2": 20,
+      "id": "l20_v_far_e"
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 1.08,
+    "ai_aggression": 1.0
+  },
+  "itemSpawners": [
+    {
+      "id": "factory_20_00",
+      "x": 9,
+      "y": 12,
+      "intervalTicks": 368,
+      "pool": [
+        "frost",
+        "charge",
+        "double",
+        "shield"
+      ]
+    },
+    {
+      "id": "factory_20_01",
+      "x": 17,
+      "y": 12,
+      "intervalTicks": 368,
+      "pool": [
+        "magnet",
+        "shield",
+        "charge",
+        "speed"
+      ]
+    },
+    {
+      "id": "factory_20_02",
+      "x": 9,
+      "y": 10,
+      "intervalTicks": 368,
+      "pool": [
+        "speed",
+        "double",
+        "frost",
+        "magnet"
+      ]
+    },
+    {
+      "id": "factory_20_03",
+      "x": 17,
+      "y": 14,
+      "intervalTicks": 368,
+      "pool": [
+        "shield",
+        "charge",
+        "magnet",
+        "double"
+      ]
+    },
+    {
+      "id": "factory_20_04",
+      "x": 1,
+      "y": 12,
+      "intervalTicks": 368,
+      "pool": [
+        "frost",
+        "double",
+        "speed",
+        "charge"
+      ]
+    },
+    {
+      "id": "factory_20_05",
+      "x": 25,
+      "y": 12,
+      "intervalTicks": 368,
+      "pool": [
+        "magnet",
+        "frost",
+        "shield",
+        "charge",
+        "double"
+      ]
+    }
+  ],
+  "starCriteria": {
+    "twoStarMinScore": 3800,
+    "threeStarMinScore": 4600,
+    "threeStarMaxSeconds": 260,
+    "threeStarNoDeath": true,
+    "threeStarRequiredTags": [
+      "L20-W",
+      "L20-E",
+      "L20-CORE"
+    ]
+  }
+}

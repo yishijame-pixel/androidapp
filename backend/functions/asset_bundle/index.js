@@ -9,8 +9,8 @@ const cloudbase = require("@cloudbase/node-sdk");
 
 const ASSET_ROOT = "yishi-assetss/v1";
 const MANIFEST = {
-  version: 1,
-  updatedAt: "2026-06-10T00:00:00Z",
+  version: 5,
+  updatedAt: "2026-06-15T12:00:00Z",
   bundles: [
     { id: "xiangkuang", file: "xiangkuang.zip", targetDir: "xiangkuang" },
     { id: "pet", file: "pet.zip", targetDir: "pet" },
@@ -18,6 +18,8 @@ const MANIFEST = {
     { id: "renge", file: "renge.zip", targetDir: "renge" },
     { id: "dibu", file: "dibu.zip", targetDir: "dibu" },
     { id: "wheel", file: "wheel.zip", targetDir: "wheel" },
+    { id: "pac_maze_sfx", file: "pac_maze_sfx.zip", targetDir: "pac_maze_sfx" },
+    { id: "pac_maze_skins", file: "pac_maze_skins.zip", targetDir: "pac_maze_skins" },
   ],
 };
 

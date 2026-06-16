@@ -6,90 +6,62 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.example.funlife.social.game.engine.pacmaze.Direction
+import com.example.funlife.social.game.engine.pacmaze.GhostBehaviorArchetype
+import com.example.funlife.social.game.engine.pacmaze.GhostKind
 import com.example.funlife.social.game.engine.pacmaze.GhostMode
+import com.example.funlife.social.game.engine.pacmaze.GhostSpecialty
 import com.example.funlife.social.game.engine.pacmaze.PacMazeConstants
-import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterDraw
-import com.example.funlife.social.game.engine.pacmaze.PacMazeEntity
+import com.example.funlife.social.game.engine.pacmaze.isPlayerPac
+import com.example.funlife.ui.screens.pacmaze.components.PacMazeEntityComfortScale
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazePlayerCosmeticDraw
+import com.example.funlife.ui.screens.pacmaze.pacMazeGhostAccent
 import kotlin.math.cos
 import kotlin.math.sin
 
 internal object CyberEntityDraw {
 
     fun drawEntities(scope: DrawScope, ctx: PacMazeMapRenderContext) {
-        val cell = ctx.cell
-        val offsetX = ctx.offsetX
-        val offsetY = ctx.offsetY
+        val cell = ctx.entityCell
         val ghostColors = ctx.config.palette.ghostColors
-
         ctx.world.entities.filter { it.role == "ghost" }.forEachIndexed { index, entity ->
-            val (ax, ay) = ctx.renderAnchor(entity)
-            val cx = offsetX + (ax + 0.5f) * cell
-            val cy = offsetY + (ay + 0.5f) * cell
+            val center = ctx.entityCenter(entity)
             val tint = ghostColors.getOrElse(index % ghostColors.size) { CyberVisualEffects.NeonPink }
+            val radiusMul = entity.ghostKind.speedMul.coerceIn(0.85f, 1.12f)
             drawCyberGhost(
-                scope,
-                Offset(cx, cy),
-                cell * 0.38f,
-                entity.ghostMode,
-                entity.facing,
-                tint,
-                ctx.animPhase + index * 0.7f,
+                scope = scope,
+                center = center,
+                radius = PacMazeEntityComfortScale.resolveGhostRadius(
+                    entityCell = cell,
+                    boost = ctx.entityDrawBoost,
+                    minRadiusPx = ctx.minGhostRadiusPx,
+                    kindMul = radiusMul,
+                ),
+                mode = entity.ghostMode,
+                facing = entity.facing,
+                tint = tint,
+                animPhase = ctx.animPhase + index * 0.7f,
+                kind = entity.ghostKind,
+                specialty = entity.ghostSpecialty,
+                burstActive = entity.opportunistBurstTicksLeft > 0,
+                hitStunTicksLeft = entity.hitStunTicksLeft,
+                powerTicksLeft = ctx.world.powerTicksLeft,
+                moving = entity.velX != 0f || entity.velY != 0f,
             )
         }
-
         ctx.world.projectiles.forEach { p ->
-            val cx = offsetX + (p.x + 0.5f) * cell
-            val cy = offsetY + (p.y + 0.5f) * cell
+            val center = ctx.projectileCenter(p)
             scope.drawCircle(
                 color = CyberVisualEffects.NeonYellow,
-                radius = cell * 0.1f,
-                center = Offset(cx, cy),
+                radius = cell * 0.1f * ctx.entityDrawBoost,
+                center = center,
             )
         }
-
-        val pac = ctx.world.entities.firstOrNull { it.role == "pac" } ?: return
-        val (ax, ay) = ctx.renderAnchor(pac)
-        val cx = offsetX + (ax + 0.5f) * cell
-        val cy = offsetY + (ay + 0.5f) * cell
-
-        ctx.playerTrail.forEachIndexed { index, point ->
-            val t = (index + 1).toFloat() / (ctx.playerTrail.size.coerceAtLeast(1)).toFloat()
-            val alpha = t * 0.5f
-            val trailSize = cell * 0.24f * t
-            scope.drawRect(
-                color = CyberVisualEffects.NeonRed.copy(alpha = alpha),
-                topLeft = Offset(point.x - trailSize / 2f, point.y - trailSize / 2f),
-                size = Size(trailSize, trailSize),
-            )
-        }
-
-        val radius = cell * 0.44f * ctx.playerDrawScale.coerceIn(0.5f, 1.5f)
-        val pose = PacMazeCharacterDraw.poseFrom(pac, ctx.animPhase, ctx.world.powerTicksLeft)
-        PacMazeCharacterDraw.draw(
-            scope = scope,
-            characterId = ctx.playerCharacterId,
-            center = Offset(cx, cy),
-            radius = radius,
-            pose = pose,
-            themeId = ctx.config.id,
-        )
-
-        if (ctx.world.ghostReleaseTicksLeft > 0) {
-            drawStartBadge(
-                scope,
-                Offset(cx, cy - cell * 0.65f),
-                cell,
-                (ctx.world.ghostReleaseTicksLeft / PacMazeConstants.TICKS_PER_SECOND.toFloat()).coerceAtLeast(0f),
-            )
-        }
+        PacMazeEntityDraw.drawPlayerPacs(scope, ctx)
     }
 
     private fun drawCyberGhost(
@@ -100,24 +72,50 @@ internal object CyberEntityDraw {
         facing: Direction,
         tint: Color,
         animPhase: Float,
+        kind: GhostKind,
+        specialty: GhostSpecialty,
+        burstActive: Boolean,
+        hitStunTicksLeft: Int = 0,
+        powerTicksLeft: Int = 0,
+        moving: Boolean = true,
     ) {
+        val kindAccent = pacMazeGhostAccent(kind)
         val ghostColor = when (mode) {
             GhostMode.FRIGHTENED -> Color(0xFF536DFE)
             GhostMode.EATEN -> Color.Gray.copy(alpha = 0.45f)
-            else -> tint
-        }
-        val spin = sin(animPhase * 1.6f) * 4f
-        val wobble = sin(animPhase * 2.4f) * radius * 0.05f
-        val c = center + Offset(0f, wobble)
-
-        for (layer in 3 downTo 1) {
-            val scale = 1f + layer * 0.22f
-            val alpha = 0.08f * layer
-            drawDiamond(
-                scope, c, radius * scale, ghostColor.copy(alpha = alpha), fill = true, rotation = spin,
+            else -> PacMazeGhostVisualEffects.resolveBodyColor(
+                baseTint = tint,
+                mode = mode,
+                powerTicksLeft = powerTicksLeft,
+                hitStunTicksLeft = hitStunTicksLeft,
+                ghostsFrozen = false,
+                kindAccent = kindAccent,
             )
         }
-
+        val stunActive = hitStunTicksLeft > 0 && mode != GhostMode.EATEN
+        val baseRotation = when (facing) {
+            Direction.RIGHT -> 0f
+            Direction.DOWN -> 90f
+            Direction.LEFT -> 180f
+            Direction.UP -> 270f
+        }
+        val wobbleScale = if (moving && hitStunTicksLeft <= 0) 0.01f else 0f
+        val wobble = sin(animPhase * (if (kind.behaviorArchetype == GhostBehaviorArchetype.OPPORTUNIST) 1.8f else 1.3f)) * radius * wobbleScale
+        val spinJitter = if (moving) sin(animPhase * (if (kind.behaviorArchetype == GhostBehaviorArchetype.PREDICTOR) 1.2f else 0.9f)) * 2f else 0f
+        val spin = baseRotation + spinJitter
+        val c = center + Offset(0f, wobble)
+        if (stunActive) {
+            PacMazeGhostVisualEffects.drawHitStunAccent(
+                scope, c, radius, kindAccent, hitStunTicksLeft, animPhase,
+            )
+        }
+        for (layer in 3 downTo 1) {
+            val scale = 1f + layer * 0.18f
+            val alpha = 0.07f * layer
+            PacMazeGhostCyberDraw.drawBody(
+                scope, c, radius * scale, kind, ghostColor.copy(alpha = alpha), spin,
+            )
+        }
         scope.drawContext.canvas.nativeCanvas.apply {
             val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
@@ -125,17 +123,34 @@ internal object CyberEntityDraw {
                 maskFilter = BlurMaskFilter(20f, BlurMaskFilter.Blur.NORMAL)
             }
             val path = android.graphics.Path()
-            buildDiamondPoints(c, radius * 1.15f, spin, path)
+            buildDiamondPoints(c, radius * 1.12f, spin, path)
             drawPath(path, glow)
         }
-
-        drawDiamond(scope, c, radius, ghostColor, fill = true, rotation = spin)
-        drawDiamond(scope, c, radius * 0.92f, Color.White.copy(alpha = 0.75f), fill = false, stroke = 2f, rotation = spin)
-        drawDiamond(scope, c, radius * 0.48f, Color.White.copy(alpha = 0.55f), fill = true, rotation = spin)
-        drawDiamond(scope, c, radius * 0.22f, ghostColor.copy(alpha = 0.9f), fill = true, rotation = spin)
-
+        PacMazeGhostCyberDraw.drawBody(scope, c, radius, kind, ghostColor, spin)
+        val outlineStroke = if (stunActive) 3.5f else 2f
+        val outlinePath = PacMazeGhostCyberDraw.outlinePath(c, radius * 0.94f, kind, spin)
+        scope.drawPath(outlinePath, Color.White.copy(alpha = if (stunActive) 0.92f else 0.75f), style = Stroke(width = outlineStroke))
+        if (stunActive) {
+            scope.drawPath(
+                PacMazeGhostCyberDraw.outlinePath(c, radius * 1.04f, kind, spin),
+                kindAccent.copy(alpha = 0.95f),
+                style = Stroke(width = radius * 0.09f),
+            )
+        }
+        PacMazeGhostCyberDraw.drawBody(
+            scope, c, radius * 0.42f, kind, Color.White.copy(alpha = 0.45f), spin,
+        )
         if (mode != GhostMode.EATEN) {
             drawGhostEyes(scope, c, radius, facing)
+            PacMazeGhostShapeDraw.drawSpecialtyBadge(scope, c, radius, specialty, animPhase)
+            if (burstActive) {
+                scope.drawCircle(
+                    color = CyberVisualEffects.NeonYellow.copy(alpha = 0.35f),
+                    radius = radius * 1.2f,
+                    center = c,
+                )
+            }
+            PacMazeGhostVisualEffects.drawStunSparks(scope, c, radius, hitStunTicksLeft, animPhase)
         }
     }
 
@@ -156,31 +171,6 @@ internal object CyberEntityDraw {
         scope.drawCircle(color = Color.White, radius = r, center = center + eyeOffset.second)
         scope.drawCircle(color = CyberVisualEffects.NeonBlue, radius = r * 0.55f, center = center + eyeOffset.first)
         scope.drawCircle(color = CyberVisualEffects.NeonBlue, radius = r * 0.55f, center = center + eyeOffset.second)
-    }
-
-    private fun drawDiamond(
-        scope: DrawScope,
-        center: Offset,
-        radius: Float,
-        color: Color,
-        fill: Boolean,
-        rotation: Float = 0f,
-        stroke: Float = 1.5f,
-    ) {
-        scope.rotate(rotation, center) {
-            val path = Path().apply {
-                moveTo(center.x, center.y - radius)
-                lineTo(center.x + radius, center.y)
-                lineTo(center.x, center.y + radius)
-                lineTo(center.x - radius, center.y)
-                close()
-            }
-            if (fill) {
-                drawPath(path, color = color, style = Fill)
-            } else {
-                drawPath(path, color = color, style = Stroke(width = stroke))
-            }
-        }
     }
 
     private fun buildDiamondPoints(center: Offset, radius: Float, rotationDeg: Float, path: android.graphics.Path) {
@@ -224,7 +214,7 @@ internal object CyberEntityDraw {
                 textAlign = Paint.Align.CENTER
                 isFakeBoldText = true
             }
-            val label = if (secondsLeft > 0.5f) "START · ${secondsLeft.toInt()}s" else "START"
+            val label = if (secondsLeft > 0.5f) "START ${secondsLeft.toInt()}s" else "START"
             drawText(label, center.x, center.y + cell * 0.08f, paint)
         }
     }

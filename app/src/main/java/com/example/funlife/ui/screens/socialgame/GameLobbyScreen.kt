@@ -96,12 +96,7 @@ fun GameLobbyScreen(
     LaunchedEffect(room?.status, room?.gameId, roomId) {
         if (room?.status == GameRoomStatus.PLAYING) {
             viewModel.clearStartingGame()
-            val isLocalPacMaze = room.gameId == "pac_maze" || room.gameId == "pac_maze_local"
-            if (isLocalPacMaze) {
-                onNavigateToLocalPacMaze()
-            } else {
-                onStartGame(roomId)
-            }
+            onStartGame(roomId)
         }
     }
     LaunchedEffect(room?.gameId, roomId, pbAuthToken) {
@@ -223,23 +218,28 @@ fun GameLobbyScreen(
 
                     when {
                         guestCanRespond -> {
-                            Spacer(Modifier.height(24.dp))
-                            GameInviteRequestPanel(
-                                invite = room,
-                                pbAuthToken = pbAuthToken,
-                                onAccept = {
-                                    viewModel.acknowledgeIncomingInvite(roomId)
-                                    viewModel.acceptInvite(roomId)
-                                },
-                                onReject = {
-                                    viewModel.exitLobby(
-                                        roomId = roomId,
-                                        action = com.example.funlife.social.game.model.LobbyExitAction.REJECT_INVITE,
-                                        onDone = onNavigateBack,
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                GameInviteRequestPanel(
+                                    invite = room,
+                                    pbAuthToken = pbAuthToken,
+                                    onAccept = {
+                                        viewModel.acknowledgeIncomingInvite(roomId)
+                                        viewModel.acceptInvite(roomId)
+                                    },
+                                    onReject = {
+                                        viewModel.exitLobby(
+                                            roomId = roomId,
+                                            action = com.example.funlife.social.game.model.LobbyExitAction.REJECT_INVITE,
+                                            onDone = onNavigateBack,
+                                        )
+                                    },
+                                )
+                            }
                         }
                         else -> {
                             GameLobbyCompactPanel(
@@ -258,6 +258,19 @@ fun GameLobbyScreen(
                                 onShareRoomCode = { copyRoomShare(context, room.gameTitle, room.roomCode) },
                                 friendProfiles = friendProfiles,
                             )
+
+                            if (room.gameId == "pac_maze") {
+                                Spacer(Modifier.height(8.dp))
+                                com.example.funlife.ui.screens.pacmaze.online.PacMazeLobbyPanel(
+                                    room = room,
+                                    pac = room.pacMaze,
+                                    isHost = isHost,
+                                    myPbId = myPbId,
+                                    onToggleReady = { ready ->
+                                        viewModel.togglePacMazeReady(roomId, ready)
+                                    },
+                                )
+                            }
 
                             if (effectiveInvitePending && isHost && !isStartingGame) {
                                 Spacer(Modifier.height(8.dp))
@@ -300,17 +313,17 @@ fun GameLobbyScreen(
                     when {
                         canStart -> {
                             HubPrimaryButton(
-                                text = if (isStartingGame) {
-                                    "正在进入游戏…"
-                                } else {
-                                    "开始游戏 · $joinedCount/$maxPlayers"
+                                text = when {
+                                    isStartingGame -> "正在进入游戏…"
+                                    room.gameId == "pac_maze" && !room.canStartGame -> "等待双方准备"
+                                    else -> "开始游戏 · $joinedCount/$maxPlayers"
                                 },
                                 onClick = {
                                     if (!isStartingGame) {
                                         viewModel.startGame(roomId) { onStartGame(roomId) }
                                     }
                                 },
-                                enabled = busyMessage == null && !isStartingGame,
+                                enabled = busyMessage == null && !isStartingGame && room.canStartGame,
                                 loading = isStartingGame,
                                 modifier = Modifier.fillMaxWidth(),
                             )

@@ -11,6 +11,10 @@ upstream funlife_draw_ws {
     server 127.0.0.1:8790;
 }
 
+upstream funlife_pac_maze_ws {
+    server 127.0.0.1:8791;
+}
+
 server {
     listen 443 ssl http2;
     server_name pb.yishi.site;
@@ -21,6 +25,20 @@ server {
     # draw_ws WebSocket 热路径
     location /draw-ws/ {
         proxy_pass http://funlife_draw_ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+
+    # Pac-Maze 权威对战 WebSocket
+    location /pac-maze-ws/ {
+        proxy_pass http://funlife_pac_maze_ws/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -48,3 +66,25 @@ server {
     server_name pb.yishi.site;
     return 301 https://$host$request_uri;
 }
+
+# ── 可选：VIP 管理后台（Docker 映射 3300，仅内网 / VPN / IP 白名单）──
+# upstream funlife_vip_admin {
+#     server 127.0.0.1:3300;
+# }
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name admin.yishi.site;
+#     ssl_certificate     /etc/letsencrypt/live/admin.yishi.site/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/admin.yishi.site/privkey.pem;
+#     allow 10.0.0.0/8;
+#     deny all;
+#     location / {
+#         proxy_pass http://funlife_vip_admin;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+# }
+# 容器内设置 ADMIN_COOKIE_SECURE=1

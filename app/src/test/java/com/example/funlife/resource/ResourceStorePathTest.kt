@@ -10,5 +10,6 @@ class ResourceStorePathTest {
         assertThat(ResourceStore.isCloudResource("pet/cat/a.png")).isTrue()
         assertThat(ResourceStore.isCloudResource("login/a.png")).isTrue()
         assertThat(ResourceStore.isCloudResource("pac_maze/levels/1.json")).isFalse()
+        assertThat(ResourceStore.isCloudResource("pac_maze_sfx/curated/attack.mp3")).isTrue()
     }
 }

@@ -33,6 +33,9 @@ data class SocialGameRoomCache(
     val maxPlayers: Int = 2,
     val minPlayers: Int = 2,
     val pendingInvitePbId: String = "",
+    val hostReady: Boolean = true,
+    val guestReady: Boolean = false,
+    val pacMazeJson: String = "",
     val createdAtMs: Long,
     val updatedAtMs: Long,
 )

@@ -1,0 +1,11 @@
+﻿{
+    "skinId":  "food_chick_walker_pro_max",
+    "clips":  {
+                  "die":  61,
+                  "walk":  61,
+                  "idle":  61,
+                  "run":  61,
+                  "attack":  61,
+                  "jump":  61
+              }
+}

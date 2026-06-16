@@ -116,3 +116,25 @@ pocketbase/tools/draw_ws/node_modules/
 # ???????
 debug_screen.png
 *.backup3
+
+# 云端音效包构建输出（二进制，不打进 APK）
+dist/pac_maze_sfx/
+dist/asset-bundles/pac_maze_sfx.zip
+dist/_zip_staging/
+# 资源分包 zip（>100MB 或本地/COS 分发，不进 Git）
+dist/asset-bundles/*.zip
+app/src/main/assets/xiangkuang.zip
+app/src/main/assets/pet.zip
+app/src/main/assets/login.zip
+app/src/main/assets/renge.zip
+app/src/main/assets/dibu.zip
+app/src/main/assets/wheel.zip
+
+# Python / 关卡生成临时产物
+**/__pycache__/
+*.pyc
+app/src/main/assets/pac_maze/levels/_gen_out.txt
+build_err.txt
+compile_out.txt
+
+tmp_move_test.kt

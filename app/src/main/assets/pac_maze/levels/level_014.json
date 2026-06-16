@@ -1,0 +1,173 @@
+{
+  "id": 14,
+  "name": "赛博-脉冲闸道",
+  "width": 23,
+  "height": 21,
+  "grid": [
+    "#######################",
+    "#*...................*#",
+    "#.....................#",
+    "#.....................#",
+    "#..............#..#...#",
+    "#...#...#......####...#",
+    "#...#...#......#..#...#",
+    "#...#.&.#.........#...#",
+    "#...#####.........#...#",
+    "#.....&.#..H......#...#",
+    "#=......#..@......#..=#",
+    "#.....&.#.........#...#",
+    "#...#####.........#...#",
+    "#...#...#......#..#...#",
+    "#..............####...#",
+    "#.....................#",
+    "#.....................#",
+    "#.....................#",
+    "#.....................#",
+    "#*...................*#",
+    "#######################"
+  ],
+  "spawn": {
+    "pac": [
+      11,
+      18
+    ],
+    "ghosts": [
+      [
+        10,
+        4
+      ],
+      [
+        11,
+        4
+      ],
+      [
+        12,
+        4
+      ]
+    ]
+  },
+  "markers": [
+    {
+      "type": "start",
+      "x": 11,
+      "y": 18
+    },
+    {
+      "type": "checkpoint",
+      "x": 7,
+      "y": 10,
+      "label": "西闸",
+      "tag": "L14-W"
+    },
+    {
+      "type": "checkpoint",
+      "x": 15,
+      "y": 10,
+      "label": "东闸",
+      "tag": "L14-E"
+    },
+    {
+      "type": "checkpoint",
+      "x": 11,
+      "y": 10,
+      "label": "核心",
+      "tag": "L14-CORE"
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 10,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 21,
+      "y": 10,
+      "label": "002",
+      "tag": "LINK"
+    }
+  ],
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 9,
+      "x1": 4,
+      "x2": 18,
+      "id": "l14_h_main"
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 0.88,
+    "ai_aggression": 0.87
+  },
+  "itemSpawners": [
+    {
+      "id": "factory_14_00",
+      "x": 7,
+      "y": 10,
+      "intervalTicks": 536,
+      "pool": [
+        "frost",
+        "charge",
+        "double"
+      ]
+    },
+    {
+      "id": "factory_14_01",
+      "x": 15,
+      "y": 10,
+      "intervalTicks": 536,
+      "pool": [
+        "magnet",
+        "shield",
+        "charge"
+      ]
+    },
+    {
+      "id": "factory_14_02",
+      "x": 7,
+      "y": 8,
+      "intervalTicks": 536,
+      "pool": [
+        "speed",
+        "double",
+        "frost"
+      ]
+    },
+    {
+      "id": "factory_14_03",
+      "x": 15,
+      "y": 12,
+      "intervalTicks": 536,
+      "pool": [
+        "shield",
+        "charge",
+        "magnet"
+      ]
+    },
+    {
+      "id": "factory_14_04",
+      "x": 1,
+      "y": 10,
+      "intervalTicks": 536,
+      "pool": [
+        "frost",
+        "double",
+        "speed",
+        "charge"
+      ]
+    }
+  ],
+  "starCriteria": {
+    "twoStarMinScore": 3080,
+    "threeStarMinScore": 3880,
+    "threeStarMaxSeconds": 212,
+    "threeStarNoDeath": false,
+    "threeStarRequiredTags": [
+      "L14-W",
+      "L14-E",
+      "L14-CORE"
+    ]
+  }
+}

@@ -72,6 +72,8 @@ android {
         buildConfigField("String", "POCKETBASE_PIN", "\"${props.getProperty("POCKETBASE_PIN", "")}\"")
         // 你画我猜笔画 WebSocket（留空则走 PocketBase 分片同步）
         buildConfigField("String", "DRAW_WS_URL", "\"${props.getProperty("DRAW_WS_URL", "")}\"")
+        // Pac-Maze 权威对战 WebSocket（留空则从 POCKETBASE_URL 推导 ws://host:8791）
+        buildConfigField("String", "PAC_MAZE_WS_URL", "\"${props.getProperty("PAC_MAZE_WS_URL", "")}\"")
         buildConfigField("boolean", "FCM_ENABLED", fcmEnabled.toString())
 
         // 真机调试只打包 arm64，减少 lib 体积（约省 15–20MB）

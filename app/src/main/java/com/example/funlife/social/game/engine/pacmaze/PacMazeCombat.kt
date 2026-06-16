@@ -4,7 +4,10 @@ import kotlin.math.abs
 
 object PacMazeCombat {
 
-    fun tryFireAttack(state: PacMazeWorldState): PacMazeWorldState {
+    fun tryFireAttack(
+        state: PacMazeWorldState,
+        cooldownTicks: Int = PacMazeConstants.ATTACK_COOLDOWN_TICKS,
+    ): PacMazeWorldState {
         if (state.attackCharges <= 0 || state.attackCooldownTicksLeft > 0) return state
         val pac = state.entities.firstOrNull { it.role == "pac" } ?: return state
         val dir = pac.facing
@@ -16,7 +19,7 @@ object PacMazeCombat {
         )
         return state.copy(
             attackCharges = state.attackCharges - 1,
-            attackCooldownTicksLeft = PacMazeConstants.ATTACK_COOLDOWN_TICKS,
+            attackCooldownTicksLeft = cooldownTicks,
             projectiles = state.projectiles + projectile,
         )
     }
@@ -50,13 +53,28 @@ object PacMazeCombat {
             }?.id
 
             if (hitGhostId != null) {
-                world = world.copy(
-                    entities = world.entities.map { entity ->
-                        if (entity.id != hitGhostId) entity
-                        else entity.copy(ghostMode = GhostMode.EATEN, facing = entity.facing)
-                    },
-                    score = world.score + PacMazeConstants.GHOST_SCORE,
-                )
+                val hit = world.entities.first { it.id == hitGhostId }
+                world = if (hit.ghostMode == GhostMode.FRIGHTENED) {
+                    world.copy(
+                        entities = world.entities.map { entity ->
+                            if (entity.id != hitGhostId) entity
+                            else entity.copy(ghostMode = GhostMode.EATEN, velX = 0f, velY = 0f)
+                        },
+                        score = world.score + PacMazeConstants.GHOST_SCORE,
+                    )
+                } else {
+                    world.copy(
+                        entities = world.entities.map { entity ->
+                            if (entity.id != hitGhostId) entity
+                            else entity.copy(
+                                hitStunTicksLeft = PacMazeConstants.GHOST_HIT_STUN_TICKS,
+                                velX = 0f,
+                                velY = 0f,
+                            )
+                        },
+                        score = world.score + PacMazeConstants.GHOST_HIT_SCORE,
+                    )
+                }
             } else {
                 remaining.add(advanced)
             }

@@ -1,0 +1,7 @@
+# 已合并至 pocketbase/docker-compose.yml 的 pac-maze-ws 服务。
+# 请直接使用：
+#   cd pocketbase
+#   docker compose build pac-maze-ws
+#   docker compose up -d pac-maze-ws
+#
+# 或一键： .\docker\up.ps1 -Build

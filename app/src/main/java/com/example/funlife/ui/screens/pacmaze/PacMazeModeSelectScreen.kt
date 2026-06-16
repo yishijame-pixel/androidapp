@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.zIndex
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import com.example.funlife.ui.screens.pacmaze.PacMazeOverlayCard
@@ -14,11 +16,8 @@ import com.example.funlife.ui.screens.pacmaze.PacMazePrimaryButton
 import com.example.funlife.ui.screens.pacmaze.PacMazeSecondaryButton
 import com.example.funlife.ui.screens.pacmaze.PacMazeStarRow
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,32 +25,71 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.funlife.social.game.engine.pacmaze.PacMazeObjectiveResults
 import com.example.funlife.social.game.engine.pacmaze.PacMazePhase
 import com.example.funlife.social.game.engine.pacmaze.PacMazeRunMode
-import com.example.funlife.ui.screens.pacmaze.components.LockLandscape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import com.example.funlife.resource.PacMazeResourceUpdateNotifier
+import com.example.funlife.ui.screens.pacmaze.PacMazeSfx
+import com.example.funlife.ui.screens.pacmaze.components.PacMazeResultOverlay
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeMapSelectorRow
+import com.example.funlife.data.model.UserSession
+import com.example.funlife.social.game.model.GameRoomStatus
+import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlineHubPanel
+import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlineInHubLobby
+import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlinePlayScreen
+import com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel
+import com.example.funlife.viewmodel.GameCenterViewModel
 import com.example.funlife.viewmodel.PacMazeLocalViewModel
 
 @Composable
 fun PacMazeModeSelectScreen(
     viewModel: PacMazeLocalViewModel,
+    userSession: UserSession?,
     onNavigateBack: () -> Unit,
     autoStart: Boolean = false,
+    onlineLobbyRoomId: String? = null,
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val gameCenterVm: GameCenterViewModel? = userSession?.let { rememberGameCenterViewModel(it) }
+    val myDisplayName = userSession?.nickname?.ifBlank { userSession.username } ?: "玩家"
 
-    LockLandscape()
+    LaunchedEffect(ui.screenPhase, ui.runMode) {
+        PacMazeSfx.syncBgm(context, ui.screenPhase, ui.runMode)
+    }
 
-    var didAutoStart by remember { mutableStateOf(false) }
-    LaunchedEffect(autoStart, ui.isLoading, ui.screenPhase, ui.menuStep) {
-        if (autoStart &&
-            !didAutoStart &&
-            !ui.isLoading &&
-            ui.screenPhase == PacMazePhase.MENU &&
-            ui.menuStep == PacMazeMenuStep.MODE_SELECT
-        ) {
-            didAutoStart = true
-            viewModel.selectMode(PacMazePlayMode.SOLO)
+    DisposableEffect(Unit) {
+        onDispose { PacMazeSfx.stopBgm(context) }
+    }
+
+    LaunchedEffect(ui.loadError) {
+        val message = ui.loadError ?: return@LaunchedEffect
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        viewModel.clearLoadError()
+    }
+
+    LaunchedEffect(autoStart, onlineLobbyRoomId) {
+        when {
+            autoStart -> viewModel.continueCampaign()
+            !onlineLobbyRoomId.isNullOrBlank() -> viewModel.openOnlineLobbyFromDeepLink(onlineLobbyRoomId)
+            else -> viewModel.ensureHubRoot()
+        }
+    }
+
+    val onlineLobbyRoute = ui.currentMenuRoute as? PacMazeMenuRoute.OnlineLobby
+    if (onlineLobbyRoute != null && userSession != null && gameCenterVm != null) {
+        val rooms by gameCenterVm.rooms.collectAsStateWithLifecycle()
+        val room = rooms.firstOrNull { it.roomId == onlineLobbyRoute.roomId }
+        if (room?.status == GameRoomStatus.PLAYING) {
+            PacMazeOnlinePlayScreen(
+                roomId = onlineLobbyRoute.roomId,
+                userId = userSession.userId,
+                onExit = viewModel::backToModeSelect,
+                onBackToLobby = viewModel::hubBack,
+            )
+            return
         }
     }
 
@@ -84,24 +122,37 @@ fun PacMazeModeSelectScreen(
                 }
                 PacMazeRunMode.MAZE -> {
                     clearTitle = "走出迷宫！"
-                    clearMessage = "用时 ${ui.elapsedSeconds}s · 得分 $score"
+                    clearMessage = buildString {
+                        append("用时 ${ui.elapsedSeconds}s · 得分 $score")
+                        if (ui.deathsThisRun > 0) append(" · 死亡 ${ui.deathsThisRun}")
+                        if (stars > 0) append(" · ★$stars")
+                    }
                     clearPrimary = "再来一局"
                     onClearPrimary = viewModel::startMaze
                 }
                 PacMazeRunMode.ENDLESS -> {
                     clearTitle = "波次完成"
-                    clearMessage = "第 ${ui.endlessWave} 波 · 得分 $score"
+                    val waveInfo = PacMazeEndlessWaveUi.resolve(ui.endlessWave, ui.maxLevelReached)
+                    clearMessage = PacMazeEndlessWaveUi.resultMessage(waveInfo, score)
                     clearPrimary = "继续"
                     onClearPrimary = viewModel::backToMenu
                 }
                 else -> {
                     clearTitle = "过关！"
-                    clearMessage = "得分 $score"
+                    clearMessage = buildString {
+                        append("得分 $score · 用时 ${ui.elapsedSeconds}s")
+                        if (ui.deathsThisRun > 0) append(" · 死亡 ${ui.deathsThisRun}")
+                    }
                     clearPrimary = if (ui.levelId < PacMazeLevelCatalog.TOTAL_LEVELS) "下一关" else "返回选关"
                     onClearPrimary = {
                         if (ui.levelId < PacMazeLevelCatalog.TOTAL_LEVELS) viewModel.nextLevel() else viewModel.backToMenu()
                     }
                 }
+            }
+            val objectives = run {
+                val config = ui.levelConfig
+                val world = ui.world
+                if (config != null && world != null) PacMazeObjectiveResults.build(config, world) else emptyList()
             }
             if (ui.runMode != PacMazeRunMode.ENDLESS) {
                 PacMazeResultOverlay(
@@ -112,6 +163,7 @@ fun PacMazeModeSelectScreen(
                     secondary = "返回",
                     onPrimary = onClearPrimary,
                     onSecondary = viewModel::backToMenu,
+                    objectives = objectives,
                 )
             }
         }
@@ -119,7 +171,11 @@ fun PacMazeModeSelectScreen(
         PacMazePhase.GAME_OVER -> {
             val score = ui.world?.score ?: 0
             val (title, message) = when (ui.runMode) {
-                PacMazeRunMode.ENDLESS -> "无尽终结" to "第 ${ui.endlessWave} 波 · 得分 $score · 最佳 ${ui.endlessBestScore}"
+                PacMazeRunMode.ENDLESS -> {
+                    val waveInfo = PacMazeEndlessWaveUi.resolve(ui.endlessWave, ui.maxLevelReached)
+                    val msg = PacMazeEndlessWaveUi.resultMessage(waveInfo, score)
+                    "无尽终结" to "$msg · 最佳 ${ui.endlessBestScore}"
+                }
                 PacMazeRunMode.MAZE -> "迷宫失败" to "得分 $score · 最佳用时 ${formatMazeTime(ui.mazeBestTimeMs)}"
                 else -> "游戏结束" to "得分 $score · 最高 ${ui.highScore}"
             }
@@ -138,115 +194,368 @@ fun PacMazeModeSelectScreen(
             )
         }
 
-        PacMazePhase.MENU -> when (ui.menuStep) {
-            PacMazeMenuStep.MODE_SELECT -> {
-                BackHandler(onBack = onNavigateBack)
-                PacMazeHubScaffold(
-                    title = "豆人迷宫",
-                    subtitle = "模式选择",
-                    onBack = onNavigateBack,
-                    topBarTrailing = { isWide ->
-                        if (isWide) {
-                            PacMazeTopBarChip(
-                                emoji = "🏆",
-                                value = ui.highScore.toString(),
-                                label = "最高分",
-                                valueColor = PacMazePalette.accentGold,
-                            )
-                        }
-                    },
-                    hero = {
-                        PacMazeModeHero(
-                            highScore = ui.highScore,
-                            maxLevelReached = ui.maxLevelReached,
-                        )
-                    },
-                    content = {
-                        PacMazeModeSelectPanel(
-                            highScore = ui.highScore,
-                            maxLevelReached = ui.maxLevelReached,
-                            totalLevels = PacMazeLevelCatalog.levels.size,
-                            onSelectMode = viewModel::selectMode,
-                        )
-                    },
-                )
+        PacMazePhase.MENU -> {
+            val route = ui.currentMenuRoute
+            val hubBack: () -> Unit = when (route) {
+                PacMazeMenuRoute.ModeSelect -> onNavigateBack
+                PacMazeMenuRoute.ChapterOverview -> viewModel::backToModeSelect
+                PacMazeMenuRoute.MazeHub, PacMazeMenuRoute.MazeHome -> viewModel::backToModeSelect
+                is PacMazeMenuRoute.OnlineHub -> viewModel::backToModeSelect
+                is PacMazeMenuRoute.OnlineLobby -> viewModel::hubBack
+                else -> viewModel::hubBack
+            }
+            BackHandler(onBack = hubBack)
+
+            LaunchedEffect(Unit) {
+                PacMazeResourceUpdateNotifier.refresh()
             }
 
-            PacMazeMenuStep.CHARACTER_SELECT -> {
-                BackHandler(onBack = viewModel::backToModeSelect)
-                PacMazeHubScaffold(
-                    title = ui.selectedMode.title,
-                    subtitle = "角色选择",
-                    onBack = viewModel::backToModeSelect,
-                    hero = {
-                        PacMazeCharacterSelectHero(
-                            characterId = ui.selectedCharacterId,
-                        )
-                    },
-                    content = {
-                        PacMazeCharacterSelectPanel(
-                            selectedCharacterId = ui.selectedCharacterId,
-                            onSelectCharacter = viewModel::selectCharacter,
-                            onContinue = viewModel::confirmCharacterAndGoToLevels,
-                        )
-                    },
-                )
+            val continueLevelId = ui.maxLevelReached.coerceIn(1, PacMazeLevelCatalog.TOTAL_LEVELS)
+            val totalLevels = PacMazeLevelCatalog.levels.size
+            val totalStars = (1..ui.maxLevelReached).sumOf { decodePacMazeStars(ui.starsBitmask, it) }
+
+            val hubTitle = when (route) {
+                PacMazeMenuRoute.ModeSelect -> "豆人迷宫"
+                PacMazeMenuRoute.MazeHub, PacMazeMenuRoute.MazeHome -> "迷雾迷宫"
+                PacMazeMenuRoute.CollectionBook -> "收藏册"
+                is PacMazeMenuRoute.OnlineHub ->
+                    if (route.subMode == "coop_campaign") "并肩闯关" else "豆人对决"
+                is PacMazeMenuRoute.OnlineLobby -> "对战大厅"
+                is PacMazeMenuRoute.CharacterDetail,
+                PacMazeMenuRoute.CharacterSeries,
+                is PacMazeMenuRoute.CharacterGrid,
+                PacMazeMenuRoute.TrailWorkshop,
+                -> if (ui.selectedMode == PacMazePlayMode.SOLO) "单人闯关" else ui.selectedMode.title
+                else -> if (route.isMazeRoute()) "迷雾迷宫" else "单人闯关"
+            }
+            val hubSubtitle = route.subtitle()
+
+            val useHero = when (route) {
+                PacMazeMenuRoute.CharacterSeries,
+                is PacMazeMenuRoute.CharacterGrid,
+                is PacMazeMenuRoute.CharacterDetail,
+                -> true
+                else -> route == PacMazeMenuRoute.ModeSelect
             }
 
-            PacMazeMenuStep.LEVEL_SELECT -> {
-                BackHandler(onBack = viewModel::backToCharacterSelect)
-                val totalLevels = PacMazeLevelCatalog.levels.size
-                val totalStars = (1..ui.maxLevelReached).sumOf { decodePacMazeStars(ui.starsBitmask, it) }
-                PacMazeHubScaffold(
-                    title = "单人闯关",
-                    subtitle = "关卡选择",
-                    onBack = viewModel::backToCharacterSelect,
-                    topBarTrailing = { isWide ->
-                        PacMazeLevelSelectTopBarStats(
+            Box(Modifier.fillMaxSize()) {
+            PacMazeHubScaffold(
+                title = hubTitle,
+                subtitle = hubSubtitle,
+                onBack = hubBack,
+                showTopBar = !route.usesCompactMazeChrome(),
+                hubBanner = {
+                    PacMazeResourceUpdateBanner(modifier = Modifier.fillMaxWidth())
+                },
+                topBarTrailing = { isWide ->
+                    when (route) {
+                        PacMazeMenuRoute.ModeSelect -> PacMazeModeSelectHubStats(
+                            highScore = ui.highScore,
+                            maxLevelReached = ui.maxLevelReached,
+                            totalLevels = totalLevels,
+                            endlessBestScore = ui.endlessBestScore,
+                            endlessBestWave = ui.endlessBestWave,
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                        )
+                        PacMazeMenuRoute.ChapterOverview,
+                        is PacMazeMenuRoute.ChapterLevels,
+                        is PacMazeMenuRoute.LevelDetail,
+                        PacMazeMenuRoute.SerpentineMap,
+                        -> PacMazeLevelSelectTopBarStats(
                             highScore = ui.highScore,
                             totalStars = totalStars,
                             maxLevelReached = ui.maxLevelReached,
                             totalLevels = totalLevels,
                             isWide = isWide,
                         )
-                    },
-                    content = {
-                        PacMazeLevelSelectPanel(
+                        PacMazeMenuRoute.CharacterSeries,
+                        is PacMazeMenuRoute.CharacterGrid,
+                        is PacMazeMenuRoute.CharacterDetail,
+                        PacMazeMenuRoute.TrailWorkshop,
+                        PacMazeMenuRoute.CollectionBook,
+                        -> Unit
+                        PacMazeMenuRoute.MazeHub,
+                        PacMazeMenuRoute.MazeHome,
+                        -> PacMazeMazeHubTopStats(
+                            mazeStats = ui.mazeStats,
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                            selectedDifficulty = ui.mazeRunProfile.difficulty,
+                            useDailyChallenge = ui.mazeRunProfile.seedMode == com.example.funlife.social.game.engine.pacmaze.PacMazeMazeSeedMode.DAILY,
+                        )
+                        else -> Unit
+                    }
+                },
+                hero = if (useHero) {
+                    {
+                        when (route) {
+                            PacMazeMenuRoute.ModeSelect -> PacMazeModeHero(
+                                continueLevelId = continueLevelId,
+                                onContinueCampaign = viewModel::continueCampaign,
+                            )
+                            else -> PacMazeCharacterSelectHero(loadout = ui.avatarLoadout)
+                        }
+                    }
+                } else {
+                    null
+                },
+                content = {
+                    when (route) {
+                        PacMazeMenuRoute.ModeSelect -> PacMazeModeSelectPanel(
+                            maxLevelReached = ui.maxLevelReached,
+                            totalLevels = totalLevels,
+                            endlessBestScore = ui.endlessBestScore,
+                            endlessBestWave = ui.endlessBestWave,
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                            onSelectMode = viewModel::selectMode,
+                        )
+                        is PacMazeMenuRoute.OnlineHub -> {
+                            if (userSession != null && gameCenterVm != null) {
+                                PacMazeOnlineHubPanel(
+                                    subMode = route.subMode,
+                                    userId = userSession.userId,
+                                    gameCenterVm = gameCenterVm,
+                                    onEnterLobby = viewModel::openOnlineLobby,
+                                )
+                            } else {
+                                Text(
+                                    "请先登录并绑定社交账号后再联机",
+                                    color = PacMazePalette.inkSecondary,
+                                )
+                            }
+                        }
+                        is PacMazeMenuRoute.OnlineLobby -> {
+                            if (userSession != null && gameCenterVm != null) {
+                                PacMazeOnlineInHubLobby(
+                                    roomId = route.roomId,
+                                    userSession = userSession,
+                                    gameCenterVm = gameCenterVm,
+                                    myDisplayName = myDisplayName,
+                                    onLobbyClosed = viewModel::hubBack,
+                                )
+                            }
+                        }
+                        PacMazeMenuRoute.ChapterOverview,
+                        PacMazeMenuRoute.SerpentineMap,
+                        -> PacMazeChapterOverviewPanel(
                             maxLevelReached = ui.maxLevelReached,
                             starsBitmask = ui.starsBitmask,
-                            continueLevelId = ui.maxLevelReached.coerceIn(1, PacMazeLevelCatalog.TOTAL_LEVELS),
-                            selectedCharacterId = ui.selectedCharacterId,
-                            isLoading = ui.isLoading,
-                            loadError = ui.loadError,
-                            onContinue = {
-                                viewModel.startLevel(ui.maxLevelReached.coerceIn(1, PacMazeLevelCatalog.TOTAL_LEVELS))
-                            },
-                            onSelectLevel = viewModel::startLevel,
-                            onPracticeLevel = viewModel::startPracticeLevel,
-                            onChangeCharacter = viewModel::backToCharacterSelect,
+                            continueLevelId = continueLevelId,
+                            selectedSkinId = ui.avatarLoadout.skinId,
+                            enabled = !ui.isLoading,
+                            onContinue = { viewModel.startLevel(continueLevelId) },
+                            onPractice = { viewModel.startPracticeLevel(continueLevelId) },
+                            onOpenChapter = { chapter -> viewModel.openChapter(chapter.themeId) },
+                            onSelectLevel = viewModel::openLevelDetail,
+                            onChangeCharacter = viewModel::openCharacterSelect,
+                            onOpenCollection = viewModel::openCollectionBook,
                         )
-                    },
-                )
+                        is PacMazeMenuRoute.ChapterLevels -> PacMazeChapterLevelListPanel(
+                            themeId = route.themeId,
+                            maxLevelReached = ui.maxLevelReached,
+                            starsBitmask = ui.starsBitmask,
+                            onSelectLevel = viewModel::openLevelDetail,
+                        )
+                        is PacMazeMenuRoute.LevelDetail -> PacMazeLevelDetailPanel(
+                            levelId = route.levelId,
+                            maxLevelReached = ui.maxLevelReached,
+                            starsBitmask = ui.starsBitmask,
+                            onStart = { viewModel.startLevel(route.levelId) },
+                            onPractice = { viewModel.startPracticeLevel(route.levelId) },
+                        )
+                        PacMazeMenuRoute.MazeHub,
+                        PacMazeMenuRoute.MazeHome,
+                        -> PacMazeMazeHomePanel(
+                            profile = ui.mazeRunProfile,
+                            mazeStats = ui.mazeStats,
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                            selectedSkinId = ui.avatarLoadout.skinId,
+                            enabled = !ui.isLoading,
+                            onOpenDaily = { viewModel.openMazePlayGate(com.example.funlife.social.game.engine.pacmaze.PacMazeMazeSeedMode.DAILY) },
+                            onOpenRandom = { viewModel.openMazePlayGate(com.example.funlife.social.game.engine.pacmaze.PacMazeMazeSeedMode.RANDOM) },
+                            onOpenArcade = viewModel::openMazeArcadeHall,
+                            onOpenTracks = viewModel::openMazeTrackPicker,
+                            onOpenContracts = viewModel::openMazeContractLab,
+                            onOpenCompetitive = viewModel::openMazeCompetitiveHub,
+                            onOpenCodex = viewModel::openMazeCodex,
+                            onLaunchConfirm = viewModel::openMazeLaunchConfirm,
+                            onChangeCharacter = viewModel::openCharacterSelect,
+                        )
+                        is PacMazeMenuRoute.MazePlayGate -> PacMazeMazePlayGatePanel(
+                            profile = ui.mazeRunProfile,
+                            mazeStats = ui.mazeStats,
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                            randomPreviewSeed = ui.mazeRandomPreviewSeed,
+                            onBack = hubBack,
+                            onSelectDifficulty = viewModel::selectMazeDifficulty,
+                            onOpenContracts = viewModel::openMazeContractLab,
+                            onNext = viewModel::openMazeLaunchConfirm,
+                            onRefreshRandomPreview = viewModel::refreshMazeRandomPreviewSeed,
+                        )
+                        PacMazeMenuRoute.MazeLaunchConfirm -> PacMazeMazeLaunchConfirmPanel(
+                            profile = ui.mazeRunProfile,
+                            previewSeed = if (ui.mazeRunProfile.seedMode == com.example.funlife.social.game.engine.pacmaze.PacMazeMazeSeedMode.DAILY) {
+                                com.example.funlife.social.game.engine.pacmaze.PacMazeMazeRunOptions.dailySeed()
+                            } else {
+                                ui.mazeRandomPreviewSeed
+                            },
+                            enabled = !ui.isLoading,
+                            onBack = hubBack,
+                            onStart = viewModel::startMaze,
+                        )
+                        PacMazeMenuRoute.MazeTrackPicker -> PacMazeMazeTrackPickerPanel(
+                            profile = ui.mazeRunProfile,
+                            mazeStats = ui.mazeStats,
+                            onBack = hubBack,
+                            onSelect = viewModel::selectMazeDifficulty,
+                            onOpenDetail = viewModel::openMazeTrackDetail,
+                        )
+                        is PacMazeMenuRoute.MazeTrackDetail -> PacMazeMazeTrackDetailPanel(
+                            track = route.track,
+                            onBack = hubBack,
+                            onApply = {
+                                viewModel.selectMazeDifficulty(route.track)
+                                viewModel.hubBack()
+                            },
+                        )
+                        PacMazeMenuRoute.MazeContractLab -> PacMazeMazeContractLabPanel(
+                            profile = ui.mazeRunProfile,
+                            onBack = hubBack,
+                            onSelect = viewModel::selectMazeContract,
+                            onOpenDetail = viewModel::openMazeContractDetail,
+                        )
+                        is PacMazeMenuRoute.MazeContractDetail -> PacMazeMazeContractDetailPanel(
+                            contract = route.contract,
+                            onBack = hubBack,
+                            onApply = {
+                                viewModel.selectMazeContract(route.contract)
+                                viewModel.hubBack()
+                            },
+                        )
+                        PacMazeMenuRoute.MazeArcadeHall -> PacMazeMazeArcadeHallPanel(
+                            profile = ui.mazeRunProfile,
+                            onBack = hubBack,
+                            onSelectVariant = { variant ->
+                                viewModel.updateMazeProfile { it.copy(variant = variant) }
+                            },
+                            onOpenVariant = viewModel::openMazeVariantDetail,
+                        )
+                        is PacMazeMenuRoute.MazeVariantDetail -> PacMazeMazeVariantDetailPanel(
+                            variant = route.variant,
+                            profile = ui.mazeRunProfile,
+                            onBack = hubBack,
+                            onApply = {
+                                viewModel.updateMazeProfile { it.copy(variant = route.variant) }
+                                viewModel.hubBack()
+                            },
+                        )
+                        PacMazeMenuRoute.MazeCompetitiveHub -> PacMazeMazeCompetitiveHubPanel(
+                            onBack = hubBack,
+                            onDailyBoard = viewModel::openMazeDailyBoard,
+                            onWeeklyBoard = viewModel::openMazeWeeklyBoard,
+                            onGhostReplay = viewModel::openMazeGhostReplay,
+                        )
+                        PacMazeMenuRoute.MazeDailyBoard -> PacMazeMazeDailyBoardPanel(
+                            mazeStats = ui.mazeStats,
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                            onBack = hubBack,
+                        )
+                        PacMazeMenuRoute.MazeWeeklyBoard -> PacMazeMazeWeeklyBoardPanel(
+                            mutator = ui.mazeRunProfile.resolvedMutator(com.example.funlife.social.game.engine.pacmaze.PacMazeMazeRunOptions.dailySeed()),
+                            onBack = hubBack,
+                        )
+                        PacMazeMenuRoute.MazeGhostReplay -> PacMazeMazeGhostReplayPanel(
+                            mazeBestTimeMs = ui.mazeBestTimeMs,
+                            onBack = hubBack,
+                        )
+                        PacMazeMenuRoute.MazeCodex -> PacMazeMazeCodexPanel(
+                            onBack = hubBack,
+                            onOpenEntry = viewModel::openMazeCodexEntry,
+                        )
+                        is PacMazeMenuRoute.MazeCodexEntry -> PacMazeMazeCodexEntryPanel(
+                            entryId = route.entryId,
+                            onBack = hubBack,
+                        )
+                        PacMazeMenuRoute.CharacterSeries -> PacMazeCharacterSeriesPanel(
+                            loadout = ui.avatarLoadout,
+                            onOpenSeries = viewModel::requestOpenCharacterGrid,
+                            onOpenTrailWorkshop = viewModel::openTrailWorkshop,
+                            onOpenCollection = viewModel::openCollectionBook,
+                        )
+                        is PacMazeMenuRoute.CharacterGrid -> PacMazeCharacterGridPanel(
+                            series = route.series,
+                            loadout = ui.avatarLoadout,
+                            onSelectSkin = viewModel::requestSelectSkin,
+                            onOpenDetail = viewModel::openCharacterDetail,
+                        )
+                        is PacMazeMenuRoute.CharacterDetail -> PacMazeCharacterDetailPanel(
+                            skinId = route.skinId,
+                            loadout = ui.avatarLoadout,
+                            onSelectSkin = { viewModel.requestSelectSkin(route.skinId) },
+                            onOpenTrailWorkshop = viewModel::openTrailWorkshop,
+                            onApplyRecommendedTrail = viewModel::applyRecommendedTrail,
+                            onConfirm = viewModel::confirmCharacterAndGoToLevels,
+                        )
+                        PacMazeMenuRoute.TrailWorkshop -> PacMazeTrailWorkshopPanel(
+                            loadout = ui.avatarLoadout,
+                            onSelectTrail = viewModel::selectTrail,
+                            onApplyRecommended = viewModel::applyRecommendedTrail,
+                            onConfirm = viewModel::confirmTrailAndBack,
+                        )
+                        PacMazeMenuRoute.CollectionBook -> PacMazeCollectionBookPanel(
+                            userId = viewModel.currentUserId,
+                            loadout = ui.avatarLoadout,
+                            onSelectSkin = viewModel::requestSelectSkin,
+                            onSelectTrail = viewModel::selectTrail,
+                        )
+                    }
+                },
+            )
+
+            if (ui.ikunDisclosureVisible) {
+                BackHandler { /* 须知未同意前不可返回关闭 */ }
+                Box(Modifier.fillMaxSize().zIndex(20f)) {
+                    PacMazeIkunDisclosureDialog(
+                        loading = ui.ikunDisclosureLoading,
+                        onConfirm = viewModel::confirmIkunDisclosure,
+                    )
+                }
+            }
             }
         }
 
         else -> {
             BackHandler(onBack = onNavigateBack)
+            val continueLevelId = ui.maxLevelReached.coerceIn(1, PacMazeLevelCatalog.TOTAL_LEVELS)
             PacMazeHubScaffold(
                 title = "豆人迷宫",
                 subtitle = "模式选择",
                 onBack = onNavigateBack,
-                hero = {
-                    PacMazeModeHero(
+                hubBanner = {
+                    PacMazeResourceUpdateBanner(modifier = Modifier.fillMaxWidth())
+                },
+                topBarTrailing = { _ ->
+                    PacMazeModeSelectHubStats(
                         highScore = ui.highScore,
                         maxLevelReached = ui.maxLevelReached,
+                        totalLevels = PacMazeLevelCatalog.levels.size,
+                        endlessBestScore = ui.endlessBestScore,
+                        endlessBestWave = ui.endlessBestWave,
+                        mazeBestTimeMs = ui.mazeBestTimeMs,
+                    )
+                },
+                hero = {
+                    PacMazeModeHero(
+                        continueLevelId = continueLevelId,
+                        onContinueCampaign = viewModel::continueCampaign,
                     )
                 },
                 content = {
                     PacMazeModeSelectPanel(
-                        highScore = ui.highScore,
                         maxLevelReached = ui.maxLevelReached,
                         totalLevels = PacMazeLevelCatalog.levels.size,
+                        endlessBestScore = ui.endlessBestScore,
+                        endlessBestWave = ui.endlessBestWave,
+                        mazeBestTimeMs = ui.mazeBestTimeMs,
                         onSelectMode = viewModel::selectMode,
                     )
                 },
@@ -254,16 +563,20 @@ fun PacMazeModeSelectScreen(
         }
     }
 
-    if (ui.isLoading && ui.screenPhase == PacMazePhase.MENU && ui.menuStep == PacMazeMenuStep.LEVEL_SELECT) {
+    if (ui.isLoading && ui.screenPhase == PacMazePhase.MENU) {
         PacMazeLoadingOverlay(
-            message = "正在加载关卡…",
+            message = if (ui.selectedMode == PacMazePlayMode.MAZE) "生成迷雾迷宫…" else "正在加载关卡…",
         )
     }
 
     if (ui.screenPhase == PacMazePhase.PAUSED) {
         PacMazePauseOverlay(
+            runMode = ui.runMode,
             levelId = ui.levelId,
             maxLevelReached = ui.maxLevelReached,
+            mazeDifficulty = ui.mazeDifficulty,
+            mazeContract = ui.mazeContract,
+            mazeUseDaily = ui.mazeUseDailyChallenge,
             isLoading = ui.isLoading,
             onResume = viewModel::resumeGame,
             onSelectLevel = viewModel::startLevel,
@@ -300,8 +613,12 @@ private fun PacMazeLoadingOverlay(message: String) {
 
 @Composable
 private fun PacMazePauseOverlay(
+    runMode: PacMazeRunMode,
     levelId: Int,
     maxLevelReached: Int,
+    mazeDifficulty: com.example.funlife.social.game.engine.pacmaze.PacMazeMazeDifficulty,
+    mazeContract: com.example.funlife.social.game.engine.pacmaze.PacMazeMazeContract,
+    mazeUseDaily: Boolean,
     isLoading: Boolean,
     onResume: () -> Unit,
     onSelectLevel: (Int) -> Unit,
@@ -326,58 +643,39 @@ private fun PacMazePauseOverlay(
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Text("点击继续游戏", color = PacMazePalette.inkSecondary, fontSize = 14.sp)
-                PacMazeMapSelectorRow(
-                    selectedLevelId = levelId,
-                    maxLevelReached = maxLevelReached,
-                    isLoading = isLoading,
-                    onSelectLevel = onSelectLevel,
-                    unlockAll = com.example.funlife.BuildConfig.DEBUG,
-                    compact = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                PacMazePrimaryButton(text = "继续游戏", onClick = onResume)
-                PacMazeSecondaryButton(text = "返回选关", onClick = onBackToLevelSelect)
-                PacMazeSecondaryButton(text = "退出游戏", onClick = onExit)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PacMazeResultOverlay(
-    title: String,
-    message: String,
-    stars: Int,
-    primary: String,
-    secondary: String,
-    onPrimary: () -> Unit,
-    onSecondary: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.78f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        PacMazeOverlayCard {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    title,
-                    color = PacMazePalette.accentGold,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(message, color = PacMazePalette.inkSecondary, fontSize = 15.sp)
-                if (stars > 0) {
-                    PacMazeStarRow(stars = stars, starSize = 22.sp)
+                if (runMode == PacMazeRunMode.MAZE) {
+                    Text(
+                        buildString {
+                            append(mazeDifficulty.displayName)
+                            append(" · ")
+                            append(if (mazeUseDaily) "每日挑战" else "自由种子")
+                            if (mazeContract != com.example.funlife.social.game.engine.pacmaze.PacMazeMazeContract.NONE) {
+                                append(" · ${mazeContract.displayName}")
+                            }
+                        },
+                        color = PacMazePalette.inkSecondary,
+                        fontSize = 14.sp,
+                    )
+                } else {
+                    Text("点击继续游戏", color = PacMazePalette.inkSecondary, fontSize = 14.sp)
                 }
-                PacMazePrimaryButton(text = primary, onClick = onPrimary)
-                PacMazeSecondaryButton(text = secondary, onClick = onSecondary)
+                if (runMode != PacMazeRunMode.MAZE) {
+                    PacMazeMapSelectorRow(
+                        selectedLevelId = levelId,
+                        maxLevelReached = maxLevelReached,
+                        isLoading = isLoading,
+                        onSelectLevel = onSelectLevel,
+                        unlockAll = PacMazeTestUnlock.enabled,
+                        compact = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                PacMazePrimaryButton(text = "继续游戏", onClick = onResume)
+                PacMazeSecondaryButton(
+                    text = if (runMode == PacMazeRunMode.MAZE) "返回迷宫大厅" else "返回选关",
+                    onClick = onBackToLevelSelect,
+                )
+                PacMazeSecondaryButton(text = "退出游戏", onClick = onExit)
             }
         }
     }

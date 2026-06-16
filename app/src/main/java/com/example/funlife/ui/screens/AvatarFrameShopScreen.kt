@@ -32,6 +32,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.funlife.data.model.ShopItem
+import com.example.funlife.resource.ResourceStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.funlife.viewmodel.ShopViewModel
 import com.example.funlife.ui.components.AvatarFrameDetailDialog
 import com.example.funlife.ui.components.PurchaseConfirmDialog
@@ -84,6 +87,14 @@ fun AvatarFrameShopScreen(
     var purchasedFrameName by remember { mutableStateOf("") }  // 🔥 购买的商品名称
     
     val avatarFrames by viewModel.avatarFrames.collectAsState()
+    var xiangkuangReady by remember { mutableStateOf(ResourceStore.isBundleCached("xiangkuang")) }
+    LaunchedEffect(Unit) {
+        if (!xiangkuangReady) {
+            xiangkuangReady = withContext(Dispatchers.IO) {
+                ResourceStore.ensureBundle("xiangkuang")
+            }
+        }
+    }
     val userCoinsData by viewModel.userCoins.collectAsState()
     val ownedFrames by viewModel.userOwnedFrames.collectAsState()
     val isUserVip by viewModel.isUserVip.collectAsState()  // 🔥 获取VIP状态
@@ -401,6 +412,7 @@ fun AvatarFrameShopScreen(
                             rarityDisplay = rarityDisplay,
                             shownCardIds = shownCardIds,
                             isVip = isVip,
+                            resourcesReady = xiangkuangReady,
                             onClick = {
                                 selectedFrame = frame
                                 showDetailDialog = true
@@ -491,6 +503,7 @@ fun FrameCard(
     rarityDisplay: String,
     shownCardIds: MutableSet<Int>,
     isVip: Boolean = false,  // 🔥 新增：用户是否为VIP
+    resourcesReady: Boolean = true,
     onClick: () -> Unit = {}  // 🔥 新增：点击事件
 ) {
     var tapped by remember { mutableStateOf(false) }
@@ -670,12 +683,17 @@ fun FrameCard(
                         val context = androidx.compose.ui.platform.LocalContext.current
                         
                         // 使用SubcomposeAsyncImage支持自定义加载和错误状态
+                        val imageModel = remember(frame.assetPath, resourcesReady) {
+                            frame.assetPath?.let { ResourceStore.resolveCoilModel(it) }
+                        }
                         coil.compose.SubcomposeAsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data("file:///android_asset/${frame.assetPath}")
-                                .crossfade(300) // 300ms淡入动画
-                                .memoryCacheKey(frame.assetPath) // 缓存key
-                                .build(),
+                            model = imageModel?.let {
+                                ImageRequest.Builder(context)
+                                    .data(it)
+                                    .crossfade(300)
+                                    .memoryCacheKey(frame.assetPath)
+                                    .build()
+                            },
                             contentDescription = frame.name,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,

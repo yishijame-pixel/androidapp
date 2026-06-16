@@ -1,0 +1,36 @@
+# FunLife VIP 管理后台 — Docker Compose
+#
+# 1. 配置环境变量
+#    copy tools\.env.example tools\.env
+#    编辑 tools\.env（TCB_* + ADMIN_*）
+#
+# 2. 启动
+#    docker compose up -d --build
+#
+# 3. 访问
+#    http://localhost:3300  （或 ADMIN_HOST_PORT）
+
+name: funlife-admin
+
+services:
+  vip-admin:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.admin
+    container_name: funlife-vip-admin
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_HOST_PORT:-3300}:3300"
+    env_file:
+      - ./tools/.env
+    volumes:
+      - ./tools/.env:/app/tools/.env:ro
+    environment:
+      PORT: "3300"
+      HOST: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3300/login.html"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

@@ -128,7 +128,7 @@ object PacMazeHazards {
         }
 
         if (!laserHit && !bulletHit) return state
-        return applyPacDamage(state, level)
+        return PacMazeItems.applyFatalDamage(state, level)
     }
 
     fun applyPacDamage(state: PacMazeWorldState, level: PacMazeLevelConfig): PacMazeWorldState {
@@ -147,14 +147,24 @@ object PacMazeHazards {
         val resetGhosts = state.entities.map { entity ->
             if (entity.role == "ghost") {
                 val idx = entity.id.removePrefix("ghost_").toIntOrNull() ?: 0
-                val spawn = level.ghostSpawns.getOrElse(idx) { level.pacSpawn }
+                val spawn = level.ghostSpawns.getOrElse(idx) {
+                    PacMazeGhostSpawnDef(
+                        level.pacSpawn.first,
+                        level.pacSpawn.second,
+                        GhostKind.STRIKER,
+                    )
+                }
                 entity.copy(
-                    x = spawn.first.toFloat(),
-                    y = spawn.second.toFloat(),
+                    x = spawn.x.toFloat(),
+                    y = spawn.y.toFloat(),
                     ghostMode = GhostMode.SCATTER,
                     direction = null,
                     velX = 0f,
                     velY = 0f,
+                    opportunistBurstTicksLeft = 0,
+                    phaseWalkCooldownTicksLeft = 0,
+                    ghostStuckTicks = 0,
+                    ghostDecisionTileKey = -1,
                 )
             } else if (entity.id == pac.id) {
                 resetPac

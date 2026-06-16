@@ -25,7 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.funlife.ui.screens.pacmaze.PacMazeTestUnlock
 import com.example.funlife.ui.screens.pacmaze.PacMazeLevelCatalog
+import com.example.funlife.ui.screens.pacmaze.pacMazeClickable
+import com.example.funlife.ui.screens.pacmaze.PacMazeUiSoundId
 import com.example.funlife.ui.screens.pacmaze.PacMazePalette
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeThemeRegistry
 import com.example.funlife.ui.screens.pacmaze.pacMazeThemeAccent
@@ -40,7 +43,7 @@ fun PacMazeMapSelectorRow(
     isLoading: Boolean,
     onSelectLevel: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    unlockAll: Boolean = com.example.funlife.BuildConfig.DEBUG,
+    unlockAll: Boolean = PacMazeTestUnlock.enabled,
     compact: Boolean = false,
 ) {
     val scroll = rememberScrollState()
@@ -130,7 +133,7 @@ private fun PacMazeMapSelectorChip(
                 color = if (selected) themeColor else Color.White.copy(alpha = 0.12f),
                 shape = shape,
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .pacMazeClickable(sound = PacMazeUiSoundId.MapChip, enabled = enabled, onClick = onClick)
             .padding(horizontal = 6.dp, vertical = if (compact) 4.dp else 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),

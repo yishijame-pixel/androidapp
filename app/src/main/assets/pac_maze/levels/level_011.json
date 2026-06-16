@@ -6,30 +6,73 @@
   "grid": [
     "bbbbbbbbbbbbbbbbbbbbb",
     "b*.................*b",
-    "b=b................=b",
-    "b.b.####.....####.b.b",
-    "b.b.b...........b.b.b",
-    "b.b.b.###G###.b.b.b.b",
-    "b.b.b.b..>..b.b.b.b.b",
-    "b=b.b.b.@...b.b.b..=b",
-    "b.b.b.b..<..b.b.b.b.b",
-    "b.b.b.###G###.b.b.b.b",
-    "b.b.b...........b.b.b",
-    "b.b.####.....####.b.b",
+    "b.bbbbbbb...bbbbbbb.b",
     "b.b...............b.b",
-    "b=b................=b",
+    "b.b.ttt.......ttt.b.b",
+    "b.b.b...........b.b.b",
+    "b.b.b.www...www.b.b.b",
+    "b.b.b.b.......b.b.b.b",
+    "b=..b.b.b.@..b.b.b.=b",
+    "b.b.b.b.......b.b.b.b",
+    "b.b.b.www...www.b.b.b",
+    "b.b.b...........b.b.b",
+    "b.b.ttt.......ttt.b.b",
+    "b.b...............b.b",
+    "b.bbbbbbb...bbbbbbb.b",
     "b*.................*b",
-    "b...................b",
     "bbbbbbbbbbbbbbbbbbbbb"
   ],
   "spawn": {
-    "pac": [10, 15],
-    "ghosts": [[8, 4], [9, 4], [10, 4], [11, 4], [12, 4]]
+    "pac": [
+      10,
+      13
+    ],
+    "ghosts": [
+      [
+        8,
+        11
+      ],
+      [
+        9,
+        11
+      ],
+      [
+        10,
+        11
+      ],
+      [
+        11,
+        11
+      ],
+      [
+        12,
+        11
+      ]
+    ]
   },
   "markers": [
-    { "type": "start", "x": 10, "y": 15 },
-    { "type": "checkpoint", "x": 1, "y": 7, "label": "东厢", "tag": "LINK" },
-    { "type": "checkpoint", "x": 19, "y": 7, "label": "西厢", "tag": "LINK" }
+    {
+      "type": "start",
+      "x": 10,
+      "y": 13
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 8,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 19,
+      "y": 8,
+      "label": "002",
+      "tag": "LINK"
+    }
   ],
-  "difficulty": { "ghost_speed_mul": 0.75, "ai_aggression": 0.72 }
+  "difficulty": {
+    "ghost_speed_mul": 0.75,
+    "ai_aggression": 0.72
+  }
 }

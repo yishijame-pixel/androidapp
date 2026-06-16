@@ -657,12 +657,18 @@ fun MainScreen(soundManager: SoundEffectManager) {
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // 主内容区域
+            // 主内容区域（沉浸路由如 pac_maze 不消费 Scaffold 内边距，地图铺满物理屏）
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(innerPadding)
+                    .then(
+                        if (showBottomBar) {
+                            Modifier.padding(innerPadding)
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
                 // 🪟 包裹式手势检测器：父级在 Final pass 监听右滑，
                 //    子元素（LazyColumn、滚动卡片）在 Main pass 优先消费事件

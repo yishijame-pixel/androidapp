@@ -78,7 +78,8 @@ import com.example.funlife.data.skin.SkinModule
 import com.example.funlife.domain.skin.BookSkin
 import com.example.funlife.repository.DiaryRepository
 import com.example.funlife.ui.components.diarybook.BookStageAmbient
-import com.example.funlife.ui.components.diarybook.MagicBook3DWidget
+import com.example.funlife.ui.components.diarybook.MagicBookWidget
+import com.example.funlife.ui.components.diarybook.SkinFx
 import com.example.funlife.ui.components.diarybook.StageSubtitle
 import com.example.funlife.ui.components.diarybook.StageTitle
 import com.example.funlife.ui.components.diarybook.drawMiniCover
@@ -149,7 +150,7 @@ fun DiaryHubScreen(
         var showSkinPicker by remember { mutableStateOf(false) }
         var showCustomize by remember { mutableStateOf(false) }
 
-        // 翻开书动画：点击 widget / 翻阅按钮 → openProgress 0→1（550ms）→ 跳转
+        // 翻开书动画：点击 widget / 翻阅按钮 → 短暂动效后跳转
         val openProgress = remember { androidx.compose.animation.core.Animatable(0f) }
         val scope = rememberCoroutineScope()
         val launchOpen: () -> Unit = remember(onOpenFullReader) {
@@ -161,7 +162,6 @@ fun DiaryHubScreen(
                             animationSpec = tween(550, easing = androidx.compose.animation.core.FastOutSlowInEasing)
                         )
                         onOpenFullReader()
-                        // 跳转后异步重置，下次回来 widget 是常态
                         openProgress.snapTo(0f)
                     }
                 }
@@ -224,18 +224,33 @@ fun DiaryHubScreen(
 
                 Spacer(Modifier.height(4.dp))
 
-                // 中央：魔法书 —— 书本身固定尺寸保持精致，特效层 fillMaxSize 铺满父容器
-                MagicBook3DWidget(
-                    skin = skin,
-                    pageCount = bookPageCount,
-                    widthDp = 210.dp,
-                    heightDp = 290.dp,
+                // 中央：魔法书（Canvas 真 3D，避免 Filament 在部分机型闪退）
+                // SkinFx 必须在书下层，恢复火海/闪电等全屏粒子特效（原 MagicBook3DWidget 自带）
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    openProgress = openProgress.value,
-                    onClick = launchOpen
-                )
+                        .weight(1f)
+                        .graphicsLayer {
+                            val p = openProgress.value
+                            scaleX = 1f + p * 0.06f
+                            scaleY = 1f + p * 0.06f
+                            alpha = 1f - p * 0.35f
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    SkinFx(
+                        skin = skin,
+                        widthDp = 210.dp,
+                        heightDp = 290.dp,
+                    )
+                    MagicBookWidget(
+                        skin = skin,
+                        pageCount = bookPageCount,
+                        widthDp = 210.dp,
+                        heightDp = 290.dp,
+                        onClick = launchOpen,
+                    )
+                }
 
                 // 皮肤缩略图条
                 SkinThumbRail(userId = userId, currentSkinId = skin.id.raw, stage = stage)

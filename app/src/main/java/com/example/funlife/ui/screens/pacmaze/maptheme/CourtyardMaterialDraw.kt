@@ -149,25 +149,19 @@ internal object CourtyardMaterialDraw {
 
     fun drawWallInnerShadows(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
-        val cell = ctx.cell
         for (y in 0 until world.height) {
             for (x in 0 until world.width) {
                 if (!world.tileAt(x, y).isWalkableFloor()) continue
-                val rect = Rect(
-                    ctx.offsetX + x * cell,
-                    ctx.offsetY + y * cell,
-                    ctx.offsetX + (x + 1) * cell,
-                    ctx.offsetY + (y + 1) * cell,
-                )
+                val rect = ctx.tileRect(x, y)
                 if (isSolidWall(world, x, y - 1)) {
                     scope.drawRect(
                         brush = Brush.verticalGradient(
                             listOf(Color.Black.copy(alpha = 0.22f), Color.Transparent),
                             startY = rect.top,
-                            endY = rect.top + cell * 0.35f,
+                            endY = rect.top + rect.height * 0.35f,
                         ),
                         topLeft = rect.topLeft,
-                        size = Size(rect.width, cell * 0.35f),
+                        size = Size(rect.width, rect.height * 0.35f),
                     )
                 }
                 if (isSolidWall(world, x - 1, y)) {
@@ -175,21 +169,21 @@ internal object CourtyardMaterialDraw {
                         brush = Brush.horizontalGradient(
                             listOf(Color.Black.copy(alpha = 0.16f), Color.Transparent),
                             startX = rect.left,
-                            endX = rect.left + cell * 0.28f,
+                            endX = rect.left + rect.width * 0.28f,
                         ),
                         topLeft = rect.topLeft,
-                        size = Size(cell * 0.28f, rect.height),
+                        size = Size(rect.width * 0.28f, rect.height),
                     )
                 }
                 if (isSolidWall(world, x + 1, y)) {
                     scope.drawRect(
                         brush = Brush.horizontalGradient(
                             listOf(Color.Transparent, Color.Black.copy(alpha = 0.16f)),
-                            startX = rect.right - cell * 0.28f,
+                            startX = rect.right - rect.width * 0.28f,
                             endX = rect.right,
                         ),
-                        topLeft = Offset(rect.right - cell * 0.28f, rect.top),
-                        size = Size(cell * 0.28f, rect.height),
+                        topLeft = Offset(rect.right - rect.width * 0.28f, rect.top),
+                        size = Size(rect.width * 0.28f, rect.height),
                     )
                 }
             }

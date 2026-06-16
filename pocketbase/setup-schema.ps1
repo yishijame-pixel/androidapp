@@ -352,7 +352,7 @@ $roomRules = @{
 
 $roomFields = @(
     @{ autogeneratePattern = "[a-z0-9]{15}"; hidden = $false; id = "text3208210256"; max = 15; min = 15; name = "id"; pattern = "^[a-z0-9]+$"; presentable = $false; primaryKey = $true; required = $true; system = $true; type = "text" },
-    @{ hidden = $false; id = "select_game_type"; maxSelect = 1; name = "game_type"; presentable = $false; required = $true; system = $false; type = "select"; values = @("gomoku", "draw_guess", "dice_duel", "truth_relay") },
+    @{ hidden = $false; id = "select_game_type"; maxSelect = 1; name = "game_type"; presentable = $false; required = $true; system = $false; type = "select"; values = @("gomoku", "draw_guess", "dice_duel", "truth_relay", "pac_maze") },
     @{ hidden = $false; id = "select_invite_mode"; maxSelect = 1; name = "invite_mode"; presentable = $false; required = $true; system = $false; type = "select"; values = @("direct", "open") },
     @{ autogeneratePattern = ""; hidden = $false; id = "text_room_code"; max = 6; min = 0; name = "room_code"; pattern = ""; presentable = $false; primaryKey = $false; required = $false; system = $false; type = "text" },
     @{ cascadeDelete = $false; collectionId = "_pb_users_auth_"; hidden = $false; id = "relation_host"; maxSelect = 1; minSelect = 0; name = "host"; presentable = $false; required = $true; system = $false; type = "relation" },

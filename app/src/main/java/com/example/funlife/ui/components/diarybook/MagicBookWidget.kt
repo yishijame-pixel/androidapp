@@ -17,7 +17,6 @@ package com.example.funlife.ui.components.diarybook
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -25,16 +24,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +39,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -60,10 +56,30 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.funlife.domain.skin.BookSkin
+import com.example.funlife.data.DiaryBookCustomizationStore
+import com.example.funlife.ui.components.diarybook.skin.rememberBookCustomization
+import com.example.funlife.R
+import androidx.compose.ui.res.stringResource
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** 与 MagicBook3DWidget 一致的默认视角：偏右 22° + 俯 15° */
+private const val DEFAULT_BOOK_ROT_Y = -22f
+private const val DEFAULT_BOOK_ROT_X = 15f
+
+/** 厚度相对封面宽度的比例（Filament 立方体 depthNorm） */
+private fun depthNormForPages(pageCount: Int): Float = when {
+    pageCount <= 1000  -> 0.25f
+    pageCount <= 5000  -> 0.35f
+    pageCount <= 10000 -> 0.45f
+    else               -> 0.60f
+}
+
+/** 封面位图超采样，与 3D 版一致减少锯齿 */
+private const val FACE_TEX_SCALE = 1.4f
 
 // ────────────────────────────────────────────────────────────────────────
 // 公共组件
@@ -79,25 +95,39 @@ fun MagicBookWidget(
     onClick: () -> Unit
 ) {
     val density = LocalDensity.current
-    val palette = skin.palette
+    val stage = bookStageThemeFor(skin.id.raw)
 
-    // ── 厚度（可视）─────────────────────────────────────
-    val thicknessDp = remember(pageCount) {
-        when {
-            pageCount <= 1000  -> 14.dp
-            pageCount <= 5000  -> 28.dp
-            pageCount <= 10000 -> 44.dp
-            else               -> 64.dp
-        }
+    // ── 厚度（与 MagicBook3DWidget depthNorm 比例一致，不再用固定 14dp）──
+    val depthNorm = remember(pageCount) { depthNormForPages(pageCount) }
+    val thicknessDp = remember(widthDp, depthNorm) {
+        (widthDp.value * depthNorm).dp
     }
 
     val widthPx  = with(density) { widthDp.toPx() }
     val heightPx = with(density) { heightDp.toPx() }
     val thickPx  = with(density) { thicknessDp.toPx() }
 
-    // ── 6 个面位图（按 skin + 尺寸缓存）─────────────────
-    val faces = remember(skin, widthPx, heightPx, thickPx) {
-        buildFaceBitmaps(skin, widthPx.toInt(), heightPx.toInt(), thickPx.toInt())
+    val customization = rememberBookCustomization()
+    val defaultTitle = stringResource(R.string.diary_book_default_title)
+    val defaultSubtitle = stringResource(R.string.diary_book_default_subtitle)
+    val coverTitle = DiaryBookCustomizationStore.resolveTitle(customization, defaultTitle)
+    val coverOwnerLine = DiaryBookCustomizationStore.resolveOwnerLine(customization, defaultSubtitle)
+    val ownerNameRaw = customization.ownerName
+
+    // ── 6 个面位图（1.4× 超采样，与 3D 版一致）─────────────────
+    val texWPx = (widthPx * FACE_TEX_SCALE).toInt()
+    val texHPx = (heightPx * FACE_TEX_SCALE).toInt()
+    val texTPx = (thickPx * FACE_TEX_SCALE).toInt()
+    val faces = remember(skin, texWPx, texHPx, texTPx, coverTitle, coverOwnerLine, ownerNameRaw) {
+        buildFaceBitmaps(
+            skin,
+            texWPx,
+            texHPx,
+            texTPx,
+            coverTitle,
+            coverOwnerLine,
+            ownerNameRaw,
+        )
     }
 
     // ── 呼吸 / 浮动 ────────────────────────────────────
@@ -111,23 +141,43 @@ fun MagicBookWidget(
         ),
         label = "phase"
     )
-    val floatYpx    = if (breathing) (-6f + phase * 12f) * density.density else 0f
-    val baseRotY    = if (breathing) (-14f + phase * 6f) else 0f
-    val auraAlpha   = 0.28f + phase * 0.20f
+    val floatYpx    = if (breathing) (-6f + phase * 12f) else 0f
+    // 呼吸微摆：与 3D 版 idleRotY / idleRotX 一致
+    val idleRotY    = if (breathing) (-3f + phase * 6f) else 0f
+    val idleRotX    = if (breathing) (-1.5f + phase * 3f) else 0f
 
-    // ── 拖拽旋转 ───────────────────────────────────────
+    // ── 拖拽旋转（偏移量；松手后回正到默认视角）────────────
     val dragRotY = remember { Animatable(0f) }
     val dragRotX = remember { Animatable(0f) }
     val coScope  = rememberCoroutineScope()
     var isDragging by remember { mutableStateOf(false) }
+    var lastInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
 
-    val totalRotY = (if (isDragging) 0f else baseRotY) + dragRotY.value
-    val totalRotX = -3f + dragRotX.value
+    // 始终叠加默认视角 + 呼吸 + 拖拽偏移（拖拽时不再丢掉 base，避免起手跳变）
+    val totalRotY = DEFAULT_BOOK_ROT_Y + idleRotY + dragRotY.value
+    val totalRotX = DEFAULT_BOOK_ROT_X + idleRotX + dragRotX.value
 
-    // ── 容器尺寸（书最大对角线 + 厚度 + 留白）──────────
-    val maxDim = maxOf(widthDp, heightDp) + thicknessDp * 2 + 80.dp
-    val containerW = maxDim
-    val containerH = maxDim
+    // 松手 1.5s 无操作 → 700ms 回正（与 MagicBook3DWidget 一致）
+    LaunchedEffect(isDragging) {
+        if (!isDragging) {
+            delay(1500)
+            val startY = dragRotY.value
+            val startX = dragRotX.value
+            val steps = 700 / 16
+            for (i in 1..steps) {
+                val pp = 1f - (1f - i.toFloat() / steps).let { t -> t * t * t }
+                dragRotY.snapTo(startY + (0f - startY) * pp)
+                dragRotX.snapTo(startX + (0f - startX) * pp)
+                delay(16)
+            }
+            dragRotY.snapTo(0f)
+            dragRotX.snapTo(0f)
+        }
+    }
+
+    // ── 容器尺寸（与 3D 版留白一致）────────────────────
+    val containerW = widthDp + 200.dp
+    val containerH = heightDp + 240.dp
 
     Box(
         modifier = Modifier
@@ -135,73 +185,58 @@ fun MagicBookWidget(
             .height(containerH),
         contentAlignment = Alignment.Center
     ) {
-        // 后方光晕
+        // 地面反照（剧场气场色，火光下不用纯黑阴影）
         Canvas(
             modifier = Modifier
-                .size(maxDim)
+                .size(width = widthDp * 0.9f, height = 22.dp)
                 .graphicsLayer {
-                    alpha = auraAlpha
-                    translationY = floatYpx
+                    translationY = with(density) { (heightDp / 2 + 36.dp).toPx() } + floatYpx * 0.3f
+                    val t = (floatYpx / 12f).coerceIn(-1f, 1f)
+                    scaleX = 1f - t * 0.12f
+                    scaleY = (1f - t * 0.12f) * 0.7f
+                    alpha = stage.groundAlpha - t * 0.18f
                 }
         ) {
-            drawCircle(
+            drawOval(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        palette.foil.base.copy(alpha = 0.55f),
-                        palette.foil.base.copy(alpha = 0.18f),
-                        Color.Transparent
-                    )
+                        stage.ground.copy(alpha = stage.groundAlpha),
+                        Color.Transparent,
+                    ),
                 ),
-                radius = size.minDimension * 0.42f,
-                center = Offset(size.width / 2f, size.height / 2f)
+                topLeft = Offset(0f, 0f),
+                size = Size(size.width, size.height),
             )
         }
-
-        // 地面阴影
-        Box(
-            modifier = Modifier
-                .width(widthDp * 0.85f)
-                .height(20.dp)
-                .graphicsLayer {
-                    translationY = (heightDp / 2 + 24.dp).toPx()
-                    scaleX = 1f - (floatYpx / 60f).coerceIn(-0.15f, 0.15f)
-                    scaleY = (1f - (floatYpx / 60f).coerceIn(-0.15f, 0.15f)) * 0.6f
-                    alpha = 0.45f
-                }
-                .clip(RoundedCornerShape(50))
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)
-                    )
-                )
-        )
 
         // ── 真 3D 立方体（手动投影 + drawBitmapMesh）──
         Canvas(
             modifier = Modifier
-                .fillMaxSize()
+                .size(widthDp + 80.dp, heightDp + 80.dp)
                 .graphicsLayer { translationY = floatYpx }
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { isDragging = true },
+                        onDragStart = {
+                            isDragging = true
+                            lastInteractionTime = System.currentTimeMillis()
+                        },
                         onDragEnd = {
                             isDragging = false
-                            coScope.launch {
-                                dragRotY.animateTo(0f, tween(700, easing = FastOutSlowInEasing))
-                            }
-                            coScope.launch {
-                                dragRotX.animateTo(0f, tween(700, easing = FastOutSlowInEasing))
-                            }
+                            lastInteractionTime = System.currentTimeMillis()
                         },
-                        onDragCancel = { isDragging = false }
+                        onDragCancel = {
+                            isDragging = false
+                            lastInteractionTime = System.currentTimeMillis()
+                        }
                     ) { change, drag ->
                         change.consume()
+                        lastInteractionTime = System.currentTimeMillis()
                         coScope.launch {
                             dragRotY.snapTo(
                                 (dragRotY.value + drag.x * 0.5f).coerceIn(-180f, 180f)
                             )
                             dragRotX.snapTo(
-                                (dragRotX.value - drag.y * 0.35f).coerceIn(-60f, 60f)
+                                (dragRotX.value - drag.y * 0.3f).coerceIn(-60f, 60f)
                             )
                         }
                     }
@@ -276,7 +311,7 @@ private fun DrawScope.drawCube3D(
     val cx = cos(rx); val sx = sin(rx)
     val cy = cos(ry); val sy = sin(ry)
 
-    val cameraDist = maxOf(widthPx, heightPx) * 3.5f
+    val cameraDist = maxOf(widthPx, heightPx) * 3.0f  // 对齐 Filament camera z=3.0
 
     val rotated = Array(8) { FloatArray(3) }
     val proj    = Array(8) { Offset.Zero }
@@ -319,10 +354,10 @@ private fun DrawScope.drawCube3D(
         val pa = proj[f.a]; val pb = proj[f.b]; val pc = proj[f.c]; val pd = proj[f.d]
 
         // 屏幕空间有符号面积 → 背面剔除
-        // (CCW 在屏幕坐标系 (Y 向下) 中表现为 area < 0)
+        // 3D Y 轴向上、屏幕 Y 向下，朝相机的面在屏幕空间为 CW（area > 0）
         val area = (pb.x - pa.x) * (pc.y - pa.y) - (pb.y - pa.y) * (pc.x - pa.x) +
                    (pc.x - pa.x) * (pd.y - pa.y) - (pc.y - pa.y) * (pd.x - pa.x)
-        if (area > 0f) continue  // 背面 (Y 向下时 CCW = 负面积)
+        if (area <= 0f) continue
 
         // drawBitmapMesh：mesh 1×1 (4 个顶点，按 row-major 排列)
         // 顺序：TL, TR, BL, BR  ←  对应  pa, pb, pd, pc
@@ -375,10 +410,9 @@ internal fun buildFaceBitmaps(
         top    = renderToBitmap(wPx, maxOf(tPx, 4)) { drawPageEdgeHorizontalEnhanced(skin) },
         bottom = renderToBitmap(wPx, maxOf(tPx, 4)) { drawPageEdgeHorizontalEnhanced(skin) },
     )
-    // ChiYan / JiYue 后处理：把"被烧/被劈"烘焙到纹理里
+    // 赤焰：封面灼烧焦痕烘焙到纹理；霁月闪电改由 SkinFx 全屏动画呈现，不在封面上画静态雷劈
     val themed = when (skin.id.raw) {
         "builtin::chiyan" -> applyScorchEffect(raw)
-        "builtin::jiyue"  -> applyLightningStrikeEffect(raw)
         else              -> raw
     }
     // 深邃剧场：压暗侧面，避免浅色反白成光晕

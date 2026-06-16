@@ -14,16 +14,40 @@ object PacMazeMapLoader {
     val spawn = root.getAsJsonObject("spawn")
     val pac = spawn.getAsJsonArray("pac")
     val pacSpawn = pac[0].asInt to pac[1].asInt
-    val ghosts = spawn.getAsJsonArray("ghosts").map { arr ->
-      val a = arr.asJsonArray
-      a[0].asInt to a[1].asInt
+    val positions = parseGhostPositions(spawn)
+    val hasDynamic = scanHasDynamicTiles(root, width, height)
+    val hasGates = scanHasEnergyGates(root, width, height)
+    val explicitGhosts = parseExplicitGhostSpawns(spawn)
+    val ghosts = if (explicitGhosts.isNotEmpty()) {
+      explicitGhosts
+    } else {
+      PacMazeGhostRoster.resolveSpawns(
+        levelId = id,
+        positions = positions,
+        hasDynamicTiles = hasDynamic,
+        hasEnergyGates = hasGates,
+      )
     }
     val diff = root.getAsJsonObject("difficulty")
-    val speedMul = diff?.get("ghost_speed_mul")?.asFloat ?: 1f
-    val aggression = diff?.get("ai_aggression")?.asFloat ?: 0.8f
+    val authoredSpeed = diff?.get("ghost_speed_mul")?.asFloat ?: 1f
+    val authoredAggression = diff?.get("ai_aggression")?.asFloat ?: 0.8f
+    val (speedMul, aggression) = PacMazeLevelProgression.resolveDifficulty(id, authoredSpeed, authoredAggression)
     val markers = parseMarkers(root, width, height, pacSpawn)
     val gridHazards = scanGridHazards(root, width, height)
     val jsonHazards = parseHazardsFromJson(root, startIndex = gridHazards.size)
+    val tiles = decodeTiles(root, width, height)
+    val parsedSpawners = parseItemSpawners(root, width, height)
+    val linkPortalTiles = linkPortalTiles(markers, width)
+    val itemSpawners = PacMazeLevelProgression.enrichItemSpawners(
+        levelId = id,
+        width = width,
+        height = height,
+        tiles = tiles,
+        pacSpawn = pacSpawn,
+        ghostSpawns = ghosts,
+        existing = parsedSpawners,
+        linkPortalTiles = linkPortalTiles,
+    )
     val modeRules = parseModeRules(root)
     return PacMazeLevelConfig(
       id = id,
@@ -36,9 +60,57 @@ object PacMazeMapLoader {
       aiAggression = aggression,
       markers = markers,
       hazards = gridHazards + jsonHazards,
+      itemSpawners = itemSpawners,
       starCriteria = PacMazeStarCriteria.fromLevelJson(root),
       modeRules = modeRules,
     )
+  }
+
+  private fun parseItemSpawners(root: JsonObject, width: Int, height: Int): List<PacMazeItemSpawnerDef> {
+    var index = 0
+    val fromJson = root.getAsJsonArray("itemSpawners")?.mapNotNull { element ->
+      val obj = element.asJsonObject
+      val x = obj.get("x")?.asInt ?: return@mapNotNull null
+      val y = obj.get("y")?.asInt ?: return@mapNotNull null
+      val id = obj.get("id")?.asString ?: "item_sp_${index++}"
+      val interval = obj.get("intervalTicks")?.asInt
+        ?: obj.get("interval")?.asInt
+        ?: PacMazeItemConstants.SPAWNER_INTERVAL_TICKS
+      val pool = obj.getAsJsonArray("pool")?.mapNotNull { el ->
+        PacMazeItemKind.fromId(el.asString)
+      }.orEmpty().ifEmpty { PacMazeItemKind.DEFAULT_POOL }
+      PacMazeItemSpawnerDef(id = id, x = x, y = y, intervalTicks = interval, pool = pool)
+    }.orEmpty()
+    val fromGrid = scanGridItemSpawners(root, width, height, startIndex = fromJson.size)
+        .filter { grid -> fromJson.none { it.x == grid.x && it.y == grid.y } }
+    return fromJson + fromGrid
+  }
+
+  private fun scanGridItemSpawners(
+    root: JsonObject,
+    width: Int,
+    height: Int,
+    startIndex: Int,
+  ): List<PacMazeItemSpawnerDef> {
+    val grid = root.getAsJsonArray("grid") ?: return emptyList()
+    val spawners = mutableListOf<PacMazeItemSpawnerDef>()
+    var index = startIndex
+    for (y in 0 until height) {
+      val row = grid[y].asString
+      for (x in 0 until width) {
+        if (row.getOrElse(x) { '#' } == '$') {
+          spawners.add(
+            PacMazeItemSpawnerDef(
+              id = "grid_sp_$index",
+              x = x,
+              y = y,
+            ),
+          )
+          index++
+        }
+      }
+    }
+    return spawners
   }
 
   private fun parseHazardsFromJson(root: JsonObject, startIndex: Int): List<PacMazeHazardDef> {
@@ -147,6 +219,11 @@ object PacMazeMapLoader {
     return top to bottom
   }
 
+  private fun linkPortalTiles(markers: List<PacMazeMapMarker>, width: Int): Set<Pair<Int, Int>> =
+      PacMazePortals.pairs(markers, width)
+          .flatMap { pair -> listOf(pair.left.x to pair.left.y, pair.right.x to pair.right.y) }
+          .toSet()
+
   private fun parseMarkers(
     root: JsonObject,
     width: Int,
@@ -164,6 +241,7 @@ object PacMazeMapLoader {
         "start" -> PacMazeMarkerKind.START
         "checkpoint", "cp" -> PacMazeMarkerKind.CHECKPOINT
         "exit" -> PacMazeMarkerKind.EXIT
+        "item_factory", "factory", "spawner" -> PacMazeMarkerKind.ITEM_FACTORY
         else -> return@mapNotNull null
       }
       PacMazeMapMarker(kind = kind, x = x, y = y, label = label, tag = tag)
@@ -210,21 +288,25 @@ object PacMazeMapLoader {
           speed = PacMazeConstants.PAC_SPEED,
         ),
       )
-      level.ghostSpawns.forEachIndexed { index, (gx, gy) ->
+      level.ghostSpawns.forEachIndexed { index, spawn ->
         add(
           PacMazeEntity(
             id = "ghost_$index",
             role = "ghost",
-            x = gx.toFloat(),
-            y = gy.toFloat(),
+            x = spawn.x.toFloat(),
+            y = spawn.y.toFloat(),
             direction = null,
-            speed = PacMazeConstants.GHOST_SPEED * level.ghostSpeedMul,
-            ghostMode = GhostMode.SCATTER,
+            speed = PacMazeConstants.GHOST_SPEED * level.ghostSpeedMul * spawn.kind.speedMul,
+            ghostMode = if (level.id <= 0) GhostMode.CHASE else GhostMode.SCATTER,
+            ghostKind = spawn.kind,
+            ghostSpecialty = spawn.specialty,
           ),
         )
       }
     }
     val hazardStates = PacMazeHazards.initStates(level.hazards)
+    val itemSpawners = level.itemSpawners
+    val itemSpawnerStates = PacMazeItems.initSpawnerStates(itemSpawners)
     val baseWorld = PacMazeWorldState(
       tick = 0L,
       levelId = level.id,
@@ -237,18 +319,24 @@ object PacMazeMapLoader {
       pelletsRemaining = pellets,
       phase = PacMazePhase.PLAYING,
       rngSeed = seed,
-      ghostMode = GhostMode.SCATTER,
-      ghostModeTicksLeft = PacMazeConstants.GHOST_MODE_CYCLE_TICKS,
-      ghostReleaseTicksLeft = PacMazeConstants.GHOST_RELEASE_TICKS,
+      ghostMode = if (level.id <= 0) GhostMode.CHASE else GhostMode.SCATTER,
+      ghostModeTicksLeft = if (level.id <= 0) {
+        PacMazeConstants.GHOST_MODE_CYCLE_TICKS / 2
+      } else {
+        PacMazeConstants.GHOST_MODE_CYCLE_TICKS
+      },
+      ghostReleaseTicksLeft = if (level.id <= 0) 0 else PacMazeConstants.GHOST_RELEASE_TICKS,
       hazards = level.hazards,
       hazardStates = hazardStates,
+      itemSpawners = itemSpawners,
+      itemSpawnerStates = itemSpawnerStates,
     )
     return baseWorld.copy(
       entities = entities.map { entity ->
         var sanitized = PacMazeMotion.sanitize(baseWorld, entity, entity.role == "ghost")
         if (sanitized.role == "ghost" && sanitized.direction == null) {
           val initialDir = Direction.entries.firstOrNull { dir ->
-            PacMazeMotion.canMoveInDir(baseWorld, sanitized.x, sanitized.y, dir, forGhost = true)
+            PacMazeMotion.canMoveInDir(baseWorld, sanitized.x, sanitized.y, dir, forGhost = true, ghost = sanitized)
           }
           if (initialDir != null) {
             sanitized = sanitized.copy(direction = initialDir, facing = initialDir)
@@ -256,7 +344,15 @@ object PacMazeMapLoader {
         }
         sanitized
       },
-    )
+    ).let { world ->
+      var next = world
+      if (level.modeRules.fogEnabled) next = PacMazeMazeExploration.initExplored(next, level)
+      next.copy(
+        intelPointsRemaining = level.modeRules.intelPointsMax,
+        mirrorDynamicWalls = level.modeRules.mirrorDynamicWalls,
+        dynamicWallSpeedMul = level.modeRules.dynamicWallSpeedMul,
+      )
+    }
   }
 
   private fun decodeTiles(root: JsonObject, width: Int, height: Int): IntArray {
@@ -286,6 +382,7 @@ object PacMazeMapLoader {
     'G' -> TileType.ENERGY_GATE
     '&' -> TileType.DYNAMIC_WALL
     'H', 'I', '>', '<', '^', 'v' -> TileType.EMPTY
+    '$' -> TileType.EMPTY
     'E' -> TileType.EMPTY
     else -> TileType.WALL
   }
@@ -296,9 +393,94 @@ object PacMazeMapLoader {
       "reach_exit", "exit" -> PacMazeWinCondition.REACH_EXIT
       else -> PacMazeWinCondition.CLEAR_PELLETS
     }
+    val requiredKeyTags = obj.getAsJsonArray("requiredKeyTags")
+        ?.mapNotNull { it.asString }
+        ?.filter { it.isNotBlank() }
+        ?: emptyList()
+    val orderedKeyTags = obj.getAsJsonArray("orderedKeyTags")
+        ?.mapNotNull { it.asString }
+        ?.filter { it.isNotBlank() }
+        ?: requiredKeyTags
+    val ghostSignatureIds = obj.getAsJsonArray("ghostSignatureIds")
+        ?.mapNotNull { it.asString }
+        ?.filter { it.isNotBlank() }
+        ?: emptyList()
     return PacMazeModeRules(
       winCondition = win,
       timeLimitSeconds = obj.get("timeLimitSeconds")?.asInt ?: 0,
+      fogEnabled = obj.get("fogEnabled")?.asBoolean ?: false,
+      fogRadius = obj.get("fogRadius")?.asInt ?: 2,
+      radarEnabled = obj.get("radarEnabled")?.asBoolean ?: false,
+      requiredKeyTags = requiredKeyTags.toSet(),
+      orderedKeyTags = orderedKeyTags,
+      scoreMultiplier = obj.get("scoreMultiplier")?.asFloat ?: 1f,
+      starTimeBonusSeconds = obj.get("starTimeBonusSeconds")?.asInt ?: 0,
+      sealedKeyOrder = obj.get("sealedKeyOrder")?.asBoolean ?: false,
+      hintPelletsEnabled = obj.get("hintPelletsEnabled")?.asBoolean ?: true,
+      intelPointsMax = obj.get("intelPointsMax")?.asInt ?: 0,
+      huntEscalation = obj.get("huntEscalation")?.asBoolean ?: false,
+      ghostSignatureIds = ghostSignatureIds,
+      mutatorId = obj.get("mutatorId")?.asString ?: "none",
+      variantId = obj.get("variantId")?.asString ?: "standard",
+      mirrorDynamicWalls = obj.get("mirrorDynamicWalls")?.asBoolean ?: false,
+      radarCooldownMultiplier = obj.get("radarCooldownMultiplier")?.asFloat ?: 1f,
+      revealExitOnLastKey = obj.get("revealExitOnLastKey")?.asBoolean ?: false,
+      extraGhostCount = obj.get("extraGhostCount")?.asInt ?: 0,
+      dynamicWallSpeedMul = obj.get("dynamicWallSpeedMul")?.asFloat ?: 1f,
     )
+  }
+
+  private fun parseExplicitGhostSpawns(spawn: JsonObject): List<PacMazeGhostSpawnDef> {
+    val arr = spawn.getAsJsonArray("ghosts") ?: return emptyList()
+    return arr.mapNotNull { element ->
+      if (!element.isJsonObject) return@mapNotNull null
+      val obj = element.asJsonObject
+      val kindRaw = obj.get("kind")?.asString ?: return@mapNotNull null
+      val x = obj.get("x")?.asInt ?: return@mapNotNull null
+      val y = obj.get("y")?.asInt ?: return@mapNotNull null
+      val kind = GhostKind.entries.firstOrNull { it.id == kindRaw } ?: return@mapNotNull null
+      PacMazeGhostSpawnDef(x = x, y = y, kind = kind)
+    }
+  }
+
+  private fun parseGhostPositions(spawn: JsonObject): List<Pair<Int, Int>> {
+    val arr = spawn.getAsJsonArray("ghosts") ?: return emptyList()
+    return arr.mapNotNull { element ->
+      when {
+        element.isJsonArray -> {
+          val a = element.asJsonArray
+          if (a.size() >= 2) a[0].asInt to a[1].asInt else null
+        }
+        element.isJsonObject -> {
+          val obj = element.asJsonObject
+          val x = obj.get("x")?.asInt ?: return@mapNotNull null
+          val y = obj.get("y")?.asInt ?: return@mapNotNull null
+          x to y
+        }
+        else -> null
+      }
+    }
+  }
+
+  private fun scanHasDynamicTiles(root: JsonObject, width: Int, height: Int): Boolean {
+    val grid = root.getAsJsonArray("grid") ?: return false
+    for (y in 0 until minOf(grid.size(), height)) {
+      val row = grid[y].asString
+      for (x in 0 until minOf(row.length, width)) {
+        if (row[x] == '&') return true
+      }
+    }
+    return false
+  }
+
+  private fun scanHasEnergyGates(root: JsonObject, width: Int, height: Int): Boolean {
+    val grid = root.getAsJsonArray("grid") ?: return false
+    for (y in 0 until minOf(grid.size(), height)) {
+      val row = grid[y].asString
+      for (x in 0 until minOf(row.length, width)) {
+        if (row[x] == 'G') return true
+      }
+    }
+    return false
   }
 }

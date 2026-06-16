@@ -1,8 +1,7 @@
-// ============================================================
-// FunLife VIP 管理后台（本地运行，不部署到公网）
-//   启动：cd backend/admin && npm install && npm start
+// FunLife VIP 管理后台
+//   本地：cd backend/admin && npm install && npm start
+//   Docker：cd backend && docker compose up -d --build
 //   访问：http://localhost:3300
-// ============================================================
 
 const express = require("express");
 const crypto = require("crypto");
@@ -39,12 +38,52 @@ app.post("/api/login", auth.rateLimitLogin, (req, res) => {
 app.post("/api/logout", (req, res) => { auth.clearCookie(res); res.json({ ok: true }); });
 app.get("/api/me", auth.requireAuth, (req, res) => { res.json({ ok: true, admin: req.admin }); });
 
+const tcb = initTcb();
+const db = tcb.database();
+
+// ── 豆人迷宫 · ikun 须知（客户端公开拉取，须在 requireAuth 之前注册）──
+const PAC_MAZE_IKUN = db.collection("pac_maze_ikun_disclosure");
+const IKUN_DISCLOSURE_ID = "ikun_disclosure";
+const DEFAULT_IKUN_DISCLOSURE = {
+  enabled: true,
+  version: 1,
+  title: "ikun类角色使用须知",
+  body: "欢迎使用「ikun类」梗图行走角色。\n\n请理性使用角色形象，勿用于侮辱、诽谤、骚扰他人，或从事任何违法违规活动。\n\n继续使用即表示您已理解并同意在合法、合规、尊重他人的前提下使用本分类角色。",
+  agreeButtonText: "我已阅读并同意",
+  footerHint: "请滑动阅读全文后再点击同意",
+};
+
+async function readIkunDisclosurePayload() {
+  let doc = null;
+  try {
+    const r = await PAC_MAZE_IKUN.doc(IKUN_DISCLOSURE_ID).get();
+    doc = r.data || null;
+  } catch (e) { /* 集合未建 */ }
+  const merged = { ...DEFAULT_IKUN_DISCLOSURE, ...(doc || {}) };
+  return {
+    version: Number(merged.version) || DEFAULT_IKUN_DISCLOSURE.version,
+    enabled: merged.enabled !== false,
+    title: String(merged.title || DEFAULT_IKUN_DISCLOSURE.title),
+    body: String(merged.body || DEFAULT_IKUN_DISCLOSURE.body),
+    agreeButtonText: String(merged.agreeButtonText || DEFAULT_IKUN_DISCLOSURE.agreeButtonText),
+    footerHint: String(merged.footerHint || DEFAULT_IKUN_DISCLOSURE.footerHint),
+    updatedAt: merged.updatedAt || null,
+  };
+}
+
+app.post("/pac_maze_config", async (req, res) => {
+  try {
+    const data = await readIkunDisclosurePayload();
+    res.json({ ok: true, data });
+  } catch (e) {
+    sendError(res, 500, "INTERNAL", "pac_maze_config 失败", e);
+  }
+});
+
 // 所有其它路由（页面 + API）都需要登录
 app.use(auth.requireAuth);
 app.use(express.static(path.join(__dirname, "public")));
 
-const tcb = initTcb();
-const db = tcb.database();
 const _ = db.command;
 const CODES = db.collection("vip_codes");
 const LOG = db.collection("vip_redeem_log");
@@ -1544,6 +1583,59 @@ app.get("/api/v53/ai/top_devices", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// 豆人迷宫 · ikun 类进入须知（管理 API，需登录）
+// ─────────────────────────────────────────────
+let ikunDisclosureCollectionReady = false;
+
+async function ensureIkunDisclosureCollection() {
+  if (ikunDisclosureCollectionReady) return;
+  try {
+    await db.createCollection("pac_maze_ikun_disclosure");
+  } catch (e) {
+    const msg = (e && (e.message || e.code)) || "";
+    if (!/exist/i.test(String(msg))) throw e;
+  }
+  ikunDisclosureCollectionReady = true;
+}
+
+app.get("/api/pac_maze/ikun_disclosure", async (req, res) => {
+  try {
+    const data = await readIkunDisclosurePayload();
+    res.json({ ok: true, data: { _id: IKUN_DISCLOSURE_ID, ...data } });
+  } catch (e) {
+    sendError(res, 500, "INTERNAL", "读取 ikun 须知失败", e);
+  }
+});
+
+app.post("/api/pac_maze/ikun_disclosure", async (req, res) => {
+  try {
+    await ensureIkunDisclosureCollection();
+    const body = req.body || {};
+    const title = String(body.title || DEFAULT_IKUN_DISCLOSURE.title).slice(0, 120);
+    const agreeButtonText = String(body.agreeButtonText || DEFAULT_IKUN_DISCLOSURE.agreeButtonText).slice(0, 40);
+    const footerHint = String(body.footerHint || DEFAULT_IKUN_DISCLOSURE.footerHint).slice(0, 120);
+    const contentBody = String(body.body || DEFAULT_IKUN_DISCLOSURE.body).slice(0, 12000);
+    const enabled = body.enabled !== false && body.enabled !== "false";
+    const version = Date.now();
+    const docData = {
+      enabled,
+      version,
+      title,
+      body: contentBody,
+      agreeButtonText,
+      footerHint,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.admin || "admin",
+    };
+    await PAC_MAZE_IKUN.doc(IKUN_DISCLOSURE_ID).set(docData);
+    await audit(db, req, "pac_maze_ikun_disclosure_update", { version, enabled });
+    res.json({ ok: true, data: { _id: IKUN_DISCLOSURE_ID, ...docData } });
+  } catch (e) {
+    sendError(res, 500, "INTERNAL", "保存 ikun 须知失败", e);
+  }
+});
+
+// ─────────────────────────────────────────────
 // 主页
 // ─────────────────────────────────────────────
 app.get("/", (req, res) => {
@@ -1555,7 +1647,8 @@ app.get("/v53", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "v53-dashboard.html"));
 });
 
-const PORT = 3300;
-app.listen(PORT, () => {
-  console.log(`\n  📊 FunLife VIP 管理后台\n  → http://localhost:${PORT}\n  按 Ctrl+C 退出\n`);
+const PORT = Number(process.env.PORT) || 3300;
+const HOST = process.env.HOST || "0.0.0.0";
+app.listen(PORT, HOST, () => {
+  console.log(`\n  📊 FunLife VIP 管理后台\n  → http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}\n  按 Ctrl+C 退出\n`);
 });

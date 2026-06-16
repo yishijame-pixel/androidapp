@@ -41,6 +41,8 @@ const COLLECTIONS = [
   // 运行时 SKU 配置（后台可改 bonusCoins / dailyCoins / durationDays / price / name）
   // doc _id = SKU code (VIP_NORMAL / VIP_YEAR / VIP_LIFETIME)
   "vip_sku_config",
+  // 豆人迷宫 · ikun 类进入须知
+  "pac_maze_ikun_disclosure",
   // 🆕 v51 时光信箱 月度配额（按 deviceId+ym 唯一）
   "letter_quota",
   // 🆕 v51 聊天记账 AI 日额度（按 deviceId+ymd 唯一）

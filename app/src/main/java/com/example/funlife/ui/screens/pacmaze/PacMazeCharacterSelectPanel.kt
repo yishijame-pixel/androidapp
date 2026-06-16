@@ -1,18 +1,14 @@
 package com.example.funlife.ui.screens.pacmaze
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,71 +34,45 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
-import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterId
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterStagePreview
-import com.example.funlife.ui.screens.pacmaze.character.hasPowerAura
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeAvatarLoadout
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterStageDecor
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeCosmeticCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeTrailId
 
 /** 左侧英雄舞台：聚光灯 + 大角色 + 名称牌 */
 @Composable
 fun PacMazeCharacterSelectHero(
-    characterId: PacMazeCharacterId,
+    loadout: PacMazeAvatarLoadout,
     modifier: Modifier = Modifier,
 ) {
-    val accent = pacMazeCharacterAccent(characterId)
-    val tag = pacMazeCharacterTag(characterId)
-    val index = PacMazeCharacterId.selectable.indexOf(characterId).coerceAtLeast(0) + 1
-    val total = PacMazeCharacterId.selectable.size
-
-    val pulse = rememberInfiniteTransition(label = "heroPulse")
-    val glowAlpha by pulse.animateFloat(
-        initialValue = 0.18f,
-        targetValue = 0.38f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "glowAlpha",
-    )
+    val skinId = loadout.skinId
+    val layout = currentPacMazeHubLayout()
+    val accent = pacMazeSkinAccent(skinId)
+    val tag = pacMazeSkinTag(skinId)
+    val tier = PacMazeCosmeticCatalog.bodyTier(skinId)
+    val index = PacMazeSkinId.selectable.indexOf(skinId).coerceAtLeast(0) + 1
+    val total = PacMazeSkinId.selectable.size
 
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val center = Offset(size.width / 2f, size.height * 0.42f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = glowAlpha), Color.Transparent),
-                    center = center,
-                    radius = size.minDimension * 0.55f,
-                ),
-                radius = size.minDimension * 0.55f,
-                center = center,
-            )
-            drawCircle(
-                color = accent.copy(alpha = 0.12f),
-                radius = size.minDimension * 0.28f,
-                center = center,
-                style = Stroke(width = 1.5.dp.toPx()),
-            )
-        }
-
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(layout.gap),
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
+                .padding(horizontal = layout.dp(6.dp), vertical = layout.dp(8.dp)),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -115,66 +84,80 @@ fun PacMazeCharacterSelectHero(
                         .clip(RoundedCornerShape(999.dp))
                         .background(accent.copy(alpha = 0.15f))
                         .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                        .padding(horizontal = layout.dp(8.dp), vertical = layout.dp(3.dp)),
                 ) {
                     Text(
                         tag,
                         color = accent,
-                        fontSize = 9.sp,
+                        fontSize = layout.captionSp,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 1.2.sp,
+                        letterSpacing = 0.8.sp,
                     )
                 }
                 Text(
                     String.format("%02d / %02d", index, total),
                     color = PacMazePalette.inkHint,
-                    fontSize = 11.sp,
+                    fontSize = layout.bodySp,
                     fontWeight = FontWeight.Bold,
                 )
             }
 
-            Spacer(Modifier.weight(0.08f))
+            Spacer(Modifier.weight(0.06f))
 
             Box(contentAlignment = Alignment.Center) {
+                val ikun = PacMazeIkunCatalog.contains(skinId)
+                val previewScale = if (ikun) 1.72f else 1f
                 PacMazeCharacterStagePreview(
-                    characterId = characterId,
-                    modifier = Modifier
-                        .size(width = 132.dp, height = 118.dp),
+                    skinId = skinId,
+                    loadout = loadout,
+                    modifier = Modifier.size(
+                        layout.characterPreviewW * previewScale,
+                        layout.characterPreviewH * previewScale,
+                    ),
                     selected = true,
                     animateWalk = true,
-                    powerActive = characterId.hasPowerAura(),
+                    powerActive = skinId.hasPowerAura(),
                 )
             }
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(layout.dp(4.dp)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(layout.cardRadius))
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xFF1A2236).copy(alpha = 0.92f), Color(0xFF121828)),
+                            listOf(
+                                Color(0xFF1E2838).copy(alpha = 0.95f),
+                                Color(0xFF121828),
+                            ),
                         ),
                     )
-                    .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .border(1.dp, accent.copy(alpha = 0.4f), RoundedCornerShape(layout.cardRadius))
+                    .padding(horizontal = layout.cardPad, vertical = layout.dp(10.dp)),
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(layout.dp(6.dp)),
+                ) {
+                    Text(skinId.emoji, fontSize = layout.subtitleSp)
+                    Text(
+                        skinId.displayName,
+                        color = accent,
+                        fontSize = layout.titleSp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Text(
-                    "${characterId.emoji} ${characterId.displayName}",
-                    color = accent,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    characterId.subtitle,
+                    "${skinId.subtitle} · 体型${tier.label} · 移速${(tier.speedMul * 100).toInt()}%",
                     color = PacMazePalette.inkSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
+                    fontSize = layout.bodySp,
+                    lineHeight = (layout.bodySp.value * 1.35f).sp,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
+                    maxLines = if (layout.isCompactHeight) 1 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -186,135 +169,187 @@ fun PacMazeCharacterSelectHero(
 
 @Composable
 fun PacMazeCharacterSelectPanel(
-    selectedCharacterId: PacMazeCharacterId,
-    onSelectCharacter: (PacMazeCharacterId) -> Unit,
+    loadout: PacMazeAvatarLoadout,
+    onSelectSkin: (PacMazeSkinId) -> Unit,
+    onSelectTrail: (PacMazeTrailId) -> Unit,
+    onApplyRecommendedTrail: () -> Unit,
     onContinue: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 62.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            PacMazeSectionHeader(
-                title = "挑选闯关角色",
-                subtitle = "共 ${PacMazeCharacterId.selectable.size} 位 · 点击卡片切换 · 双击已选进入选关",
-                accentColor = pacMazeCharacterAccent(selectedCharacterId),
-            )
+    val layout = currentPacMazeHubLayout()
+    val accent = pacMazeSkinAccent(loadout.skinId)
+    val subtitle = if (layout.isCompactHeight) {
+        "共 ${PacMazeSkinId.selectable.size} 款皮肤 · 点击切换"
+    } else {
+        "共 ${PacMazeSkinId.selectable.size} 款皮肤 · 可搭配拖尾特效"
+    }
 
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(layout.gap),
+    ) {
+        PacMazeSectionHeader(
+            title = "挑选闯关角色",
+            subtitle = subtitle,
+            accentColor = accent,
+            layout = layout,
+        )
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            val cardWidth = layout.characterCardWidth(maxWidth, visibleCards = if (layout.isCompactHeight) 3 else 4)
             LazyRow(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(layout.gap),
             ) {
                 itemsIndexed(
-                    PacMazeCharacterId.selectable,
-                    key = { _, c -> c.storageKey },
-                ) { index, character ->
+                    PacMazeSkinId.selectable,
+                    key = { _, skin -> skin.storageKey },
+                ) { index, skin ->
                     PacMazeCharacterPortraitCard(
-                        character = character,
+                        skin = skin,
+                        loadout = loadout,
                         index = index + 1,
-                        selected = character == selectedCharacterId,
+                        selected = skin == loadout.skinId,
                         onClick = {
-                            if (character == selectedCharacterId) {
+                            if (skin == loadout.skinId) {
                                 onContinue()
                             } else {
-                                onSelectCharacter(character)
+                                onSelectSkin(skin)
                             }
                         },
+                        layout = layout,
                         modifier = Modifier
-                            .width(108.dp)
+                            .width(cardWidth)
                             .fillMaxHeight(),
                     )
                 }
             }
+        }
 
-            PacMazeCharacterSelectHintBar(selectedCharacterId = selectedCharacterId)
+        PacMazeTrailSelectRow(
+            selectedTrailId = loadout.trailId,
+            onSelectTrail = onSelectTrail,
+            onApplyRecommended = onApplyRecommendedTrail,
+            recommendedTrailId = PacMazeCosmeticCatalog.recommendedTrail(loadout.skinId),
+            layout = layout,
+        )
+
+        if (!layout.isCompactHeight) {
+            PacMazeCharacterSelectHintBar(
+                loadout = loadout,
+                layout = layout,
+            )
         }
 
         PacMazeCharacterConfirmButton(
             onClick = onContinue,
-            accent = pacMazeCharacterAccent(selectedCharacterId),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .zIndex(1f),
+            accent = accent,
+            layout = layout,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
 @Composable
+private fun PacMazeTrailSelectRow(
+    selectedTrailId: PacMazeTrailId,
+    onSelectTrail: (PacMazeTrailId) -> Unit,
+    onApplyRecommended: () -> Unit,
+    recommendedTrailId: PacMazeTrailId,
+    layout: PacMazeHubLayoutSpec,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(layout.dp(4.dp))) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "拖尾特效",
+                color = PacMazePalette.inkPrimary,
+                fontSize = layout.bodySp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "推荐 ${recommendedTrailId.emoji}",
+                color = PacMazePalette.inkMuted,
+                fontSize = layout.captionSp,
+                modifier = Modifier.pacMazeClickable(sound = PacMazeUiSoundId.UtilityRecommend, onClick = onApplyRecommended),
+            )
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(layout.dp(6.dp))) {
+            itemsIndexed(PacMazeTrailId.selectable, key = { _, t -> t.storageKey }) { _, trail ->
+                val selected = trail == selectedTrailId
+                val trailAccent = pacMazeTrailAccent(trail)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(layout.dp(10.dp)))
+                        .background(if (selected) trailAccent.copy(alpha = 0.2f) else Color(0xFF151B28))
+                        .border(
+                            1.dp,
+                            if (selected) trailAccent else PacMazePalette.cardBorder,
+                            RoundedCornerShape(layout.dp(10.dp)),
+                        )
+                        .pacMazeClickable(sound = PacMazeUiSoundId.GridSelect) { onSelectTrail(trail) }
+                        .padding(horizontal = layout.dp(10.dp), vertical = layout.dp(6.dp)),
+                ) {
+                    Text(
+                        "${trail.emoji} ${trail.displayName}",
+                        color = if (selected) trailAccent else PacMazePalette.inkSecondary,
+                        fontSize = layout.captionSp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun PacMazeCharacterPortraitCard(
-    character: PacMazeCharacterId,
+    skin: PacMazeSkinId,
+    loadout: PacMazeAvatarLoadout,
     index: Int,
     selected: Boolean,
     onClick: () -> Unit,
+    layout: PacMazeHubLayoutSpec,
     modifier: Modifier = Modifier,
 ) {
-    val accent = pacMazeCharacterAccent(character)
-    val pulse = rememberInfiniteTransition(label = "cardPulse")
-    val glowAlpha by pulse.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "cardGlow",
-    )
+    val accent = pacMazeSkinAccent(skin)
+    val tier = PacMazeCosmeticCatalog.bodyTier(skin)
+    val family = PacMazeCharacterStageDecor.familyLabel(skin)
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.05f else 1f,
+        targetValue = if (selected) 1.04f else 1f,
         animationSpec = tween(240, easing = FastOutSlowInEasing),
         label = "cardScale",
     )
-    val outerShape = RoundedCornerShape(18.dp)
+    val outerShape = RoundedCornerShape(layout.cardRadius)
 
     Box(
         modifier = modifier
             .scale(scale)
             .clip(outerShape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        if (selected) accent.copy(alpha = 0.18f) else Color(0xFF2A3550),
-                        Color(0xFF121828),
-                    ),
-                ),
-            )
+            .background(PacMazeCharacterStageDecor.neutralCardFill(selected))
             .border(
-                width = if (selected) 2.5.dp else 1.dp,
-                brush = if (selected) {
-                    Brush.verticalGradient(listOf(accent.copy(alpha = glowAlpha), accent.copy(alpha = 0.35f)))
-                } else {
-                    Brush.verticalGradient(listOf(PacMazePalette.cardBorder, Color(0xFF1E2838)))
-                },
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) accent.copy(alpha = 0.7f) else PacMazePalette.cardBorder,
                 shape = outerShape,
             )
-            .clickable(onClick = onClick),
+            .pacMazeClickable(sound = PacMazeUiSoundId.GridSelect, onClick = onClick),
     ) {
-        if (selected) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                drawCircle(
-                    color = accent.copy(alpha = 0.08f * glowAlpha),
-                    radius = size.minDimension * 0.55f,
-                    center = Offset(size.width / 2f, size.height * 0.45f),
-                )
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(layout.dp(6.dp)),
+            verticalArrangement = Arrangement.spacedBy(layout.dp(4.dp)),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
+                    .height(layout.dp(3.dp))
                     .clip(RoundedCornerShape(999.dp))
                     .background(
                         Brush.horizontalGradient(
@@ -343,19 +378,19 @@ private fun PacMazeCharacterPortraitCard(
                             if (selected) accent.copy(alpha = 0.6f) else PacMazePalette.cardBorder,
                             RoundedCornerShape(999.dp),
                         )
-                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                        .padding(horizontal = layout.dp(6.dp), vertical = layout.dp(2.dp)),
                 ) {
                     Text(
                         String.format("%02d", index),
                         color = if (selected) accent else PacMazePalette.inkHint,
-                        fontSize = 10.sp,
+                        fontSize = layout.captionSp,
                         fontWeight = FontWeight.Black,
                     )
                 }
                 if (selected) {
                     Box(
                         modifier = Modifier
-                            .size(18.dp)
+                            .size(layout.dp(16.dp))
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(listOf(accent, accent.copy(alpha = 0.6f))),
@@ -367,53 +402,62 @@ private fun PacMazeCharacterPortraitCard(
                             Icons.Default.Check,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(11.dp),
+                            modifier = Modifier.size(layout.dp(10.dp)),
                         )
                     }
                 } else {
-                    Text(character.emoji, fontSize = 12.sp)
+                    Text(skin.emoji, fontSize = layout.bodySp)
                 }
             }
 
             PacMazeCharacterStagePreview(
-                characterId = character,
+                skinId = skin,
+                loadout = if (selected) loadout else PacMazeAvatarLoadout(skinId = skin),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 selected = selected,
                 animateWalk = selected,
-                powerActive = selected && character.hasPowerAura(),
+                powerActive = selected && skin.hasPowerAura(),
             )
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(layout.dp(8.dp)))
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color(0xFF151B28).copy(alpha = 0.6f),
-                                if (selected) accent.copy(alpha = 0.22f) else Color(0xFF1A2236),
+                                Color(0xFF0E121C).copy(alpha = 0.75f),
+                                if (selected) accent.copy(alpha = 0.18f) else Color(0xFF151B28),
                             ),
                         ),
                     )
                     .border(
                         1.dp,
-                        if (selected) accent.copy(alpha = 0.35f) else PacMazePalette.cardBorder,
-                        RoundedCornerShape(10.dp),
+                        if (selected) accent.copy(alpha = 0.4f) else PacMazePalette.cardBorder,
+                        RoundedCornerShape(layout.dp(8.dp)),
                     )
-                    .padding(horizontal = 6.dp, vertical = 5.dp),
+                    .padding(horizontal = layout.dp(4.dp), vertical = layout.dp(5.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    character.displayName,
-                    color = if (selected) PacMazePalette.inkPrimary else PacMazePalette.inkSecondary,
-                    fontSize = if (selected) 11.sp else 10.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        skin.displayName,
+                        color = if (selected) PacMazePalette.inkPrimary else PacMazePalette.inkSecondary,
+                        fontSize = layout.bodySp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        "$family · ${tier.label}",
+                        color = if (selected) accent.copy(alpha = 0.85f) else PacMazePalette.inkHint,
+                        fontSize = layout.captionSp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }
@@ -421,33 +465,35 @@ private fun PacMazeCharacterPortraitCard(
 
 @Composable
 private fun PacMazeCharacterSelectHintBar(
-    selectedCharacterId: PacMazeCharacterId,
+    loadout: PacMazeAvatarLoadout,
+    layout: PacMazeHubLayoutSpec,
 ) {
-    val accent = pacMazeCharacterAccent(selectedCharacterId)
+    val skinId = loadout.skinId
+    val accent = pacMazeSkinAccent(skinId)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(layout.dp(10.dp)))
             .background(Color(0xFF151B28).copy(alpha = 0.85f))
-            .border(1.dp, PacMazePalette.cardBorder, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .border(1.dp, PacMazePalette.cardBorder, RoundedCornerShape(layout.dp(10.dp)))
+            .padding(horizontal = layout.cardPad, vertical = layout.dp(6.dp)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(layout.dp(6.dp)),
     ) {
-        Text(selectedCharacterId.emoji, fontSize = 16.sp)
+        Text(skinId.emoji, fontSize = layout.subtitleSp)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "当前：${selectedCharacterId.displayName}",
+                "当前：${skinId.displayName} + ${loadout.trailId.displayName}",
                 color = PacMazePalette.inkPrimary,
-                fontSize = 12.sp,
+                fontSize = layout.bodySp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                selectedCharacterId.subtitle,
+                skinId.subtitle,
                 color = PacMazePalette.inkMuted,
-                fontSize = 10.sp,
+                fontSize = layout.captionSp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -457,12 +503,12 @@ private fun PacMazeCharacterSelectHintBar(
                 .clip(RoundedCornerShape(999.dp))
                 .background(accent.copy(alpha = 0.15f))
                 .border(1.dp, accent.copy(alpha = 0.4f), RoundedCornerShape(999.dp))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
+                .padding(horizontal = layout.dp(6.dp), vertical = layout.dp(2.dp)),
         ) {
             Text(
-                pacMazeCharacterTag(selectedCharacterId),
+                pacMazeSkinTag(skinId),
                 color = accent,
-                fontSize = 8.sp,
+                fontSize = layout.captionSp,
                 fontWeight = FontWeight.Black,
             )
         }
@@ -473,12 +519,13 @@ private fun PacMazeCharacterSelectHintBar(
 private fun PacMazeCharacterConfirmButton(
     onClick: () -> Unit,
     accent: Color,
+    layout: PacMazeHubLayoutSpec,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(layout.cardRadius)
     Box(
         modifier = modifier
-            .height(52.dp)
+            .height(layout.dp(if (layout.isCompactHeight) 44.dp else 48.dp))
             .clip(shape)
             .background(
                 Brush.horizontalGradient(
@@ -486,38 +533,40 @@ private fun PacMazeCharacterConfirmButton(
                 ),
             )
             .border(1.5.dp, Color.White.copy(alpha = 0.25f), shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp),
+            .pacMazeClickable(sound = PacMazeUiSoundId.GridSelect, onClick = onClick)
+            .padding(horizontal = layout.cardPad),
         contentAlignment = Alignment.Center,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(layout.dp(8.dp)),
         ) {
             Text(
                 "确认角色",
                 color = Color.White,
-                fontSize = 16.sp,
+                fontSize = layout.buttonSp,
                 fontWeight = FontWeight.Black,
             )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color.White.copy(alpha = 0.2f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    "去选关",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+            if (!layout.isCompactHeight) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.2f))
+                        .padding(horizontal = layout.dp(8.dp), vertical = layout.dp(3.dp)),
+                ) {
+                    Text(
+                        "返回选关",
+                        color = Color.White,
+                        fontSize = layout.bodySp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
             Icon(
                 Icons.Filled.ArrowForward,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(layout.dp(18.dp)),
             )
         }
     }

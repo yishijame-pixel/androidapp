@@ -33,6 +33,7 @@ data class GameRoomStatePayload(
     @SerializedName("member_ids") val memberIds: List<String> = emptyList(),
     val gomoku: GomokuPlayState? = null,
     @SerializedName("draw_guess") val drawGuess: DrawGuessPlayState? = null,
+    @SerializedName("pac_maze") val pacMaze: PacMazePlayState? = null,
 )
 
 data class GameRoomMemberWire(
@@ -81,6 +82,7 @@ object GameRoomStateCodec {
         state.declinedByPbId?.takeIf { it.isNotBlank() }?.let { put("declined_by_pb_id", it) }
         state.gomoku?.let { put("gomoku", it.toMap()) }
         state.drawGuess?.let { put("draw_guess", it.toMap()) }
+        state.pacMaze?.let { put("pac_maze", it.toMap()) }
     }
 
     fun fromLegacy(
@@ -263,7 +265,8 @@ object GameRoomStateCodec {
         state: GameRoomStatePayload,
         gomoku: GomokuPlayState? = state.gomoku,
         drawGuess: DrawGuessPlayState? = state.drawGuess,
-    ): GameRoomStatePayload = state.copy(gomoku = gomoku, drawGuess = drawGuess)
+        pacMaze: PacMazePlayState? = state.pacMaze,
+    ): GameRoomStatePayload = state.copy(gomoku = gomoku, drawGuess = drawGuess, pacMaze = pacMaze)
 
     private fun joinedMemberIds(members: List<GameRoomMemberWire>): List<String> =
         members.filter { it.status == LobbyMemberStatus.JOINED.wire }.map { it.pbId }

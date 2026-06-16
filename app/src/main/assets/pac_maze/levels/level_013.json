@@ -2,44 +2,97 @@
   "id": 13,
   "name": "古风-回字院落",
   "width": 21,
-  "height": 17,
+  "height": 21,
   "grid": [
-    "#####################",
-    "#*.................*#",
-    "#=#...............=.#",
-    "#.#.####.....####.#.#",
-    "#.#.#...........#.#.#",
-    "#.#.#.###G###.#.#.#.#",
-    "#.#.#.#..>..#.#.#.#.#",
-    "#=..#.#.@...#.#..=..#",
-    "#.#.#.#..<..#.#.#.#.#",
-    "#.#.#.###G###.#.#.#.#",
-    "#.#.#...........#.#.#",
-    "#.#.####.....####.#.#",
-    "#.#...............#.#",
-    "#=#...............=.#",
-    "#*.................*#",
-    "#...................#",
-    "#####################"
+    "bbbbbbbbbbbbbbbbbbbbb",
+    "b*.................*b",
+    "b.bbbbbbb...bbbbbbb.b",
+    "b.b...............b.b",
+    "b.b.bbbb.....bbbb.b.b",
+    "b.b.b...........b.b.b",
+    "b.b.b.bb.....bb.b.b.b",
+    "b.b.b.b.......b.b.b.b",
+    "b.b.b.b.w...w.b.b.b.b",
+    "b.b.b.b.w...w.b.b.b.b",
+    "b=..b.b.b...w.b.b..=b",
+    "b.b.b.b.w...w.b.b.b.b",
+    "b.b.b.b.w...w.b.b.b.b",
+    "b.b.b.b.......b.b.b.b",
+    "b.b.b.btt...ttt.b.b.b",
+    "b.b.b...........b.b.b",
+    "b.b.bbbb.....bbbb.b.b",
+    "b.b...............b.b",
+    "b.bbbb.....bbbbbbbb.b",
+    "b*.................*b",
+    "bbbbbbbbbbbbbbbbbbbbb"
   ],
   "spawn": {
-    "pac": [10, 15],
-    "ghosts": [[8, 4], [9, 4], [10, 4], [11, 4], [12, 4]]
+    "pac": [
+      10,
+      19
+    ],
+    "ghosts": [
+      [
+        8,
+        19
+      ],
+      [
+        9,
+        19
+      ],
+      [
+        11,
+        19
+      ],
+      [
+        12,
+        19
+      ],
+      [
+        13,
+        19
+      ]
+    ]
   },
   "markers": [
-    { "type": "start", "x": 10, "y": 15 },
-    { "type": "checkpoint", "x": 1, "y": 7, "label": "外廊", "tag": "LINK" },
-    { "type": "checkpoint", "x": 19, "y": 7, "label": "内宅", "tag": "LINK" }
+    {
+      "type": "start",
+      "x": 10,
+      "y": 19
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 10,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 19,
+      "y": 10,
+      "label": "002",
+      "tag": "LINK"
+    }
   ],
   "hazards": [
-    { "type": "laser_h", "y": 7, "x1": 6, "x2": 14, "id": "courtyard_scan" },
-    { "type": "laser_v", "x": 10, "y1": 4, "y2": 12, "id": "gate_pillar" }
+    {
+      "type": "laser_h",
+      "y": 10,
+      "x1": 4,
+      "x2": 16,
+      "id": "courtyard_scan"
+    },
+    {
+      "type": "laser_v",
+      "x": 10,
+      "y1": 5,
+      "y2": 15,
+      "id": "gate_pillar"
+    }
   ],
-  "difficulty": { "ghost_speed_mul": 0.85, "ai_aggression": 0.82 },
-  "starCriteria": {
-    "twoStarMinScore": 2000,
-    "threeStarMinScore": 3500,
-    "threeStarMaxSeconds": 200,
-    "threeStarNoDeath": true
+  "difficulty": {
+    "ghost_speed_mul": 0.85,
+    "ai_aggression": 0.82
   }
 }

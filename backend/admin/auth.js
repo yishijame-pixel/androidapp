@@ -61,6 +61,9 @@ function clearCookie(res) {
 
 /** Express 中间件：未登录直接 401 / 跳登录页 */
 function requireAuth(req, res, next) {
+  if (req.method === "POST" && req.path === "/pac_maze_config") {
+    return next();
+  }
   const payload = verify(req.cookies && req.cookies[COOKIE_NAME]);
   if (!payload) {
     if (req.path.startsWith("/api/")) {

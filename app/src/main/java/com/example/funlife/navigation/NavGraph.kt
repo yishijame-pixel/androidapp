@@ -16,6 +16,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -181,6 +186,19 @@ sealed class Screen(val route: String, val title: String) {
     // 🆕 v55 古籍日记本
     object DiaryBook : Screen("diary_book", "日记本")
     object DiaryBookFull : Screen("diary_book_full", "日记本")
+
+    companion object {
+        /** 豆人迷宫本地大厅；可携带联机房间号直达对战大厅。 */
+        fun pacMazeRoute(autoStart: Boolean = false, onlineLobbyRoomId: String? = null): String {
+            val params = buildList {
+                if (autoStart) add("autoStart=true")
+                if (!onlineLobbyRoomId.isNullOrBlank()) {
+                    add("onlineLobbyRoomId=$onlineLobbyRoomId")
+                }
+            }
+            return if (params.isEmpty()) "pac_maze" else "pac_maze?${params.joinToString("&")}"
+        }
+    }
 }
 
 @Composable
@@ -409,44 +427,34 @@ fun NavGraph(
         }
 
         composable(
-            route = "pac_maze?autoStart={autoStart}",
+            route = "pac_maze?autoStart={autoStart}&onlineLobbyRoomId={onlineLobbyRoomId}",
             arguments = listOf(
                 navArgument("autoStart") {
                     type = NavType.BoolType
                     defaultValue = false
                 },
+                navArgument("onlineLobbyRoomId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
             ),
+            enterTransition = {
+                fadeIn(animationSpec = tween(420, easing = FastOutSlowInEasing)) +
+                    scaleIn(
+                        initialScale = 0.97f,
+                        animationSpec = tween(420, easing = FastOutSlowInEasing),
+                    )
+            },
+            exitTransition = { fadeOut(animationSpec = tween(300)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(320)) },
+            popExitTransition = { fadeOut(animationSpec = tween(280)) },
         ) {
-            val context = LocalContext.current
-            val application = context.applicationContext as FunLifeApplication
-            val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
-            val userSession = if (isLoggedIn) authViewModel.getCurrentSession() else null
-            val autoStart = it.arguments?.getBoolean("autoStart") ?: false
-            if (userSession != null) {
-                val userId = userSession.userId
-                val vm = viewModel<PacMazeLocalViewModel>(
-                    key = "pac_maze_$userId",
-                    factory = PacMazeLocalViewModelFactory(
-                        userId = userId,
-                        database = application.database,
-                        appContext = context.applicationContext,
-                    ),
-                )
-                com.example.funlife.ui.screens.pacmaze.PacMazeModeSelectScreen(
-                    viewModel = vm,
-                    autoStart = autoStart,
-                    onNavigateBack = { navController.popBackStack() },
-                )
-            } else {
-                LoadingFallback(if (isLoggedIn) "加载中…" else "正在跳转登录…")
-                LaunchedEffect(isLoggedIn) {
-                    if (!isLoggedIn) {
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
-                }
-            }
+            PacMazeRouteContent(
+                navController = navController,
+                authViewModel = authViewModel,
+                autoStart = it.arguments?.getBoolean("autoStart") ?: false,
+                onlineLobbyRoomId = it.arguments?.getString("onlineLobbyRoomId").orEmpty().ifBlank { null },
+            )
         }
         
         composable(Screen.Profile.route) {
@@ -575,7 +583,7 @@ fun NavGraph(
                     navController.safeNavigate(Screen.SocialGameDetail.route(gameId), context)
                 },
                 onNavigateToLocalGame = { route ->
-                    navController.safeNavigate("$route?autoStart=true", context)
+                    navController.safeNavigate(route, context)
                 },
                 onNavigateToLobby = { roomId ->
                     navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
@@ -608,6 +616,17 @@ fun NavGraph(
                 }
                 return@composable
             }
+            // 豆人迷宫统一走本地大厅（启动页 → 加载页 → 模式选择），不再停留趣玩详情页
+            if (gameId == "pac_maze") {
+                LoadingFallback("正在进入豆人迷宫…")
+                LaunchedEffect(Unit) {
+                    navController.navigate(Screen.pacMazeRoute()) {
+                        popUpTo(Screen.SocialGameCenter.route()) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+                return@composable
+            }
             val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
             com.example.funlife.ui.screens.socialgame.GameDetailScreen(
                 gameId = gameId,
@@ -618,7 +637,7 @@ fun NavGraph(
                     navController.safeNavigate(Screen.SocialGameLobby.route(roomId), context)
                 },
                 onNavigateToLocalGame = { route ->
-                    navController.safeNavigate("$route?autoStart=true", context)
+                    navController.safeNavigate(route, context)
                 },
             )
         }
@@ -642,6 +661,25 @@ fun NavGraph(
                 return@composable
             }
             val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
+            LaunchedEffect(roomId) {
+                gameCenterVm.enterLobby(roomId)
+            }
+            val rooms by gameCenterVm.rooms.collectAsState()
+            val room = rooms.firstOrNull { it.roomId == roomId }
+            if (room?.gameId == "pac_maze") {
+                LoadingFallback("正在进入豆人迷宫…")
+                LaunchedEffect(roomId) {
+                    navController.navigate(Screen.pacMazeRoute(onlineLobbyRoomId = roomId)) {
+                        popUpTo(Screen.SocialGameLobby.route(roomId)) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+                return@composable
+            }
+            if (room == null) {
+                LoadingFallback("正在进入对战大厅…")
+                return@composable
+            }
             val navigateToGameCenter: () -> Unit = {
                 navController.navigate(Screen.SocialGameCenter.route()) {
                     popUpTo(Screen.SocialGameLobby.route(roomId)) { inclusive = true }
@@ -670,7 +708,7 @@ fun NavGraph(
                     }
                 },
                 onNavigateToLocalPacMaze = {
-                    navController.navigate("pac_maze?autoStart=true") {
+                    navController.navigate(Screen.pacMazeRoute()) {
                         popUpTo(Screen.SocialGameLobby.route(roomId)) { inclusive = true }
                         launchSingleTop = true
                     }
@@ -698,12 +736,11 @@ fun NavGraph(
             val playVm = com.example.funlife.ui.screens.socialgame.play.rememberGamePlayViewModel(userSession, playRoomId)
             com.example.funlife.ui.screens.socialgame.play.GamePlayScreen(
                 roomId = playRoomId,
+                userId = userSession.userId,
                 viewModel = playVm,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToLobby = {
-                    navController.navigate(Screen.SocialGameLobby.route(playRoomId)) {
-                        launchSingleTop = true
-                    }
+                    navController.navigatePacMazeOnlineLobby(playRoomId)
                 },
                 onNavigateToGameCenter = {
                     navController.navigate(Screen.SocialGameCenter.route()) {
@@ -712,7 +749,7 @@ fun NavGraph(
                     }
                 },
                 onNavigateToLocalPacMaze = {
-                    navController.navigate("pac_maze?autoStart=true") {
+                    navController.navigate(Screen.pacMazeRoute(onlineLobbyRoomId = playRoomId)) {
                         popUpTo(Screen.SocialGamePlay.route(playRoomId)) { inclusive = true }
                         launchSingleTop = true
                     }
@@ -1203,6 +1240,52 @@ fun NavGraph(
                 LoadingFallback("正在跳转登录…")
                 LaunchedEffect(Unit) {
                     navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            }
+        }
+    }
+}
+
+private fun NavHostController.navigatePacMazeOnlineLobby(roomId: String) {
+    navigate(Screen.pacMazeRoute(onlineLobbyRoomId = roomId)) {
+        launchSingleTop = true
+    }
+}
+
+@Composable
+private fun PacMazeRouteContent(
+    navController: NavHostController,
+    authViewModel: AuthViewModel,
+    autoStart: Boolean,
+    onlineLobbyRoomId: String? = null,
+) {
+    val context = LocalContext.current
+    val application = context.applicationContext as FunLifeApplication
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    val userSession = if (isLoggedIn) authViewModel.getCurrentSession() else null
+    if (userSession != null) {
+        val userId = userSession.userId
+        val vm = viewModel<PacMazeLocalViewModel>(
+            key = "pac_maze_$userId",
+            factory = PacMazeLocalViewModelFactory(
+                userId = userId,
+                database = application.database,
+                appContext = context.applicationContext,
+            ),
+        )
+        com.example.funlife.ui.screens.pacmaze.PacMazeEntryScreen(
+            viewModel = vm,
+            userSession = userSession,
+            autoStart = autoStart,
+            onlineLobbyRoomId = onlineLobbyRoomId,
+            onNavigateBack = { navController.popBackStack() },
+        )
+    } else {
+        LoadingFallback(if (isLoggedIn) "加载中…" else "正在跳转登录…")
+        LaunchedEffect(isLoggedIn) {
+            if (!isLoggedIn) {
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(0) { inclusive = true }
                 }
             }
         }

@@ -31,6 +31,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.funlife.data.model.ShopItem
+import com.example.funlife.resource.ResourceStore
 
 // 颜色配置
 private object DialogPalette {
@@ -201,11 +202,16 @@ fun AvatarFrameDetailDialog(
                             ) {
                                 if (!frame.assetPath.isNullOrEmpty()) {
                                     val context = LocalContext.current
+                                    val imageModel = remember(frame.assetPath) {
+                                        ResourceStore.resolveCoilModel(frame.assetPath!!)
+                                    }
                                     SubcomposeAsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data("file:///android_asset/${frame.assetPath}")
-                                            .crossfade(300)
-                                            .build(),
+                                        model = imageModel?.let {
+                                            ImageRequest.Builder(context)
+                                                .data(it)
+                                                .crossfade(300)
+                                                .build()
+                                        },
                                         contentDescription = frame.name,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Fit,

@@ -147,31 +147,15 @@ object SocialGameCatalog {
             accentColors = listOf(0xFF8B5CF6, 0xFFFF6FAE),
         ),
         SocialGameEntry(
-            gameId = "pac_maze_local",
-            title = "豆人迷宫",
-            subtitle = "闯关13关 · 无尽 · 迷宫",
-            iconEmoji = "👾",
-            category = GameCategory.LOCAL_PARTY,
-            playersLabel = "1 人",
-            minPlayers = 1,
-            maxPlayers = 1,
-            status = GameCatalogStatus.LIVE,
-            localRoute = "pac_maze",
-            sortOrder = 24,
-            tags = listOf("街机", "横屏", "同屏"),
-            accentColors = listOf(0xFFFF6E40, 0xFFFFD54F),
-            durationLabel = "随时开玩",
-        ),
-        SocialGameEntry(
             gameId = "pac_maze",
             title = "豆人迷宫",
-            subtitle = "闯关/无尽/迷宫 · 联机开发中",
+            subtitle = "闯关 · 无尽 · 联机对决",
             iconEmoji = "👾",
             category = GameCategory.ONLINE_PVP,
             playersLabel = "1~2 人",
             minPlayers = 1,
             maxPlayers = 2,
-            status = GameCatalogStatus.BETA,
+            status = GameCatalogStatus.LIVE,
             localRoute = "pac_maze",
             minPocketBase = false,
             sortOrder = 5,
@@ -188,6 +172,6 @@ object SocialGameCatalog {
             .sortedWith(compareBy({ it.status.ordinal }, { it.sortOrder }))
 
     fun localPartyGames(): List<SocialGameEntry> =
-        all.filter { it.category == GameCategory.LOCAL_PARTY }
+        all.filter { it.category == GameCategory.LOCAL_PARTY || it.gameId == "pac_maze" }
             .sortedBy { it.sortOrder }
 }

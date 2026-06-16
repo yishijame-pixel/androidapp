@@ -28,6 +28,10 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
 
         com.example.funlife.utils.UserAvatarBitmapCache.install(this)
         com.example.funlife.resource.ResourceStore.init(this)
+        com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinAssetCache.ensureLoaded(this)
+        if (com.example.funlife.resource.ResourceStore.isPacMazeBundleReady("pac_maze_skins")) {
+            com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCache.warmCoverCacheAsync()
+        }
 
         // 🛡️ 全局崩溃兜底：必须最早安装，才能捕获后续初始化中的异常
         com.example.funlife.utils.CrashHandler.install(this)

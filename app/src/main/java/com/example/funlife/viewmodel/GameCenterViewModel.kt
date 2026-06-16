@@ -459,7 +459,12 @@ class GameCenterViewModel(
         _recentIds.value = prefs.recentGameIds(currentUserId)
     }
 
-    fun createOpenRoom(gameId: String, thenInviteGuestPbId: String? = null) {
+    fun createOpenRoom(
+        gameId: String,
+        thenInviteGuestPbId: String? = null,
+        pacSubMode: String? = null,
+        pacLevelId: Int? = null,
+    ) {
         val entry = SocialGameCatalog.find(gameId) ?: return
         if (_busyMessage.value != null) {
             _toast.value = "请稍候，正在处理上一操作…"
@@ -475,7 +480,7 @@ class GameCenterViewModel(
         PocketBaseConnectionWarmer.warmAsync(getApplication())
         viewModelScope.launch {
             _busyMessage.value = "正在开房间…"
-            gameRoomInteractor.createOpenRoom(gameId)
+            gameRoomInteractor.createOpenRoom(gameId, pacSubMode, pacLevelId)
                 .onSuccess { roomId ->
                     _toast.value = "房间已创建"
                     _navigateToRoomId.value = roomId
@@ -697,6 +702,13 @@ class GameCenterViewModel(
                     _startingGameRoomId.value = null
                     notifyUser(gameRoomInteractor.mapErrorMessage(it), systemToast = true)
                 }
+        }
+    }
+
+    fun togglePacMazeReady(roomId: String, ready: Boolean) {
+        viewModelScope.launch {
+            gameRoomInteractor.togglePacMazeReady(roomId, ready)
+                .onFailure { notifyUser(gameRoomInteractor.mapErrorMessage(it), systemToast = true) }
         }
     }
 

@@ -20,6 +20,10 @@ class PacMazeLevelConnectivityTest {
                 val json = file.readText()
                 val rows = gridRows(json)
                 val level = PacMazeMapLoader.parseLevelJson(json)
+                assertTrue(
+                    "${file.name} missing item spawners",
+                    level.itemSpawners.size >= PacMazeLevelProgression.spawnerCount(level.id),
+                )
                 assertEquals("${file.name} grid row count", level.height, rows.size)
                 rows.forEachIndexed { y, row ->
                     assertEquals("${file.name} row $y width", level.width, row.length)
@@ -34,10 +38,10 @@ class PacMazeLevelConnectivityTest {
                     assertTrue("${file.name} ghost $gx,$gy not walkable", PacMazeRules.isWalkable(world, gx, gy, forGhost = true))
                 }
 
-                val fromPac = flood(world, pac.first, pac.second)
+                val fromPac = floodAcrossDynamics(world, pac.first, pac.second)
                 val fromGhosts = mutableSetOf<Pair<Int, Int>>()
                 level.ghostSpawns.forEach { (gx, gy) ->
-                    fromGhosts.addAll(flood(world, gx, gy, forGhost = true))
+                    fromGhosts.addAll(floodAcrossDynamics(world, gx, gy, forGhost = true))
                 }
 
                 assertTrue(
@@ -48,10 +52,39 @@ class PacMazeLevelConnectivityTest {
                 val allWalkable = walkableTiles(world)
                 val unreachable = allWalkable.count { it !in fromPac }
                 assertTrue(
-                    "${file.name}: $unreachable tiles unreachable from pac",
+                    "${file.name}: $unreachable tiles unreachable from pac (limit 4)",
                     unreachable <= 4,
                 )
+
+                if (PacMazeMapDynamics.hasDynamicTiles(world)) {
+                    assertDynamicGatesReachable(file.name, rows, world, pac, fromPac)
+                }
             }
+    }
+
+    /** 闸道 & 格在某个相位须从玩家位置可进入。 */
+    private fun assertDynamicGatesReachable(
+        fileName: String,
+        grid: List<String>,
+        world: PacMazeWorldState,
+        pac: Pair<Int, Int>,
+        fromPac: Set<Pair<Int, Int>>,
+    ) {
+        val rate = PacMazeMapDynamics.dynamicPhaseTicks(world.levelId)
+        grid.forEachIndexed { y, row ->
+            for (x in row.indices) {
+                if (row[x] != '&') continue
+                val reachableAtSomePhase = (0 until 3).any { phase ->
+                    val tick = phase * rate
+                    val probe = world.copy(dynamicsTick = tick)
+                    x to y in flood(probe, pac.first, pac.second)
+                }
+                assertTrue(
+                    "$fileName: dynamic gate $x,$y not enterable from pac",
+                    reachableAtSomePhase || (x to y) in fromPac,
+                )
+            }
+        }
     }
 
     private fun gridRows(json: String): List<String> =
@@ -65,6 +98,23 @@ class PacMazeLevelConnectivityTest {
                 }
             }
         }
+
+    private fun floodAcrossDynamics(
+        world: PacMazeWorldState,
+        sx: Int,
+        sy: Int,
+        forGhost: Boolean = false,
+    ): Set<Pair<Int, Int>> {
+        if (!PacMazeMapDynamics.hasDynamicTiles(world)) {
+            return flood(world, sx, sy, forGhost)
+        }
+        val union = mutableSetOf<Pair<Int, Int>>()
+        val rate = PacMazeMapDynamics.dynamicPhaseTicks(world.levelId)
+        repeat(3) { phase ->
+            union.addAll(flood(world.copy(dynamicsTick = phase * rate), sx, sy, forGhost))
+        }
+        return union
+    }
 
     private fun flood(
         world: PacMazeWorldState,

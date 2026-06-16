@@ -1,0 +1,25 @@
+# Pac-Maze 权威 WebSocket — 运行时镜像（需先在仓库根目录执行 installDist）
+#
+#   cd d:\soft
+#   .\gradlew :pac-maze-server:installDist
+#   cd pocketbase
+#   docker compose build pac-maze-ws
+
+FROM alpine:3.20
+
+RUN apk add --no-cache openjdk17-jre-headless wget
+
+WORKDIR /app
+COPY pac-maze-server/build/install/pac-maze-server /app
+
+ENV PB_BASE_URL=http://pocketbase:8090
+ENV PAC_MAZE_WS_PORT=8791
+ENV PAC_MAZE_DISCONNECT_MS=30000
+ENV PAC_MAZE_ROOM_GO_MS=8000
+
+EXPOSE 8791
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8791/health || exit 1
+
+ENTRYPOINT ["/app/bin/pac-maze-server"]

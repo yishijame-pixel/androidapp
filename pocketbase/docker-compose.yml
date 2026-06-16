@@ -9,8 +9,11 @@
 # 含 Cloudflare 隧道:
 #   docker compose --profile tunnel up -d
 #
+# 含 VIP 管理后台（CloudBase）:
+#   docker compose --profile admin up -d
+#
 # 完整生产栈:
-#   docker compose --profile push --profile tunnel up -d
+#   docker compose --profile push --profile tunnel --profile admin up -d
 
 name: funlife
 
@@ -78,6 +81,31 @@ services:
       retries: 3
       start_period: 10s
 
+  pac-maze-ws:
+    build:
+      context: ..
+      dockerfile: pocketbase/docker/Dockerfile.pac-maze-ws
+    container_name: funlife-pac-maze-ws
+    restart: unless-stopped
+    ports:
+      - "${PAC_MAZE_WS_HOST_PORT:-8791}:8791"
+    environment:
+      PB_BASE_URL: http://pocketbase:8090
+      PAC_MAZE_WS_PORT: "8791"
+      PAC_MAZE_DISCONNECT_MS: ${PAC_MAZE_DISCONNECT_MS:-30000}
+      PAC_MAZE_ROOM_GO_MS: ${PAC_MAZE_ROOM_GO_MS:-8000}
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    networks:
+      - funlife
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8791/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
   fcm-relay:
     profiles: ["push"]
     build:
@@ -119,8 +147,38 @@ services:
         condition: service_healthy
       draw-ws:
         condition: service_healthy
+      pac-maze-ws:
+        condition: service_healthy
     networks:
       - funlife
+
+  vip-admin:
+    profiles: ["admin"]
+    build:
+      context: ../backend
+      dockerfile: docker/Dockerfile.admin
+    container_name: funlife-vip-admin
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_HOST_PORT:-3300}:3300"
+    environment:
+      PORT: "3300"
+      HOST: "0.0.0.0"
+      TCB_ENV_ID: ${TCB_ENV_ID:?TCB_ENV_ID is required for admin profile}
+      TCB_SECRET_ID: ${TCB_SECRET_ID:?TCB_SECRET_ID is required for admin profile}
+      TCB_SECRET_KEY: ${TCB_SECRET_KEY:?TCB_SECRET_KEY is required for admin profile}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?ADMIN_PASSWORD_HASH is required for admin profile}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?ADMIN_SESSION_SECRET is required for admin profile}
+      ADMIN_COOKIE_SECURE: ${ADMIN_COOKIE_SECURE:-0}
+    networks:
+      - funlife
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3300/login.html"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 networks:
   funlife:

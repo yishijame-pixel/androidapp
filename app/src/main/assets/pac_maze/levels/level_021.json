@@ -1,0 +1,264 @@
+{
+  "id": 21,
+  "name": "古风-奇门八卦",
+  "width": 27,
+  "height": 27,
+  "grid": [
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "b*.......................*b",
+    "b.........................b",
+    "b.........................b",
+    "b.........................b",
+    "b.........................b",
+    "b.....b...b...b...b.......b",
+    "b...........&.&...........b",
+    "b.....b...b...b...b.......b",
+    "b.........................b",
+    "b.........................b",
+    "b.........................b",
+    "b.....b...b..Hb^..b.......b",
+    "b=........<.I@>.>........=b",
+    "b.....b...bv.Gb...b.......b",
+    "b.........................b",
+    "b.........................b",
+    "b.........................b",
+    "b.....b...b...b...b.......b",
+    "b...........&.&...........b",
+    "b.....b...b...b...b.......b",
+    "b.........................b",
+    "b.........................b",
+    "b.........................b",
+    "b.........................b",
+    "b*.......................*b",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "spawn": {
+    "pac": [
+      13,
+      24
+    ],
+    "ghosts": [
+      [
+        11,
+        3
+      ],
+      [
+        12,
+        3
+      ],
+      [
+        13,
+        3
+      ],
+      [
+        14,
+        3
+      ],
+      [
+        15,
+        3
+      ],
+      [
+        16,
+        3
+      ]
+    ]
+  },
+  "markers": [
+    {
+      "type": "start",
+      "x": 13,
+      "y": 24
+    },
+    {
+      "type": "checkpoint",
+      "x": 9,
+      "y": 13,
+      "label": "西闸",
+      "tag": "L21-W"
+    },
+    {
+      "type": "checkpoint",
+      "x": 17,
+      "y": 13,
+      "label": "东闸",
+      "tag": "L21-E"
+    },
+    {
+      "type": "checkpoint",
+      "x": 13,
+      "y": 13,
+      "label": "核心",
+      "tag": "L21-CORE"
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 13,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 25,
+      "y": 13,
+      "label": "002",
+      "tag": "LINK"
+    }
+  ],
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 12,
+      "x1": 4,
+      "x2": 22,
+      "id": "l21_h_main"
+    },
+    {
+      "type": "laser_v",
+      "x": 13,
+      "y1": 4,
+      "y2": 22,
+      "id": "l21_v_main"
+    },
+    {
+      "type": "laser_h",
+      "y": 15,
+      "x1": 6,
+      "x2": 20,
+      "id": "l21_h_sub"
+    },
+    {
+      "type": "laser_v",
+      "x": 8,
+      "y1": 5,
+      "y2": 21,
+      "id": "l21_v_west"
+    },
+    {
+      "type": "laser_v",
+      "x": 18,
+      "y1": 5,
+      "y2": 21,
+      "id": "l21_v_east"
+    },
+    {
+      "type": "laser_h",
+      "y": 9,
+      "x1": 5,
+      "x2": 21,
+      "id": "l21_h_north"
+    },
+    {
+      "type": "laser_h",
+      "y": 17,
+      "x1": 5,
+      "x2": 21,
+      "id": "l21_h_south"
+    },
+    {
+      "type": "laser_v",
+      "x": 6,
+      "y1": 4,
+      "y2": 22,
+      "id": "l21_v_far_w"
+    },
+    {
+      "type": "laser_v",
+      "x": 20,
+      "y1": 4,
+      "y2": 22,
+      "id": "l21_v_far_e"
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 1.12,
+    "ai_aggression": 1.0
+  },
+  "itemSpawners": [
+    {
+      "id": "factory_21_00",
+      "x": 9,
+      "y": 13,
+      "intervalTicks": 360,
+      "pool": [
+        "frost",
+        "charge",
+        "double",
+        "shield"
+      ]
+    },
+    {
+      "id": "factory_21_01",
+      "x": 17,
+      "y": 13,
+      "intervalTicks": 360,
+      "pool": [
+        "magnet",
+        "shield",
+        "charge",
+        "speed"
+      ]
+    },
+    {
+      "id": "factory_21_02",
+      "x": 9,
+      "y": 11,
+      "intervalTicks": 360,
+      "pool": [
+        "speed",
+        "double",
+        "frost",
+        "magnet"
+      ]
+    },
+    {
+      "id": "factory_21_03",
+      "x": 17,
+      "y": 15,
+      "intervalTicks": 360,
+      "pool": [
+        "shield",
+        "charge",
+        "magnet",
+        "double"
+      ]
+    },
+    {
+      "id": "factory_21_04",
+      "x": 1,
+      "y": 13,
+      "intervalTicks": 360,
+      "pool": [
+        "frost",
+        "double",
+        "speed",
+        "charge"
+      ]
+    },
+    {
+      "id": "factory_21_05",
+      "x": 25,
+      "y": 13,
+      "intervalTicks": 360,
+      "pool": [
+        "magnet",
+        "frost",
+        "shield",
+        "charge",
+        "double"
+      ]
+    }
+  ],
+  "starCriteria": {
+    "twoStarMinScore": 3920,
+    "threeStarMinScore": 4720,
+    "threeStarMaxSeconds": 268,
+    "threeStarNoDeath": true,
+    "threeStarRequiredTags": [
+      "L21-W",
+      "L21-E",
+      "L21-CORE"
+    ]
+  }
+}

@@ -4,42 +4,76 @@ object PacMazeSimulation {
 
     fun tick(
         state: PacMazeWorldState,
-        pacInput: PacMazeInputState?,
+        pacInput: PacMazeTickInput?,
         level: PacMazeLevelConfig,
         fireAttack: Boolean = false,
+        cosmeticSpeedMultiplier: Float = 1f,
+        attackCooldownTicks: Int = PacMazeConstants.ATTACK_COOLDOWN_TICKS,
+        playerPassRadius: Float = PacMazeMotion.BODY_RADIUS,
     ): PacMazeWorldState {
-        val input = pacInput ?: PacMazeInputState.Inactive
+        val input = pacInput ?: PacMazeTickInput.Inactive
         if (state.phase != PacMazePhase.PLAYING) return state
 
-        var world = PacMazeMapDynamics.tick(advanceTimers(state))
+        var world = PacMazeItems.tickEffects(PacMazeMapDynamics.tick(advanceTimers(state)))
+        world = PacMazeItems.tick(world)
         if (fireAttack) {
-            world = PacMazeCombat.tryFireAttack(world)
+            world = PacMazeCombat.tryFireAttack(world, attackCooldownTicks)
         }
         val pac = world.entities.firstOrNull { it.role == "pac" } ?: return world
 
+        val movedPac = tickPacEntity(world, pac, input, cosmeticSpeedMultiplier, playerPassRadius)
+        world = PacMazePortals.tryArmLinkPair(world, movedPac, level)
         val pacAfter = sanitizeEntity(
             world,
-            PacMazePortals.applyTransit(world, tickPacEntity(world, pac, input), level),
+            PacMazePortals.applyTransit(
+                world,
+                movedPac,
+                level,
+            ),
             forGhost = false,
+            bodyRadius = PacMazeMotion.BODY_RADIUS,
         )
         world = world.copy(
             entities = world.entities.map { entity ->
                 if (entity.id != pac.id) entity else pacAfter
             },
         )
-        world = PacMazeRules.eatPellet(world, pacAfter.x, pacAfter.y)
+        val pelletsBefore = world.pelletsRemaining
+        world = PacMazeRules.eatPellet(world, pacAfter.x, pacAfter.y, level.modeRules.winCondition, level)
+        if (level.modeRules.scoreMultiplier != 1f && world.score > state.score) {
+            val gained = world.score - state.score
+            val bonus = (gained * (level.modeRules.scoreMultiplier - 1f)).toInt()
+            if (bonus > 0) world = world.copy(score = world.score + bonus)
+        }
+        if (world.pelletsRemaining < pelletsBefore) {
+            world = triggerOpportunistBurst(world)
+        }
+        world = PacMazeItems.tryPickup(world, pacAfter.x, pacAfter.y)
+        world = PacMazeCheckpointVisits.apply(world, level)
+        world = PacMazeItems.tickMagnet(world)
+        world = PacMazeMazeExploration.tick(world, level)
+        world = PacMazeMazeMechanics.tick(world, level, elapsedSeconds = (world.tick / PacMazeConstants.TICKS_PER_SECOND).toInt())
 
-        if (world.ghostReleaseTicksLeft <= 0) {
+        if (world.ghostReleaseTicksLeft <= 0 && !PacMazeItems.ghostsFrozen(world)) {
             val updatedPac = world.entities.first { it.id == pac.id }
             val rng = PacMazeDeterministicRng(world.rngSeed + world.tick)
             world = world.copy(
                 entities = world.entities.map { entity ->
                     if (entity.role != "ghost") entity
-                    else sanitizeEntity(
+                    else if (entity.hitStunTicksLeft > 0) {
+                        entity.copy(velX = 0f, velY = 0f)
+                    } else sanitizeEntity(
                         world,
                         tickGhostEntity(world, entity, updatedPac, rng, level),
                         forGhost = true,
                     )
+                },
+            )
+        } else if (PacMazeItems.ghostsFrozen(world)) {
+            world = world.copy(
+                entities = world.entities.map { entity ->
+                    if (entity.role != "ghost" || entity.ghostMode == GhostMode.EATEN) entity
+                    else entity.copy(velX = 0f, velY = 0f)
                 },
             )
         }
@@ -54,21 +88,73 @@ object PacMazeSimulation {
         state: PacMazeWorldState,
         entity: PacMazeEntity,
         forGhost: Boolean,
+        bodyRadius: Float = PacMazeMotion.BODY_RADIUS,
     ): PacMazeEntity {
-        if (PacMazeMotion.isPositionLegal(state, entity.x, entity.y, forGhost)) return entity
-        return PacMazeMotion.sanitize(state, entity, forGhost)
+        val ghost = if (forGhost) entity else null
+        val radius = if (forGhost) PacMazeMotion.BODY_RADIUS else bodyRadius
+        if (PacMazeMotion.isPositionLegal(state, entity.x, entity.y, forGhost, ghost, radius)) return entity
+        return PacMazeMotion.sanitize(state, entity, forGhost, radius)
     }
+
+    private fun tickPacEntity(
+        state: PacMazeWorldState,
+        entity: PacMazeEntity,
+        input: PacMazeTickInput,
+        cosmeticSpeedMultiplier: Float,
+        playerPassRadius: Float,
+    ): PacMazeEntity = PacMazeMotion.tickPlayer(
+        state = state,
+        entity = entity,
+        input = input,
+        movementMode = state.movementMode,
+        cosmeticSpeedMultiplier = cosmeticSpeedMultiplier,
+        passRadius = playerPassRadius,
+    )
+
+    private fun triggerOpportunistBurst(state: PacMazeWorldState): PacMazeWorldState =
+        state.copy(
+            entities = state.entities.map { entity ->
+                if (entity.role == "ghost" &&
+                    entity.ghostKind.behaviorArchetype == GhostBehaviorArchetype.OPPORTUNIST
+                ) {
+                    entity.copy(opportunistBurstTicksLeft = PacMazeGhostRoster.OPPORTUNIST_BURST_TICKS)
+                } else {
+                    entity
+                }
+            },
+        )
 
     private fun advanceTimers(state: PacMazeWorldState): PacMazeWorldState {
         var ghostMode = state.ghostMode
         var ghostTicks = state.ghostModeTicksLeft - 1
         if (ghostTicks <= 0) {
-            ghostMode = if (ghostMode == GhostMode.CHASE) GhostMode.SCATTER else GhostMode.CHASE
+            ghostMode = if (state.levelId <= 0) {
+                // 迷雾迷宫：程序地图无固定角落，保持追击避免散场卡死
+                GhostMode.CHASE
+            } else if (ghostMode == GhostMode.CHASE) {
+                GhostMode.SCATTER
+            } else {
+                GhostMode.CHASE
+            }
             ghostTicks = PacMazeConstants.GHOST_MODE_CYCLE_TICKS
         }
         val power = (state.powerTicksLeft - 1).coerceAtLeast(0)
         val release = (state.ghostReleaseTicksLeft - 1).coerceAtLeast(0)
         val attackCooldown = (state.attackCooldownTicksLeft - 1).coerceAtLeast(0)
+        val entities = state.entities.map { entity ->
+            when {
+                entity.role != "ghost" -> entity
+                entity.hitStunTicksLeft > 0 -> entity.copy(
+                    hitStunTicksLeft = entity.hitStunTicksLeft - 1,
+                    velX = 0f,
+                    velY = 0f,
+                )
+                else -> entity.copy(
+                    opportunistBurstTicksLeft = (entity.opportunistBurstTicksLeft - 1).coerceAtLeast(0),
+                    phaseWalkCooldownTicksLeft = (entity.phaseWalkCooldownTicksLeft - 1).coerceAtLeast(0),
+                )
+            }
+        }
         return state.copy(
             tick = state.tick + 1,
             powerTicksLeft = power,
@@ -76,14 +162,9 @@ object PacMazeSimulation {
             ghostModeTicksLeft = ghostTicks,
             ghostReleaseTicksLeft = release,
             attackCooldownTicksLeft = attackCooldown,
+            entities = entities,
         )
     }
-
-    private fun tickPacEntity(
-        state: PacMazeWorldState,
-        entity: PacMazeEntity,
-        input: PacMazeInputState,
-    ): PacMazeEntity = PacMazeMotion.tickPlayer(state, entity, input)
 
     private fun tickGhostEntity(
         state: PacMazeWorldState,
@@ -91,44 +172,7 @@ object PacMazeSimulation {
         pac: PacMazeEntity,
         rng: PacMazeDeterministicRng,
         level: PacMazeLevelConfig,
-    ): PacMazeEntity {
-        var current = entity
-        val mode = when {
-            state.powerTicksLeft > 0 && current.ghostMode != GhostMode.EATEN -> GhostMode.FRIGHTENED
-            current.ghostMode == GhostMode.EATEN -> GhostMode.EATEN
-            else -> state.ghostMode
-        }
-        val speed = PacMazeConstants.ghostSpeedCellsPerSec(mode, level.ghostSpeedMul)
-        val currentDir = current.direction
-        val forwardBlocked = currentDir != null &&
-            !PacMazeMotion.canMoveInDir(state, current.x, current.y, currentDir, forGhost = true)
-        val atDecision = PacMazeMotion.isGhostDecisionPoint(state, current)
-
-        if (currentDir == null || atDecision || forwardBlocked) {
-            val picked = PacMazeGhostAi.pickDirection(
-                state = state,
-                ghost = current,
-                pac = pac,
-                rng = rng,
-                level = level,
-                escapeOnly = forwardBlocked && !atDecision,
-            )
-            val nextDir = picked ?: currentDir
-            if (nextDir != null) {
-                current = current.copy(
-                    ghostMode = mode,
-                    speed = speed,
-                    direction = nextDir,
-                    facing = nextDir,
-                )
-            }
-        } else {
-            current = current.copy(ghostMode = mode, speed = speed)
-        }
-
-        val dir = current.direction ?: return current
-        return PacMazePortals.applyTransit(state, PacMazeMotion.tickGhost(state, current, dir, speed), level)
-    }
+    ): PacMazeEntity = PacMazeGhostController.tick(state, entity, pac, rng, level)
 
     private fun resolveCollisions(state: PacMazeWorldState, level: PacMazeLevelConfig): PacMazeWorldState {
         val pac = state.entities.firstOrNull { it.role == "pac" } ?: return state
@@ -148,6 +192,10 @@ object PacMazeSimulation {
                         )
                     }
                     ghost.ghostMode != GhostMode.EATEN -> {
+                        PacMazeItems.tryConsumeShield(world)?.let { shielded ->
+                            world = shielded
+                            return@forEach
+                        }
                         val lives = world.lives - 1
                         val phase = if (lives <= 0) PacMazePhase.GAME_OVER else PacMazePhase.PLAYING
                         val resetPac = pac.copy(
@@ -162,14 +210,24 @@ object PacMazeSimulation {
                         val resetGhosts = world.entities.map { e ->
                             if (e.role == "ghost") {
                                 val idx = e.id.removePrefix("ghost_").toIntOrNull() ?: 0
-                                val spawn = level.ghostSpawns.getOrElse(idx) { level.pacSpawn }
+                                val spawn = level.ghostSpawns.getOrElse(idx) {
+                                    PacMazeGhostSpawnDef(
+                                        level.pacSpawn.first,
+                                        level.pacSpawn.second,
+                                        GhostKind.STRIKER,
+                                    )
+                                }
                                 e.copy(
-                                    x = spawn.first.toFloat(),
-                                    y = spawn.second.toFloat(),
+                                    x = spawn.x.toFloat(),
+                                    y = spawn.y.toFloat(),
                                     ghostMode = GhostMode.SCATTER,
                                     direction = null,
                                     velX = 0f,
                                     velY = 0f,
+                                    opportunistBurstTicksLeft = 0,
+                                    ghostStuckTicks = 0,
+                                    ghostDecisionTileKey = -1,
+                                    phaseWalkCooldownTicksLeft = 0,
                                 )
                             } else if (e.id == pac.id) resetPac else e
                         }

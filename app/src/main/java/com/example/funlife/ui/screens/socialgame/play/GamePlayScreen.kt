@@ -38,10 +38,12 @@ import com.example.funlife.ui.screens.socialgame.SocialGameToastHost
 import com.example.funlife.social.game.SyncState
 import com.example.funlife.viewmodel.GamePlayViewModel
 import com.example.funlife.viewmodel.GomokuPlacementSyncState
+import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlinePlayScreen
 
 @Composable
 fun GamePlayScreen(
     roomId: String,
+    userId: Long,
     viewModel: GamePlayViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToLobby: () -> Unit,
@@ -53,11 +55,19 @@ fun GamePlayScreen(
     var showExitConfirm by remember(roomId) { mutableStateOf(false) }
     val entry = remember(ui.gameId) { SocialGameCatalog.find(ui.gameId) }
     val title = entry?.title ?: "对局中"
-    val isLocalPacMaze = ui.gameId == "pac_maze" || ui.gameId == "pac_maze_local"
-    LaunchedEffect(isLocalPacMaze) {
-        if (isLocalPacMaze) onNavigateToLocalPacMaze()
+    if (ui.gameId == "pac_maze") {
+        PacMazeOnlinePlayScreen(
+            roomId = roomId,
+            userId = userId,
+            onExit = onNavigateToGameCenter,
+            onBackToLobby = onNavigateToLobby,
+        )
+        return
     }
-    if (isLocalPacMaze) {
+    LaunchedEffect(ui.gameId) {
+        if (ui.gameId == "pac_maze_local") onNavigateToLocalPacMaze()
+    }
+    if (ui.gameId == "pac_maze_local") {
         SocialGameEnterLoading(
             gameId = ui.gameId,
             gameTitle = title,

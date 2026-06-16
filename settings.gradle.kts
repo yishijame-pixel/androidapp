@@ -27,3 +27,5 @@ dependencyResolutionManagement {
 rootProject.name = "FunLife"
 include(":app")
 include(":PageFlip")
+include(":pac-maze-engine")
+include(":pac-maze-server")

@@ -4,6 +4,7 @@ import com.example.funlife.data.dao.PacMazeProgressDao
 import com.example.funlife.data.model.PacMazeProgress
 import com.example.funlife.ui.screens.pacmaze.PacMazeLevelCatalog
 import com.example.funlife.ui.screens.pacmaze.PacMazeStars
+import com.example.funlife.ui.screens.pacmaze.PacMazeTestUnlock
 import kotlinx.coroutines.flow.Flow
 
 class PacMazeProgressRepository(
@@ -70,6 +71,17 @@ class PacMazeProgressRepository(
             current.copy(
                 mazeBestTimeMs = bestTime,
                 highScore = maxOf(current.highScore, score),
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    suspend fun unlockAllLevelsForTesting(userId: Long) {
+        if (!PacMazeTestUnlock.enabled) return
+        val current = ensureProgress(userId)
+        dao.upsert(
+            current.copy(
+                maxLevelReached = PacMazeLevelCatalog.TOTAL_LEVELS,
                 updatedAt = System.currentTimeMillis(),
             ),
         )

@@ -1,7 +1,9 @@
 package com.example.funlife.ui.screens.pacmaze
 
+import com.example.funlife.social.game.engine.pacmaze.PacMazeLevelProgression
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 object PacMazePalette {
     val bgTop = Color(0xFF0F1628)
@@ -52,6 +54,26 @@ object PacMazePalette {
     val hudGradient = Brush.horizontalGradient(
         listOf(Color(0xE6121828), Color(0xCC121828)),
     )
+    val hudScrim = Brush.verticalGradient(
+        listOf(Color(0xCC060A14), Color(0x00060A14)),
+    )
+
+    val modeEndless = Color(0xFFB388FF)
+    val modeMaze = Color(0xFFFFB74D)
+    val modePractice = Color(0xFF4ADE80)
+}
+
+/** 横屏对局安全区：避开系统栏与左右触控区。 */
+object PacMazeLandscapeInsets {
+    val hudTop = 6.dp
+    val hudHorizontal = 10.dp
+    val joystickStart = 14.dp
+    val joystickBottom = 10.dp
+    val actionEnd = 14.dp
+    val actionBottom = 10.dp
+    val joystickSize = 136.dp
+    val joystickZoneWidth = 168.dp
+    val joystickZoneHeight = 168.dp
 }
 
 enum class PacMazePlayMode(
@@ -63,12 +85,14 @@ enum class PacMazePlayMode(
 ) {
     SOLO("solo", "单人闯关", "四主题 13 关递进", "🏃", playable = true),
     ENDLESS("endless", "无尽模式", "波次递进 · 冲高分", "♾️", playable = true),
-    MAZE("maze", "迷宫模式", "找到出口 · 计时赛", "🧭", playable = true),
-    LOCAL_COOP("local_coop", "本地双人", "同屏协作闯关", "👥"),
-    LOCAL_VERSUS("local_versus", "本地 1v1", "豆人 VS 幽灵", "⚔️"),
-    ONLINE("online", "在线对战", "好友联机（开发中）", "🌐"),
+    MAZE("maze", "迷雾迷宫", "战争迷雾 · 钥印出口 · 每日挑战", "🌫️", playable = true),
+    ONLINE_VERSUS("online_versus", "豆人对决", "邀请好友实时竞技", "⚔️", playable = true),
+    ONLINE_COOP("online_coop", "并肩闯关", "在线合作 L1–L8", "👥", playable = true),
+    ONLINE("online", "在线对战", "大厅内联机开房", "🌐", playable = true),
 }
 
+/** @deprecated 使用 [PacMazeMenuRoute] 栈式导航 */
+@Deprecated("Replaced by PacMazeMenuRoute")
 enum class PacMazeMenuStep {
     MODE_SELECT,
     CHARACTER_SELECT,
@@ -80,26 +104,47 @@ data class PacMazeLevelMeta(
     val name: String,
     val subtitle: String,
     val difficulty: String,
+    val mechanisms: List<PacMazeMechanismKind> = PacMazeLevelMechanisms.forLevel(id),
+    val tutorialHint: String = "",
 )
 
 object PacMazeLevelCatalog {
-    const val TOTAL_LEVELS = 13
+    const val TOTAL_LEVELS = 23
 
-    val levels: List<PacMazeLevelMeta> = listOf(
-        PacMazeLevelMeta(1, "赛博-1", "数据管道 · 交错竖廊", "简单"),
-        PacMazeLevelMeta(2, "赛博-2", "内核环路 · 中空堡垒", "简单"),
-        PacMazeLevelMeta(3, "花园-1", "树篱迷宫 · 多死路", "普通"),
-        PacMazeLevelMeta(4, "糖果-1", "方糖群岛 · 散点岛", "困难"),
-        PacMazeLevelMeta(5, "古风-1", "四合院 · 天井中空", "挑战"),
-        PacMazeLevelMeta(6, "赛博-3", "分叉数据港 · 传送门", "普通"),
-        PacMazeLevelMeta(7, "花园-2", "四瓣花坛 · 十字花圃", "普通"),
-        PacMazeLevelMeta(8, "糖果-2", "糖浆螺旋 · 回字形", "困难"),
-        PacMazeLevelMeta(9, "古风-2", "九曲回廊 · 蛇形廊道", "挑战"),
-        PacMazeLevelMeta(10, "古风-3", "龙门关 · 终局双激光", "挑战"),
-        PacMazeLevelMeta(11, "古风-4", "四合院落 · 四面厢房", "挑战"),
-        PacMazeLevelMeta(12, "花园-3", "江南园林 · 曲径水池", "普通"),
-        PacMazeLevelMeta(13, "古风-5", "回字院落 · 三重围合", "挑战"),
-    )
+    val levels: List<PacMazeLevelMeta> = (1..TOTAL_LEVELS).map { id ->
+        val meta = when (id) {
+            1 -> "赛博-1" to "数据管道 · 道具入门"
+            2 -> "赛博-2" to "内核环路 · 双工厂"
+            3 -> "花园-1" to "树篱迷宫 · 冰霜解锁"
+            4 -> "糖果-1" to "方糖群岛 · 三厂补给"
+            5 -> "古风-1" to "四合院 · 激光庭院"
+            6 -> "赛博-3" to "分叉数据港 · 传送门"
+            7 -> "花园-2" to "四瓣花坛 · 十字花圃"
+            8 -> "糖果-2" to "糖浆螺旋 · 充能登场"
+            9 -> "古风-2" to "九曲回廊 · 蛇形廊道"
+            10 -> "古风-3" to "龙门关 · 五厂终局"
+            11 -> "古风-4" to "四合院落 · 四面厢房"
+            12 -> "花园-3" to "江南园林 · 曲径水池"
+            13 -> "古风-5" to "回字院落 · 三重围合"
+            14 -> "蒸汽-1" to "活塞矩阵 · 移动墙入门"
+            15 -> "故障-1" to "RGB 错位 · 十字激光"
+            16 -> "星港-1" to "气闸矩阵 · 能量门阵"
+            17 -> "熔岩-1" to "地核脉冲 · 炮塔走廊"
+            18 -> "深潜-1" to "声呐迷宫 · 五重围合"
+            19 -> "冰库-1" to "霜花机关 · 动态条纹"
+            20 -> "古籍-1" to "符卷索引 · 全幽灵池"
+            21 -> "地铁-1" to "区间闸机 · 八卦要道"
+            22 -> "戏台-1" to "幕布包抄 · 六厂熔炉"
+            else -> "温室-1" to "穹顶终局 · 地狱熔炉"
+        }
+        PacMazeLevelMeta(
+            id = id,
+            name = meta.first,
+            subtitle = meta.second,
+            difficulty = PacMazeLevelProgression.difficultyLabel(id),
+            tutorialHint = tutorialHintFor(id),
+        )
+    }
 
     fun find(levelId: Int): PacMazeLevelMeta? = levels.firstOrNull { it.id == levelId }
 
@@ -107,6 +152,8 @@ object PacMazeLevelCatalog {
         "简单" -> PacMazePalette.difficultyEasy
         "普通" -> PacMazePalette.difficultyNormal
         "困难" -> PacMazePalette.difficultyHard
+        "挑战" -> PacMazePalette.difficultyExtreme
+        "极限" -> PacMazePalette.difficultyExtreme
         else -> PacMazePalette.difficultyExtreme
     }
 }

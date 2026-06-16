@@ -58,7 +58,8 @@ sleep 3
 echo ""
 echo "健康检查:"
 curl -fsS "http://127.0.0.1:8090/api/health" >/dev/null && echo "  PocketBase :8090 OK" || echo "  PocketBase :8090 未就绪"
-curl -fsS "http://127.0.0.1:8790/health" >/dev/null && echo "  draw_ws    :8790 OK" || echo "  draw_ws    :8790 未就绪"
+curl -fsS "http://127.0.0.1:8790/health" >/dev/null && echo "  draw_ws       :8790 OK" || echo "  draw_ws       :8790 未就绪"
+curl -fsS "http://127.0.0.1:8791/health" >/dev/null && echo "  pac-maze-ws   :8791 OK" || echo "  pac-maze-ws   :8791 未就绪"
 
 if [[ "$LOGS" -eq 1 ]]; then
   docker compose "${profiles[@]}" logs -f

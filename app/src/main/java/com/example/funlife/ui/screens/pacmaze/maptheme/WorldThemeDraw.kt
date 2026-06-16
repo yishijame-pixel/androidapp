@@ -37,7 +37,6 @@ internal object GardenThemeDraw {
 
     fun drawHedgeEdges(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
-        val cell = ctx.cell
         val p = ctx.config.palette
         val breath = 0.8f + 0.2f * sin(ctx.animPhase)
         for (y in 0 until world.height) {
@@ -45,19 +44,21 @@ internal object GardenThemeDraw {
                 if (!isWall(ctx, x, y)) continue
                 val tile = world.tileAt(x, y)
                 if (tile == TileType.WOOD_WALL || tile == TileType.TILE_WALL) continue
-                val left = ctx.offsetX + x * cell
-                val top = ctx.offsetY + y * cell
-                val right = left + cell
-                val bottom = top + cell
-                val inset = cell * 0.08f
-                val stroke = cell * 0.11f
+                val rect = ctx.tileRect(x, y)
+                val tileCell = ctx.tileMetric(rect)
+                val left = rect.left
+                val top = rect.top
+                val right = rect.right
+                val bottom = rect.bottom
+                val inset = tileCell * 0.08f
+                val stroke = tileCell * 0.11f
                 val color = p.wallEdge.themeAlpha(breath)
                 val leaf = p.wallGlow.themeAlpha(breath * 0.85f)
                 if (!isWall(ctx, x, y - 1)) {
                     scope.drawRoundRect(color = color, topLeft = Offset(left + inset, top + inset), size = Size(right - left - inset * 2, stroke), cornerRadius = CornerRadius(stroke / 2))
                     repeat(3) { i ->
                         val lx = left + inset + (right - left - inset * 2) * (i + 1) / 4f
-                        scope.drawCircle(color = leaf, radius = cell * 0.045f, center = Offset(lx, top + inset + stroke * 0.5f))
+                        scope.drawCircle(color = leaf, radius = tileCell * 0.045f, center = Offset(lx, top + inset + stroke * 0.5f))
                     }
                 }
                 if (!isWall(ctx, x, y + 1)) {
@@ -172,36 +173,31 @@ internal object ChineseThemeDraw {
 
     fun drawDoorLanterns(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
-        val cell = ctx.cell
         val pulse = 0.75f + 0.25f * sin(ctx.animPhase * 1.8f)
         for (y in 0 until world.height) {
             for (x in 0 until world.width) {
                 if (world.tileAt(x, y) != TileType.DOOR) continue
-                val rect = Rect(
-                    ctx.offsetX + x * cell,
-                    ctx.offsetY + y * cell,
-                    ctx.offsetX + (x + 1) * cell,
-                    ctx.offsetY + (y + 1) * cell,
-                )
-                listOf(rect.left + cell * 0.12f, rect.right - cell * 0.22f).forEach { lx ->
-                    val lantern = Rect(lx, rect.top + cell * 0.08f, lx + cell * 0.1f, rect.top + cell * 0.32f)
+                val rect = ctx.tileRect(x, y)
+                val tileCell = ctx.tileMetric(rect)
+                listOf(rect.left + tileCell * 0.12f, rect.right - tileCell * 0.22f).forEach { lx ->
+                    val lantern = Rect(lx, rect.top + tileCell * 0.08f, lx + tileCell * 0.1f, rect.top + tileCell * 0.32f)
                     scope.drawRoundRect(
                         brush = Brush.verticalGradient(
                             listOf(Color(0xFFD32F2F), Color(0xFF8B0000)),
                         ),
                         topLeft = lantern.topLeft,
                         size = lantern.size,
-                        cornerRadius = CornerRadius(cell * 0.04f),
+                        cornerRadius = CornerRadius(tileCell * 0.04f),
                     )
                     scope.drawLine(
                         color = Color(0xFFD4AF37).copy(alpha = 0.7f),
-                        start = Offset(lantern.center.x, lantern.top - cell * 0.04f),
+                        start = Offset(lantern.center.x, lantern.top - tileCell * 0.04f),
                         end = Offset(lantern.center.x, lantern.top),
-                        strokeWidth = cell * 0.025f,
+                        strokeWidth = tileCell * 0.025f,
                     )
                     scope.drawCircle(
                         color = Color(0xFFFFD54F).copy(alpha = 0.35f * pulse),
-                        radius = cell * 0.14f,
+                        radius = tileCell * 0.14f,
                         center = Offset(lantern.center.x, lantern.center.y),
                     )
                 }
@@ -213,23 +209,18 @@ internal object ChineseThemeDraw {
 
 internal fun DrawScope.drawCourtyardTiles(ctx: PacMazeMapRenderContext, themeId: PacMazeMapThemeId) {
     val world = ctx.world
-    val cell = ctx.cell
     val p = ctx.config.palette
     for (y in 0 until world.height) {
         for (x in 0 until world.width) {
             val tile = world.tileAt(x, y)
-            val rect = Rect(
-                ctx.offsetX + x * cell,
-                ctx.offsetY + y * cell,
-                ctx.offsetX + (x + 1) * cell,
-                ctx.offsetY + (y + 1) * cell,
-            )
+            val rect = ctx.tileRect(x, y)
+            val cell = ctx.tileMetric(rect)
             when (tile) {
                 TileType.WALL, TileType.BRICK_WALL, TileType.WOOD_WALL, TileType.TILE_WALL ->
                     CourtyardMaterialDraw.drawCourtyardWall(this, ctx, rect, cell, x, y, themeId)
                 TileType.DOOR -> {
                     drawCourtyardFloor(this, ctx, themeId, rect, p, x, y, tile)
-                    CourtyardMaterialDraw.drawWoodGate(this, rect, cell, themeId)
+                    PacMazePortalVisual.drawPortalTile(this, ctx, rect, cell, x, y)
                 }
                 TileType.DYNAMIC_WALL -> {
                     if (PacMazeMapDynamics.isTileBlocking(world, tile, x, y, forGhost = false)) {
@@ -240,7 +231,7 @@ internal fun DrawScope.drawCourtyardTiles(ctx: PacMazeMapRenderContext, themeId:
                 }
                 TileType.TUNNEL, TileType.PORTAL -> {
                     drawCourtyardFloor(this, ctx, themeId, rect, p, x, y, tile)
-                    MapThemeTiles.drawPortal(this, rect, cell, p, ctx.animPhase * 0.5f)
+                    PacMazePortalVisual.drawPortalTile(this, ctx, rect, cell, x, y)
                 }
                 TileType.ENERGY_GATE -> {
                     drawCourtyardFloor(this, ctx, themeId, rect, p, x, y, tile)
@@ -300,23 +291,18 @@ internal fun DrawScope.drawThemedTiles(
     drawWall: (DrawScope, Rect, Float, PacMazeThemePalette) -> Unit,
 ) {
     val world = ctx.world
-    val cell = ctx.cell
     val p = ctx.config.palette
     for (y in 0 until world.height) {
         for (x in 0 until world.width) {
             val tile = world.tileAt(x, y)
-            val rect = Rect(
-                ctx.offsetX + x * cell,
-                ctx.offsetY + y * cell,
-                ctx.offsetX + (x + 1) * cell,
-                ctx.offsetY + (y + 1) * cell,
-            )
+            val rect = ctx.tileRect(x, y)
+            val cell = ctx.tileMetric(rect)
             when (tile) {
                 TileType.WALL, TileType.BRICK_WALL, TileType.WOOD_WALL, TileType.TILE_WALL ->
                     drawWall(this, rect, cell, p)
-                TileType.DOOR -> when (themeId) {
-                    PacMazeMapThemeId.GARDEN -> MapThemeTiles.drawGardenWall(this, rect, cell, p)
-                    else -> drawWall(this, rect, cell, p)
+                TileType.DOOR -> {
+                    drawThemedFloor(this, ctx, themeId, rect, p, x, y)
+                    PacMazePortalVisual.drawPortalTile(this, ctx, rect, cell, x, y)
                 }
                 TileType.DYNAMIC_WALL -> {
                     if (PacMazeMapDynamics.isTileBlocking(world, tile, x, y, forGhost = false)) {
@@ -327,7 +313,7 @@ internal fun DrawScope.drawThemedTiles(
                 }
                 TileType.TUNNEL, TileType.PORTAL -> {
                     drawThemedFloor(this, ctx, themeId, rect, p, x, y)
-                    MapThemeTiles.drawPortal(this, rect, cell, p, ctx.animPhase * 0.5f)
+                    PacMazePortalVisual.drawPortalTile(this, ctx, rect, cell, x, y)
                 }
                 TileType.ENERGY_GATE -> {
                     drawThemedFloor(this, ctx, themeId, rect, p, x, y)

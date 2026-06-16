@@ -21,16 +21,9 @@ internal object CyberHazardDraw {
     fun draw(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
         val cell = ctx.cell
-        val ox = ctx.offsetX
-        val oy = ctx.offsetY
 
         world.hazards.forEach { def ->
-            val rect = Rect(
-                ox + def.x * cell,
-                oy + def.y * cell,
-                ox + (def.x + 1) * cell,
-                oy + (def.y + 1) * cell,
-            )
+            val rect = ctx.tileRect(def.x, def.y)
             when (def.kind) {
                 PacMazeHazardKind.TURRET -> drawTurretBase(scope, rect, cell, def.direction, ctx.animPhase)
                 PacMazeHazardKind.LASER_ROW, PacMazeHazardKind.LASER_COL ->
@@ -54,9 +47,8 @@ internal object CyberHazardDraw {
         }
 
         world.enemyBullets.forEach { bullet ->
-            val cx = ox + (bullet.x + 0.5f) * cell
-            val cy = oy + (bullet.y + 0.5f) * cell
-            drawEnemyBullet(scope, Offset(cx, cy), cell, bullet.direction)
+            val center = ctx.enemyBulletCenter(bullet)
+            drawEnemyBullet(scope, center, cell, bullet.direction)
         }
     }
 
@@ -94,16 +86,16 @@ internal object CyberHazardDraw {
         phase: Float,
     ) {
         val cell = ctx.cell
-        val y = ctx.offsetY + (row + 0.5f) * cell
-        val x1 = ctx.offsetX + (xStart + 0.5f) * cell
-        val x2 = ctx.offsetX + (xEnd + 0.5f) * cell
+        val y = ctx.offsetY + (row + 0.5f) * ctx.cellY
+        val x1 = ctx.offsetX + (xStart + 0.5f) * ctx.cellX
+        val x2 = ctx.offsetX + (xEnd + 0.5f) * ctx.cellX
         val beamColor = if (lethal) CyberVisualEffects.NeonRed else Color(0xFFFF9100)
         val alpha = if (lethal) 0.95f else 0.45f + 0.2f * sin(phase * 4f)
         CyberVisualEffects.drawGlowLine(
             scope, Offset(x1, y), Offset(x2, y),
             beamColor.copy(alpha = alpha), cell * 0.07f, glowBlur = if (lethal) 18f else 8f,
         )
-        val scanScreenX = ctx.offsetX + scanX * cell
+        val scanScreenX = ctx.offsetX + scanX * ctx.cellX
         scope.drawContext.canvas.nativeCanvas.apply {
             val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = beamColor.copy(alpha = if (lethal) 0.75f else 0.35f).toArgb()
@@ -124,16 +116,16 @@ internal object CyberHazardDraw {
         phase: Float,
     ) {
         val cell = ctx.cell
-        val x = ctx.offsetX + (col + 0.5f) * cell
-        val y1 = ctx.offsetY + (yStart + 0.5f) * cell
-        val y2 = ctx.offsetY + (yEnd + 0.5f) * cell
+        val x = ctx.offsetX + (col + 0.5f) * ctx.cellX
+        val y1 = ctx.offsetY + (yStart + 0.5f) * ctx.cellY
+        val y2 = ctx.offsetY + (yEnd + 0.5f) * ctx.cellY
         val beamColor = if (lethal) CyberVisualEffects.NeonRed else Color(0xFFFF9100)
         val alpha = if (lethal) 0.95f else 0.45f + 0.2f * sin(phase * 4f)
         CyberVisualEffects.drawGlowLine(
             scope, Offset(x, y1), Offset(x, y2),
             beamColor.copy(alpha = alpha), cell * 0.07f, glowBlur = if (lethal) 18f else 8f,
         )
-        val scanScreenY = ctx.offsetY + scanY * cell
+        val scanScreenY = ctx.offsetY + scanY * ctx.cellY
         scope.drawContext.canvas.nativeCanvas.apply {
             val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = beamColor.copy(alpha = if (lethal) 0.75f else 0.35f).toArgb()

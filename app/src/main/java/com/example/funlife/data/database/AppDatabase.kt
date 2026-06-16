@@ -127,7 +127,7 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.SocialGameRoomCache::class,     // 🆕 v59：趣玩中心房间缓存
         com.example.funlife.data.model.PacMazeProgress::class,         // 🆕 v64：豆人迷宫进度
     ],
-    version = 65,  // 🆕 v65 - pac_maze endless/maze stats
+    version = 66,  // 🆕 v66 - social game room pac_maze lobby cache
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -1687,6 +1687,20 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_65_66 = object : Migration(65, 66) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `hostReady` INTEGER NOT NULL DEFAULT 1",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `guestReady` INTEGER NOT NULL DEFAULT 0",
+                )
+                database.execSQL(
+                    "ALTER TABLE `social_game_room_cache` ADD COLUMN `pacMazeJson` TEXT NOT NULL DEFAULT ''",
+                )
+            }
+        }
+
         private val MIGRATION_64_65 = object : Migration(64, 65) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
@@ -2036,6 +2050,7 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_62_63,
                 MIGRATION_63_64,
                 MIGRATION_64_65,
+                MIGRATION_65_66,
             )
             // Release 禁止 destructive migration，避免升级误删全库
             if (BuildConfig.DEBUG) {

@@ -18,6 +18,15 @@ enum class GameMoveKind(val wire: String) {
     DRAW_CLEAR("draw_clear"),
     DRAW_GUESS("draw_guess"),
     DRAW_PHASE("draw_phase"),
+    PAC_INPUT_FRAME("pac_input_frame"),
+    /** 权威服模式：轻量直连输入（无 tick 绑定）。 */
+    PAC_INPUT_DIRECT("pac_input_direct"),
+    /** 权威服模式：房主广播的世界快照。 */
+    PAC_STATE_SNAPSHOT("pac_state_snapshot"),
+    PAC_ATTACK("pac_attack"),
+    PAC_READY("pac_ready"),
+    PAC_SURRENDER("pac_surrender"),
+    PAC_COSMETIC("pac_cosmetic"),
     ;
 
     companion object {
@@ -52,4 +61,32 @@ data class DrawGuessPayload(
 data class DrawPhasePayload(
     val kind: String = GameMoveKind.DRAW_PHASE.wire,
     val phase: String,
+)
+
+data class PacInputFrameWire(
+    val tick: Long,
+    val gen: Long = 0L,
+    val mode: String = "committed",
+    val dir: String? = null,
+    val attack: Boolean = false,
+)
+
+data class PacInputFramePayload(
+    val kind: String = GameMoveKind.PAC_INPUT_FRAME.wire,
+    @SerializedName("from_tick") val fromTick: Long = 0L,
+    val frames: List<PacInputFrameWire> = emptyList(),
+)
+
+data class PacReadyPayload(
+    val kind: String = GameMoveKind.PAC_READY.wire,
+    val ready: Boolean = true,
+)
+
+data class PacSurrenderPayload(
+    val kind: String = GameMoveKind.PAC_SURRENDER.wire,
+)
+
+data class PacCosmeticPayload(
+    val kind: String = GameMoveKind.PAC_COSMETIC.wire,
+    @SerializedName("skin_id") val skinId: String = "",
 )

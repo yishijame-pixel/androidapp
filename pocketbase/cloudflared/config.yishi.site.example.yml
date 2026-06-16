@@ -19,6 +19,10 @@ ingress:
   - hostname: pb.yishi.site
     path: ^/draw-ws
     service: http://127.0.0.1:8790
+  # Pac-Maze 权威对战：wss://pb.yishi.site/pac-maze-ws
+  - hostname: pb.yishi.site
+    path: ^/pac-maze-ws
+    service: http://127.0.0.1:8791
   - hostname: pb.yishi.site
     service: http://127.0.0.1:8090
   # 旧独立子域（可选保留）

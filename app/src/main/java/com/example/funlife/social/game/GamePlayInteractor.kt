@@ -93,6 +93,29 @@ class GamePlayInteractor(
             moveRepo.submitDrawPhase(userId, cred.pbRecordId, cred.token, dto, phase)
         }
 
+    suspend fun submitPacMove(roomId: String, payload: Map<String, Any?>): Result<Unit> =
+        submitPacMoveAtIndex(roomId, moveIndex = null, payload = payload)
+
+    suspend fun submitPacMoveAtIndex(
+        roomId: String,
+        moveIndex: Int?,
+        payload: Map<String, Any?>,
+    ): Result<Unit> =
+        runPlayPacInput(roomId) { cred ->
+            moveRepo.submitPacMoveAtIndex(
+                cred.token,
+                roomId,
+                cred.pbRecordId,
+                moveIndex,
+                payload,
+            ).map { Unit }
+        }
+
+    suspend fun finishPacMatch(roomId: String, result: com.example.funlife.social.game.model.PacMazeMatchResultWire): Result<Unit> =
+        runPlayMutation(roomId, "结束对局") { cred ->
+            roomRepo.finishPacMazeMatch(userId, cred.pbRecordId, cred.token, roomId, result).map { Unit }
+        }
+
     suspend fun abandonPlay(roomId: String): Result<Unit> =
         lobbyInteractor.abandonPlay(roomId)
 
@@ -127,6 +150,21 @@ class GamePlayInteractor(
             if (!GamePlayCredentialGate.isRecoverableError(err)) return@let first
             GamePlayCredentialGate.invalidateAndRebind(ctx, userId)
             executeMutation("作画", timeoutMs, block)
+        }
+    }
+
+    /** 豆人迷宫输入帧：与笔画同级，不占 mutating 锁，避免阻塞对手输入。 */
+    private suspend fun <T> runPlayPacInput(
+        @Suppress("UNUSED_PARAMETER") roomId: String,
+        block: suspend (SocialCredentials) -> Result<T>,
+    ): Result<T> {
+        val timeoutMs = SocialOperationGate.playMoveTimeoutMs()
+        return executeMutation("同步操作", timeoutMs, block).let { first ->
+            if (first.isSuccess) return@let first
+            val err = first.exceptionOrNull() ?: return@let first
+            if (!GamePlayCredentialGate.isRecoverableError(err)) return@let first
+            GamePlayCredentialGate.invalidateAndRebind(ctx, userId)
+            executeMutation("同步操作", timeoutMs, block)
         }
     }
 

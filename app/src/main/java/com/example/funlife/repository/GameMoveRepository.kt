@@ -404,6 +404,38 @@ class GameMoveRepository(
         Result.failure(e)
     }
 
+    suspend fun submitPacMove(
+        token: String,
+        roomId: String,
+        myPbId: String,
+        payload: Map<String, Any?>,
+    ): Result<GameMoveDto> = submitPacMoveAtIndex(
+        token = token,
+        roomId = roomId,
+        myPbId = myPbId,
+        moveIndex = null,
+        payload = payload,
+    )
+
+    /** 高频输入帧：指定 moveIndex，避免每帧 list 全量 moves。 */
+    suspend fun submitPacMoveAtIndex(
+        token: String,
+        roomId: String,
+        myPbId: String,
+        moveIndex: Int?,
+        payload: Map<String, Any?>,
+    ): Result<GameMoveDto> = withContext(Dispatchers.IO) {
+        try {
+            val index = moveIndex ?: run {
+                val moves = api.listGameMoves(token, roomId)
+                nextMoveIndex(moves)
+            }
+            Result.success(api.createGameMove(token, roomId, myPbId, index, payload))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun advanceAfterCorrectGuess(
         play: DrawGuessPlayState,
         room: GameRoomDto,

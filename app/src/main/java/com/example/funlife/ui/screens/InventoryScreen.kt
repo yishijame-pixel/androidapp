@@ -31,6 +31,7 @@ import com.example.funlife.data.model.InventoryItem
 import com.example.funlife.data.model.ItemRarity
 import com.example.funlife.data.model.InventoryItemType
 import com.example.funlife.viewmodel.InventoryViewModel
+import com.example.funlife.resource.ResourceStore
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
@@ -511,10 +512,13 @@ fun InventoryItemCard(
                     // 🔥 显示头像框图片 - 通过 ShopDao 的真实路径用 Coil 加载（支持 GIF/中文路径）
                     val context = LocalContext.current
                     val resolved = resolveFrameAssetPath(item, frameAssetMap)
-                    if (!resolved.isNullOrBlank()) {
+                    val imageModel = remember(resolved) {
+                        resolved?.let { ResourceStore.resolveCoilModel(it) }
+                    }
+                    if (imageModel != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
-                                .data("file:///android_asset/$resolved")
+                                .data(imageModel)
                                 .crossfade(200)
                                 .build(),
                             contentDescription = item.itemName,
@@ -721,10 +725,13 @@ fun ItemDetailDialog(
                         item.itemId.startsWith("avatar_frame_") -> {
                             // 🔥 显示头像框图片 - 使用 ShopDao 真实路径 + Coil（支持中文路径/GIF）
                             val resolved = resolveFrameAssetPath(item, frameAssetMap)
-                            if (!resolved.isNullOrBlank()) {
+                            val imageModel = remember(resolved) {
+                                resolved?.let { ResourceStore.resolveCoilModel(it) }
+                            }
+                            if (imageModel != null) {
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
-                                        .data("file:///android_asset/$resolved")
+                                        .data(imageModel)
                                         .crossfade(200)
                                         .build(),
                                     contentDescription = item.itemName,

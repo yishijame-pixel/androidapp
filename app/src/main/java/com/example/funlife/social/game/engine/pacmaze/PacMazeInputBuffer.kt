@@ -10,6 +10,7 @@ class PacMazeInputBuffer {
         var current: Direction? = null,
         var queued: Direction? = null,
         var active: Boolean = false,
+        var holdOnly: Boolean = false,
     )
 
     private val entries = ConcurrentHashMap<String, Entry>()
@@ -20,8 +21,24 @@ class PacMazeInputBuffer {
             entry.current = direction
             entry.queued = direction
             entry.active = true
+            entry.holdOnly = false
         } else {
-            entries[playerId]?.active = false
+            release(playerId)
+        }
+    }
+
+    /** 手指仍按住摇杆（死区内）：保持 active 与当前滑行，不应用缓冲方向改向/改朝向。 */
+    fun holdActive(playerId: String) {
+        val entry = entries.getOrPut(playerId) { Entry() }
+        entry.active = true
+        entry.holdOnly = true
+    }
+
+    /** 手指离开摇杆：停止输入，保留最后方向供下次按下复用。 */
+    fun release(playerId: String) {
+        entries[playerId]?.let { entry ->
+            entry.active = false
+            entry.holdOnly = false
         }
     }
 
@@ -31,6 +48,7 @@ class PacMazeInputBuffer {
             current = entry.current,
             queued = entry.queued,
             active = entry.active,
+            holdOnly = entry.holdOnly,
         )
     }
 
@@ -38,6 +56,7 @@ class PacMazeInputBuffer {
     fun commitTurn(playerId: String, direction: Direction) {
         val entry = entries.getOrPut(playerId) { Entry() }
         entry.current = direction
+        entry.holdOnly = false
     }
 
     fun clear(playerId: String) {

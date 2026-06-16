@@ -42,6 +42,7 @@
 |------|--------|------|--------------|------|
 | **PocketBase** | `funlife-pocketbase` | 8090 | 是（可映射到宿主机） | REST API、Realtime、Hooks、SQLite |
 | **draw_ws** | `funlife-draw-ws` | 8790 | 是 | 你画我猜笔画 WebSocket 热路径 |
+| **pac-maze-ws** | `funlife-pac-maze-ws` | 8791 | 是 | Pac-Maze 权威对战 WebSocket |
 | **fcm_relay** | `funlife-fcm-relay` | 8787 | **否** | PocketBase Hook → Firebase 推送 |
 | **cloudflared** | `funlife-cloudflared` | — | 出站隧道 | HTTPS/WSS 公网入口 |
 
@@ -49,7 +50,7 @@
 
 | Profile | 包含服务 | 使用场景 |
 |---------|----------|----------|
-| （默认） | pocketbase + draw-ws | 本地开发、内网测试 |
+| （默认） | pocketbase + draw-ws + pac-maze-ws | 本地开发、内网测试 |
 | `push` | + fcm-relay | 需要 FCM 离线推送 |
 | `tunnel` | + cloudflared | 需要公网 HTTPS（pb.yishi.site） |
 

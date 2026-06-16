@@ -150,3 +150,16 @@ node admin_disable.js FL-XXXX-XXXX-XXXX
 | 用户换手机 | 引导用 migrate 流程，3 次内自助 |
 | 退款 | `node admin_disable.js <卡密>` |
 | 恶意刷迁移 | 已限制 3 次；超过让用户走客服 |
+
+## VIP 管理后台（Docker）
+
+Web 管理面板（卡密、SKU 配置、ikun 须知等）可容器化运行，详见 [docker/README.md](docker/README.md)。
+
+```powershell
+cd backend
+copy tools\.env.example tools\.env
+# 填入 TCB_* 与 ADMIN_* 后：
+docker compose up -d --build
+```
+
+与 PocketBase 同机时：`cd pocketbase && docker compose --profile admin up -d --build`（在 `pocketbase/.env` 配置相同变量）。

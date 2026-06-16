@@ -11,10 +11,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.example.funlife.social.game.engine.pacmaze.Direction
 import com.example.funlife.social.game.engine.pacmaze.PacMazeEntity
+import com.example.funlife.social.game.engine.pacmaze.PacMazeEntityVisuals
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeMapThemeId
 import kotlin.math.abs
 import kotlin.math.sin
@@ -24,6 +26,18 @@ data class PacMazeCharacterPose(
     val animPhase: Float,
     val isMoving: Boolean,
     val powerActive: Boolean,
+    /** 选角/工坊预览为 true，行走序列帧会使用更慢步态 */
+    val walkPreview: Boolean = false,
+    /** 序列帧皮肤：外部帧计时器强制指定当前帧（0..n-1），优先于 animPhase 推算 */
+    val spriteFrameOverride: Int? = null,
+    val attackCooldownTicksLeft: Int = 0,
+    val attackCooldownTotal: Int = 0,
+    val speedBoostActive: Boolean = false,
+    val isDead: Boolean = false,
+    /** 云端皮肤：仅绘制 preview 封面（网格未选中时） */
+    val preferCoverOnly: Boolean = false,
+    /** 局内速度 X（格/秒），供 ikun 横版位图在上下移动时保持水平朝向 */
+    val velX: Float = 0f,
 )
 
 internal object PacMazeCharacterDraw {
@@ -48,31 +62,48 @@ internal object PacMazeCharacterDraw {
         }
     }
 
-    fun poseFrom(entity: PacMazeEntity, animPhase: Float, powerTicksLeft: Int): PacMazeCharacterPose {
-        val moving = entity.inputActive && (abs(entity.velX) > 0.01f || abs(entity.velY) > 0.01f)
+    fun poseFrom(
+        entity: PacMazeEntity,
+        animPhase: Float,
+        powerTicksLeft: Int,
+        attackCooldownTicksLeft: Int = 0,
+        attackCooldownTotal: Int = 0,
+        speedBoostTicksLeft: Int = 0,
+    ): PacMazeCharacterPose {
+        val visualFacing = PacMazeEntityVisuals.spriteFacing(entity)
+        val moving = PacMazeEntityVisuals.isLocomoting(entity)
         return PacMazeCharacterPose(
-            facing = entity.facing,
+            facing = visualFacing,
             animPhase = animPhase,
             isMoving = moving,
             powerActive = powerTicksLeft > 0,
+            attackCooldownTicksLeft = attackCooldownTicksLeft,
+            attackCooldownTotal = attackCooldownTotal,
+            speedBoostActive = speedBoostTicksLeft > 0,
+            velX = entity.velX,
         )
     }
 
     private fun walkCycle(pose: PacMazeCharacterPose): Float {
         if (!pose.isMoving) return 0f
-        return sin(pose.animPhase * 5.5f)
+        return sin(pose.animPhase * 3.2f)
     }
 
-    private fun facingRotation(facing: Direction): Float = when (facing) {
-        Direction.RIGHT -> 0f
-        Direction.DOWN -> 90f
-        Direction.LEFT -> 180f
-        Direction.UP -> 270f
+    /**
+     * 角色默认朝右绘制。向左用水平镜像（避免 180° 旋转把眼睛翻到脚下），上下用旋转。
+     */
+    private inline fun DrawScope.withFacing(center: Offset, facing: Direction, block: DrawScope.() -> Unit) {
+        when (facing) {
+            Direction.RIGHT -> block()
+            Direction.LEFT -> scale(scaleX = -1f, scaleY = 1f, pivot = center, block = block)
+            Direction.UP -> rotate(degrees = -90f, pivot = center, block = block)
+            Direction.DOWN -> rotate(degrees = 90f, pivot = center, block = block)
+        }
     }
 
     private fun drawShadow(scope: DrawScope, center: Offset, radius: Float) {
         scope.drawOval(
-            color = Color.Black.copy(alpha = 0.32f),
+            color = Color.Black.copy(alpha = 0.22f),
             topLeft = Offset(center.x - radius * 0.85f, center.y + radius * 0.52f),
             size = Size(radius * 1.7f, radius * 0.38f),
         )
@@ -109,11 +140,11 @@ internal object PacMazeCharacterDraw {
             else -> listOf(Color(0xFFFFFDE7), Color(0xFFFFEB3B), Color(0xFFFFB300), Color(0xFFFF8F00))
         }
         val mouthOpen = if (pose.isMoving) {
-            28f + 18f * ((sin(pose.animPhase * 4f) + 1f) * 0.5f)
+            28f + 18f * ((sin(pose.animPhase * 2.4f) + 1f) * 0.5f)
         } else {
             14f
         }
-        scope.rotate(facingRotation(pose.facing), center) {
+        scope.withFacing(center, pose.facing) {
             scope.drawCircle(
                 brush = Brush.radialGradient(
                     colors = bodyColors,
@@ -157,7 +188,7 @@ internal object PacMazeCharacterDraw {
         val bob = if (pose.isMoving) abs(step) * radius * 0.04f else 0f
         val c = center + Offset(0f, -bob)
 
-        scope.rotate(facingRotation(pose.facing), c) {
+        scope.withFacing(c, pose.facing) {
             val robe = Color(0xFF4A7C59)
             val robeDark = Color(0xFF2E5A3A)
             val skin = Color(0xFFFFE0B2)
@@ -228,7 +259,7 @@ internal object PacMazeCharacterDraw {
         val bob = if (pose.isMoving) abs(step) * radius * 0.05f else sin(pose.animPhase) * radius * 0.015f
         val c = center + Offset(0f, -bob)
 
-        scope.rotate(facingRotation(pose.facing), c) {
+        scope.withFacing(c, pose.facing) {
             val fur = Color(0xFFFF8A65)
             val furLight = Color(0xFFFFCCBC)
             val furDark = Color(0xFFE64A19)
@@ -325,7 +356,7 @@ internal object PacMazeCharacterDraw {
         val stretch = if (pose.isMoving && bounce > -radius * 0.02f) 0.92f else 1f
         val c = center + Offset(0f, bounce)
 
-        scope.rotate(facingRotation(pose.facing), c) {
+        scope.withFacing(c, pose.facing) {
             val bodyW = radius * 1.1f * squash
             val bodyH = radius * 0.95f * stretch
             scope.drawRoundRect(
@@ -444,7 +475,7 @@ internal object PacMazeCharacterDraw {
         val squash = 1f + if (pose.isMoving) sin(pose.animPhase * 6f) * 0.06f else sin(pose.animPhase) * 0.03f
         val c = center + Offset(wobble, -abs(sin(pose.animPhase * 3f)) * radius * 0.04f)
 
-        scope.rotate(facingRotation(pose.facing), c) {
+        scope.withFacing(c, pose.facing) {
             val bodyW = radius * 1.05f * squash
             val bodyH = radius * 0.88f / squash
             scope.drawOval(
@@ -490,7 +521,7 @@ internal object PacMazeCharacterDraw {
         val c = center + Offset(0f, floatY)
         val noodleSwing = if (pose.isMoving) walkCycle(pose) else sin(pose.animPhase * 3f) * 0.4f
 
-        scope.rotate(facingRotation(pose.facing), c) {
+        scope.withFacing(c, pose.facing) {
             val sheet = Color(0xFFF8FAFC)
             val noodle = Color(0xFFFDE68A)
 
@@ -570,7 +601,7 @@ internal object PacMazeCharacterDraw {
         val step = walkCycle(pose)
         val c = center + Offset(0f, -abs(step) * radius * 0.03f)
 
-        scope.rotate(facingRotation(pose.facing), c) {
+        scope.withFacing(c, pose.facing) {
             val fur = Color(0xFF78716C)
             val furDark = Color(0xFF44403C)
             val brass = Color(0xFFFBBF24)

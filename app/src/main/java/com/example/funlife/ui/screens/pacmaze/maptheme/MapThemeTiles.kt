@@ -237,13 +237,31 @@ internal object MapThemeTiles {
         y: Int,
     ) {
         val closed = PacMazeMapDynamics.isTileBlocking(ctx.world, TileType.DYNAMIC_WALL, x, y, forGhost = false)
+        val rate = PacMazeMapDynamics.dynamicPhaseTicks(ctx.world.levelId).coerceAtLeast(1)
+        val phase = (ctx.world.dynamicsTick / rate) % 3
+        val ticksToOpen = if (closed) {
+            val stripe = (x + y) % 3
+            val phasesUntil = (stripe - phase + 3) % 3
+            if (phasesUntil == 0) rate - (ctx.world.dynamicsTick % rate) else phasesUntil * rate
+        } else {
+            0
+        }
+        val openingSoon = closed && ticksToOpen < rate / 3
         if (closed) {
             drawCyberWall(scope, rect, cell, palette, ctx.animPhase)
+            if (openingSoon) {
+                val pulse = 0.25f + 0.35f * (1f - ticksToOpen.toFloat() / (rate / 3f).coerceAtLeast(1f))
+                scope.drawCircle(
+                    color = palette.wallGlow.copy(alpha = pulse),
+                    radius = cell * 0.38f,
+                    center = Offset(rect.center.x, rect.center.y),
+                )
+            }
         } else {
             drawPath(scope, rect, palette)
             scope.drawCircle(
-                color = palette.wallGlow.copy(alpha = 0.35f),
-                radius = cell * 0.06f,
+                color = palette.wallGlow.copy(alpha = 0.45f),
+                radius = cell * 0.08f,
                 center = Offset(rect.center.x, rect.center.y),
             )
         }

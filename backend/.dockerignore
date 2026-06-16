@@ -1,0 +1,8 @@
+# FunLife VIP 管理后台 Docker 构建上下文
+admin/node_modules
+tools/node_modules
+functions/**/node_modules
+**/.git
+**/.env
+*.md
+!docker/README.md

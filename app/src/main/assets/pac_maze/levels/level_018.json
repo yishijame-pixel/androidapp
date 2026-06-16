@@ -1,0 +1,227 @@
+{
+  "id": 18,
+  "name": "古风-天罗地网",
+  "width": 25,
+  "height": 25,
+  "grid": [
+    "bbbbbbbbbbbbbbbbbbbbbbbbb",
+    "b*..........=..........*b",
+    "b.......................b",
+    "b.......................b",
+    "b...bb.bb.......bb.bb...b",
+    "b...b...b.......b...b...b",
+    "b.......b.......b.......b",
+    "b...b...b.......b...b...b",
+    "b...bb.bb.......bb.bb...b",
+    "b.......................b",
+    "b.......................b",
+    "b...........H...........b",
+    "b=.........I@>.........=b",
+    "b.......................b",
+    "b.......................b",
+    "b.......................b",
+    "b...bb.bbb.....bb.bbb...b",
+    "b...b....b.....b....b...b",
+    "b........b.....b........b",
+    "b...b....b.....b....b...b",
+    "b...bb.bbb.....bb.bbb...b",
+    "b.......................b",
+    "b.......................b",
+    "b*.....................*b",
+    "bbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "spawn": {
+    "pac": [
+      12,
+      22
+    ],
+    "ghosts": [
+      [
+        10,
+        3
+      ],
+      [
+        11,
+        3
+      ],
+      [
+        12,
+        3
+      ],
+      [
+        13,
+        3
+      ],
+      [
+        14,
+        3
+      ]
+    ]
+  },
+  "markers": [
+    {
+      "type": "start",
+      "x": 12,
+      "y": 22
+    },
+    {
+      "type": "checkpoint",
+      "x": 8,
+      "y": 12,
+      "label": "西闸",
+      "tag": "L18-W"
+    },
+    {
+      "type": "checkpoint",
+      "x": 16,
+      "y": 12,
+      "label": "东闸",
+      "tag": "L18-E"
+    },
+    {
+      "type": "checkpoint",
+      "x": 12,
+      "y": 12,
+      "label": "核心",
+      "tag": "L18-CORE"
+    },
+    {
+      "type": "checkpoint",
+      "x": 1,
+      "y": 12,
+      "label": "001",
+      "tag": "LINK"
+    },
+    {
+      "type": "checkpoint",
+      "x": 23,
+      "y": 12,
+      "label": "002",
+      "tag": "LINK"
+    }
+  ],
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 11,
+      "x1": 4,
+      "x2": 20,
+      "id": "l18_h_main"
+    },
+    {
+      "type": "laser_v",
+      "x": 12,
+      "y1": 4,
+      "y2": 20,
+      "id": "l18_v_main"
+    },
+    {
+      "type": "laser_h",
+      "y": 14,
+      "x1": 6,
+      "x2": 18,
+      "id": "l18_h_sub"
+    },
+    {
+      "type": "laser_v",
+      "x": 7,
+      "y1": 5,
+      "y2": 19,
+      "id": "l18_v_west"
+    },
+    {
+      "type": "laser_v",
+      "x": 17,
+      "y1": 5,
+      "y2": 19,
+      "id": "l18_v_east"
+    },
+    {
+      "type": "laser_h",
+      "y": 8,
+      "x1": 5,
+      "x2": 19,
+      "id": "l18_h_north"
+    },
+    {
+      "type": "laser_h",
+      "y": 16,
+      "x1": 5,
+      "x2": 19,
+      "id": "l18_h_south"
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 1.02,
+    "ai_aggression": 0.99
+  },
+  "itemSpawners": [
+    {
+      "id": "factory_18_00",
+      "x": 8,
+      "y": 12,
+      "intervalTicks": 424,
+      "pool": [
+        "frost",
+        "charge",
+        "double"
+      ]
+    },
+    {
+      "id": "factory_18_01",
+      "x": 16,
+      "y": 12,
+      "intervalTicks": 424,
+      "pool": [
+        "magnet",
+        "shield",
+        "charge"
+      ]
+    },
+    {
+      "id": "factory_18_02",
+      "x": 8,
+      "y": 10,
+      "intervalTicks": 424,
+      "pool": [
+        "speed",
+        "double",
+        "frost"
+      ]
+    },
+    {
+      "id": "factory_18_03",
+      "x": 16,
+      "y": 14,
+      "intervalTicks": 424,
+      "pool": [
+        "shield",
+        "charge",
+        "magnet"
+      ]
+    },
+    {
+      "id": "factory_18_04",
+      "x": 1,
+      "y": 12,
+      "intervalTicks": 424,
+      "pool": [
+        "frost",
+        "double",
+        "speed",
+        "charge"
+      ]
+    }
+  ],
+  "starCriteria": {
+    "twoStarMinScore": 3560,
+    "threeStarMinScore": 4360,
+    "threeStarMaxSeconds": 244,
+    "threeStarNoDeath": true,
+    "threeStarRequiredTags": [
+      "L18-W",
+      "L18-E",
+      "L18-CORE"
+    ]
+  }
+}

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.example.funlife.social.game.engine.pacmaze.PacMazeMapMarker
 import com.example.funlife.social.game.engine.pacmaze.PacMazeMarkerKind
+import com.example.funlife.social.game.engine.pacmaze.PacMazePortals
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -23,20 +24,37 @@ internal object CyberMapDecorations {
 
     fun drawMarkers(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         if (ctx.markers.isEmpty()) return
-        val cell = ctx.cell
         ctx.markers.forEach { marker ->
-            val rect = Rect(
-                ctx.offsetX + marker.x * cell,
-                ctx.offsetY + marker.y * cell,
-                ctx.offsetX + (marker.x + 1) * cell,
-                ctx.offsetY + (marker.y + 1) * cell,
-            )
+            val rect = ctx.tileRect(marker.x, marker.y)
+            val cell = ctx.tileMetric(rect)
             when (marker.kind) {
                 PacMazeMarkerKind.START -> drawStartTile(scope, rect, cell)
-                PacMazeMarkerKind.CHECKPOINT -> drawCyberPortal(scope, rect, cell, marker, ctx)
-                PacMazeMarkerKind.EXIT -> drawCyberPortal(scope, rect, cell, marker, ctx)
+                PacMazeMarkerKind.CHECKPOINT, PacMazeMarkerKind.EXIT -> {
+                    if (marker.tag == "HINT") {
+                        drawHintPellet(scope, rect, cell)
+                    } else if (marker.tag == "LINK") {
+                        PacMazePortalVisual.drawLinkMarker(scope, ctx, rect, cell, marker)
+                    } else {
+                        drawCyberPortal(scope, rect, cell, marker, ctx)
+                    }
+                }
+                PacMazeMarkerKind.ITEM_FACTORY -> Unit
             }
         }
+    }
+
+    private fun drawHintPellet(scope: DrawScope, rect: Rect, cell: Float) {
+        val center = Offset(rect.center.x, rect.center.y)
+        scope.drawCircle(
+            color = Color(0xFF4FC3F7).copy(alpha = 0.35f),
+            radius = cell * 0.34f,
+            center = center,
+        )
+        scope.drawCircle(
+            color = Color(0xFF4FC3F7),
+            radius = cell * 0.16f,
+            center = center,
+        )
     }
 
     private fun drawStartTile(scope: DrawScope, rect: Rect, cell: Float) {
@@ -73,9 +91,29 @@ internal object CyberMapDecorations {
         val center = Offset(rect.center.x, rect.center.y)
         val phase = ctx.animPhase
         val isLeftGate = marker.x <= ctx.world.width / 2
-        val label = marker.label.ifBlank { if (isLeftGate) "001" else "002" }
-        val accent = if (isLeftGate) CyberVisualEffects.NeonBlue else CyberVisualEffects.NeonPink
-        val accent2 = if (isLeftGate) CyberVisualEffects.NeonPink else CyberVisualEffects.NeonBlue
+        val visited = when {
+            marker.tag == "LINK" -> PacMazePortals.isPortalArmed(ctx.world, marker)
+            marker.kind == PacMazeMarkerKind.CHECKPOINT &&
+                marker.tag.isNotBlank() &&
+                !PacMazePortals.isArmedTag(marker.tag) ->
+                marker.tag in ctx.world.visitedCheckpointTags
+            else -> false
+        }
+        val label = when {
+            marker.label.isNotBlank() -> marker.label
+            isLeftGate -> "001"
+            else -> "002"
+        }
+        val accent = when {
+            visited -> Color(0xFF22C55E)
+            isLeftGate -> CyberVisualEffects.NeonBlue
+            else -> CyberVisualEffects.NeonPink
+        }
+        val accent2 = when {
+            visited -> Color(0xFF86EFAC)
+            isLeftGate -> CyberVisualEffects.NeonPink
+            else -> CyberVisualEffects.NeonBlue
+        }
 
         // 暗色底 + 网格
         scope.drawRect(
@@ -148,6 +186,20 @@ internal object CyberMapDecorations {
 
         drawPortalChevrons(scope, rect, cell, isLeftGate, accent, phase)
 
+        if (visited) {
+            scope.drawCircle(
+                color = Color(0xFF22C55E).copy(alpha = 0.35f),
+                radius = cell * 0.44f,
+                center = center,
+            )
+            scope.drawCircle(
+                color = Color(0xFF22C55E).copy(alpha = 0.85f),
+                radius = cell * 0.44f,
+                center = center,
+                style = Stroke(width = cell * 0.04f),
+            )
+        }
+
         // 全息编号
         drawCenteredLabel(
             scope,
@@ -158,7 +210,7 @@ internal object CyberMapDecorations {
             cell * 0.22f,
         )
 
-        // 底部 LINK 标签
+        // 底部标签
         val tagRect = Rect(rect.left + cell * 0.08f, rect.bottom - cell * 0.28f, rect.right - cell * 0.08f, rect.bottom - cell * 0.06f)
         scope.drawRoundRect(
             color = Color(0xFF001820).copy(alpha = 0.92f),
@@ -167,7 +219,12 @@ internal object CyberMapDecorations {
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(cell * 0.04f),
             style = Stroke(width = cell * 0.025f),
         )
-        val tag = "↕ LINK"
+        val tag = when {
+            visited -> "✓ ${marker.label.ifBlank { marker.tag }}"
+            marker.tag == "LINK" -> "↕ LINK"
+            marker.label.isNotBlank() -> marker.label
+            else -> if (isLeftGate) "↕ 001" else "↕ 002"
+        }
         scope.drawContext.canvas.nativeCanvas.apply {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = accent.toArgb()

@@ -11,6 +11,7 @@ import com.example.funlife.social.PocketBaseConnectionWarmer
 import com.example.funlife.social.PocketBaseRealtimeClient
 import com.example.funlife.social.SocialSessionManager
 import com.example.funlife.social.game.engine.DrawGuessSync
+import com.example.funlife.social.game.engine.pacmaze.PacMazeBoardSync
 import com.example.funlife.social.game.model.GameMoveDto
 import com.example.funlife.social.game.model.GameRoomDto
 import com.example.funlife.social.game.model.GameRoomStatus
@@ -71,6 +72,8 @@ object GamePlaySyncManager {
         roomId: String,
         onMoveReceived: (GameMoveDto) -> Unit = {},
         onRoomUpdated: (GameRoomDto) -> Unit = {},
+        replaceExisting: Boolean = false,
+        initialMoveIndex: Int = 0,
     ) {
         if (!PocketBaseConfig.isEnabled()) {
             Log.w(TAG, "PocketBase not configured, using poll-only mode")
@@ -78,7 +81,7 @@ object GamePlaySyncManager {
 
         scope.launch {
             sessionMutex.withLock {
-                if (activeSession?.roomId == roomId && activeSession?.isActive == true) {
+                if (activeSession?.roomId == roomId && activeSession?.isActive == true && !replaceExisting) {
                     Log.d(TAG, "Session for $roomId already active")
                     return@launch
                 }
@@ -91,6 +94,7 @@ object GamePlaySyncManager {
                     roomId = roomId,
                     onMoveReceived = onMoveReceived,
                     onRoomUpdated = onRoomUpdated,
+                    initialMoveIndex = initialMoveIndex,
                 )
                 activeSession = session
                 session.start()
@@ -143,6 +147,7 @@ object GamePlaySyncManager {
         val roomId: String,
         private val onMoveReceived: (GameMoveDto) -> Unit,
         private val onRoomUpdated: (GameRoomDto) -> Unit,
+        initialMoveIndex: Int = 0,
     ) {
         private val db = (ctx as? FunLifeApplication)?.database
             ?: com.example.funlife.data.database.AppDatabase.getDatabase(ctx)
@@ -155,7 +160,7 @@ object GamePlaySyncManager {
         private var realtimeJob: Job? = null
         private var pollJob: Job? = null
         private var reconnectBackoff = RECONNECT_BASE_MS
-        private var lastKnownMoveIndex = 0
+        private var lastKnownMoveIndex = initialMoveIndex.coerceAtLeast(0)
         private var lastPollRefreshAtMs = 0L
         private var fullSyncJob: Job? = null
         private val refreshChannel = Channel<Unit>(Channel.CONFLATED)
@@ -222,8 +227,10 @@ object GamePlaySyncManager {
         }
 
         suspend fun ingestMove(move: GameMoveDto) {
-            val isDrawStroke = DrawGuessSync.isDrawStrokeMove(move)
-            if (!isDrawStroke && GameRoomSyncCoordinator.isMutating(roomId)) {
+            val isHighFrequency = DrawGuessSync.isDrawStrokeMove(move) ||
+                PacMazeBoardSync.isPacInputMove(move) ||
+                PacMazeBoardSync.isPacAuthoritativeMove(move)
+            if (!isHighFrequency && GameRoomSyncCoordinator.isMutating(roomId)) {
                 Log.d(TAG, "ingestMove skipped (mutating) #${move.moveIndex}")
                 return
             }
@@ -313,7 +320,7 @@ object GamePlaySyncManager {
         private suspend fun refreshRoomAndMoves(token: String, silent: Boolean = false) {
             try {
                 val (room, moves) = api.fetchPlayState(token, roomId, includeProfiles = true)
-                applyMovesWatermark(moves)
+                deliverNewMoves(moves)
                 _roomEvents.emit(RoomEvent(roomId, room, moves))
                 onRoomUpdated(room)
             } catch (e: Exception) {
@@ -329,13 +336,13 @@ object GamePlaySyncManager {
                     token, roomId, lastKnownMoveIndex,
                 )
                 if (!incremental) {
-                    applyMovesWatermark(deltaMoves)
+                    deliverNewMoves(deltaMoves)
                     _roomEvents.emit(RoomEvent(roomId, room, deltaMoves))
                     onRoomUpdated(room)
                     return
                 }
                 if (deltaMoves.isNotEmpty()) {
-                    applyMovesWatermark(deltaMoves)
+                    deliverNewMoves(deltaMoves)
                     _roomEvents.emit(RoomEvent(roomId, room, deltaMoves))
                     onRoomUpdated(room)
                     return
@@ -352,11 +359,17 @@ object GamePlaySyncManager {
             }
         }
 
-        private fun applyMovesWatermark(moves: List<GameMoveDto>) {
-            val maxIndex = moves.maxOfOrNull { it.moveIndex } ?: 0
-            if (maxIndex > lastKnownMoveIndex) {
-                lastKnownMoveIndex = maxIndex
-            }
+        private suspend fun deliverNewMoves(moves: List<GameMoveDto>) {
+            if (moves.isEmpty()) return
+            moves
+                .filter { it.moveIndex > lastKnownMoveIndex }
+                .sortedBy { it.moveIndex }
+                .forEach { move ->
+                    if (move.moveIndex > lastKnownMoveIndex) {
+                        lastKnownMoveIndex = move.moveIndex
+                    }
+                    onMoveReceived(move)
+                }
         }
     }
 }

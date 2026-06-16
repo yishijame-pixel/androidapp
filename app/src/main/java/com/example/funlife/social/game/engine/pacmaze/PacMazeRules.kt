@@ -2,10 +2,10 @@ package com.example.funlife.social.game.engine.pacmaze
 
 object PacMazeRules {
 
-    fun isWalkable(state: PacMazeWorldState, x: Int, y: Int, forGhost: Boolean = false): Boolean {
+    fun isWalkable(state: PacMazeWorldState, x: Int, y: Int, forGhost: Boolean = false, ghost: PacMazeEntity? = null): Boolean {
         if (x !in 0 until state.width || y !in 0 until state.height) return false
         val tile = state.tileAt(x, y)
-        return !PacMazeMapDynamics.isTileBlocking(state, tile, x, y, forGhost)
+        return !PacMazeMapDynamics.isTileBlocking(state, tile, x, y, forGhost, ghost)
     }
 
     fun canTurn(state: PacMazeWorldState, x: Int, y: Int, dir: Direction, forGhost: Boolean = false): Boolean {
@@ -24,7 +24,13 @@ object PacMazeRules {
         return ty * state.width + tx
     }
 
-    fun eatPellet(state: PacMazeWorldState, x: Float, y: Float): PacMazeWorldState {
+    fun eatPellet(
+        state: PacMazeWorldState,
+        x: Float,
+        y: Float,
+        winCondition: PacMazeWinCondition = PacMazeWinCondition.CLEAR_PELLETS,
+        level: PacMazeLevelConfig? = null,
+    ): PacMazeWorldState {
         val tx = PacMazeMotion.tileX(x)
         val ty = PacMazeMotion.tileY(y)
         if (tx !in 0 until state.width || ty !in 0 until state.height) return state
@@ -36,7 +42,7 @@ object PacMazeRules {
         val addScore = if (tile == TileType.POWER.code) {
             PacMazeConstants.POWER_SCORE
         } else {
-            PacMazeConstants.PELLET_SCORE
+            PacMazeItems.pelletScore(state)
         }
         val power = if (tile == TileType.POWER.code) {
             PacMazeConstants.POWER_DURATION_TICKS
@@ -49,7 +55,7 @@ object PacMazeRules {
             state.attackCharges
         }
         val pelletsLeft = (state.pelletsRemaining - 1).coerceAtLeast(0)
-        val phase = if (pelletsLeft == 0 && state.phase == PacMazePhase.PLAYING) {
+        val phase = if (pelletsLeft == 0 && state.phase == PacMazePhase.PLAYING && winCondition == PacMazeWinCondition.CLEAR_PELLETS) {
             PacMazePhase.LEVEL_CLEAR
         } else {
             state.phase
@@ -61,16 +67,32 @@ object PacMazeRules {
             powerTicksLeft = power,
             attackCharges = attackCharges,
             phase = phase,
-        )
+        ).let { eaten ->
+            if (tile == TileType.PELLET.code && level != null) {
+                PacMazeMazeMechanics.onPelletEaten(eaten, level, tx, ty)
+            } else {
+                eaten
+            }
+        }
     }
 
     fun checkExitReached(state: PacMazeWorldState, level: PacMazeLevelConfig): PacMazeWorldState {
         if (level.modeRules.winCondition != PacMazeWinCondition.REACH_EXIT) return state
         if (state.phase != PacMazePhase.PLAYING) return state
+        val required = level.modeRules.requiredKeyTags
+        if (required.isNotEmpty() && !required.all { it in state.visitedCheckpointTags }) {
+            return state
+        }
         val pac = state.entities.firstOrNull { it.role == "pac" } ?: return state
         val tx = PacMazeMotion.tileX(pac.x)
         val ty = PacMazeMotion.tileY(pac.y)
         val onExit = level.markers.any { it.kind == PacMazeMarkerKind.EXIT && it.x == tx && it.y == ty }
         return if (onExit) state.copy(phase = PacMazePhase.LEVEL_CLEAR) else state
+    }
+
+    fun checkTimeLimit(state: PacMazeWorldState, level: PacMazeLevelConfig, elapsedSeconds: Int): PacMazeWorldState {
+        val limit = level.modeRules.timeLimitSeconds
+        if (limit <= 0 || state.phase != PacMazePhase.PLAYING) return state
+        return if (elapsedSeconds >= limit) state.copy(phase = PacMazePhase.GAME_OVER) else state
     }
 }

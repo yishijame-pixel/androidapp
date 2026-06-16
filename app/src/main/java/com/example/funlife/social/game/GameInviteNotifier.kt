@@ -113,7 +113,11 @@ object GameInviteNotifier {
                     id = alertId(room.roomId),
                     title = "对战邀请",
                     body = "$host 邀请你玩${room.gameTitle}",
-                    deepLinkRoute = Screen.SocialGameLobby.route(room.roomId),
+                    deepLinkRoute = if (room.gameId == "pac_maze") {
+                        Screen.pacMazeRoute(onlineLobbyRoomId = room.roomId)
+                    } else {
+                        Screen.SocialGameLobby.route(room.roomId)
+                    },
                 ),
             )
         }

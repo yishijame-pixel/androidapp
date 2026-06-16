@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "game": "pac_maze",
+  "updatedAt": "2026-06-09T00:00:00Z",
+  "description": "豆人迷宫云端音效包；解压到 resource_cache/pac_maze_sfx/",
+  "events": {
+    "checkpoint": {
+      "file": "curated/checkpoint.wav",
+      "volume": 0.85,
+      "note": "抵达 checkpoint / 西闸东闸核心"
+    },
+    "gate_phase": {
+      "file": "curated/gate_phase.ogg",
+      "volume": 0.35,
+      "note": "移动墙相位切换"
+    },
+    "level_clear": {
+      "file": "curated/level_clear.mp3",
+      "volume": 0.9,
+      "note": "关卡通关 / 无尽波次完成"
+    },
+    "game_over": {
+      "file": "curated/game_over.mp3",
+      "volume": 0.75,
+      "note": "死亡 / 无尽终结"
+    },
+    "pellet": {
+      "file": "curated/pellet.wav",
+      "volume": 0.55,
+      "note": "吃小豆"
+    },
+    "power_pellet": {
+      "file": "curated/power_pellet.wav",
+      "volume": 0.7,
+      "note": "吃能量豆"
+    },
+    "item_pickup": {
+      "file": "curated/item_pickup.wav",
+      "volume": 0.65,
+      "note": "拾取道具"
+    },
+    "ui_back": {
+      "file": "curated/ui/back.ogg",
+      "volume": 0.55,
+      "note": "Kenney switch2 · 顶栏返回"
+    },
+    "ui_primary_confirm": {
+      "file": "curated/ui/primary_confirm.ogg",
+      "volume": 0.62,
+      "note": "Kenney switch14 · 主 CTA"
+    },
+    "ui_list_select": {
+      "file": "curated/ui/list_select.ogg",
+      "volume": 0.52,
+      "note": "Kenney click4 · 列表选择"
+    },
+    "attack": {
+      "file": "curated/attack.mp3",
+      "volume": 0.8,
+      "note": "玩家发射能量弹"
+    },
+    "laser": {
+      "file": "curated/laser.wav",
+      "volume": 0.6,
+      "note": "激光扫射（可选环境音）"
+    },
+    "hurt": {
+      "file": "curated/hurt.wav",
+      "volume": 0.75,
+      "note": "被幽灵抓到（Explosion 1.wav）"
+    },
+    "ghost_hit": {
+      "file": "curated/ghost_hit.wav",
+      "volume": 0.75,
+      "note": "击中幽灵（Explosion 1.wav）"
+    },
+    "bgm_campaign": {
+      "file": "curated/bgm_campaign.mp3",
+      "volume": 0.6,
+      "loop": true,
+      "note": "单人闯关 BGM（gameplay #4）"
+    },
+    "bgm_endless": {
+      "file": "curated/bgm_endless.mp3",
+      "volume": 0.65,
+      "loop": true,
+      "note": "无尽模式 BGM（gameplay #3）"
+    }
+  },
+  "variants": {
+    "level_clear": ["variants/victory/victory_01.mp3", "variants/victory/victory_02.mp3", "variants/victory/victory_03.mp3", "variants/victory/victory_04.mp3"],
+    "game_over": ["variants/failure/failure_01.mp3", "variants/failure/failure_02.mp3", "variants/failure/failure_03.mp3", "variants/failure/failure_04.mp3"],
+    "attack": ["variants/projectile/projectile_01.mp3", "variants/projectile/projectile_02.mp3", "variants/projectile/projectile_03.mp3", "variants/projectile/projectile_04.mp3"],
+    "bgm_campaign": ["curated/bgm_campaign.mp3"],
+    "bgm_endless": ["curated/bgm_endless.mp3"]
+  },
+  "libraries": {
+    "kenney_impact": {
+      "path": "kenney_impact/",
+      "license": "CC0",
+      "source": "Kenney Impact Sounds"
+    },
+    "retro_wav": {
+      "path": "retro/",
+      "note": "Pickup / Hit / Laser 等复古 wav"
+    },
+    "kenney_ui": {
+      "path": "kenney_ui/",
+      "license": "CC0",
+      "source": "Kenney UI Audio",
+      "note": "完整 UI 音效库；Hub 使用 curated/ui/ 固定子集"
+    },
+    "cute_mp3": {
+      "path": "variants/",
+      "note": "Victory / Failure / Projectile / Gameplay 变体"
+    }
+  }
+}

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.funlife.social.game.engine.pacmaze.PacMazeMovementMode
 import com.example.funlife.ui.screens.pacmaze.PacMazePalette
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeMapThemeId
 import com.example.funlife.ui.screens.pacmaze.pacMazeThemeAccent

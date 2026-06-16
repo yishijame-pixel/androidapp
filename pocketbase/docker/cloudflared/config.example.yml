@@ -23,6 +23,16 @@ ingress:
       keepAliveTimeout: 90s
       keepAliveConnections: 100
       httpHostHeader: pb.yishi.site
+  # Pac-Maze 权威对战：wss://pb.yishi.site/pac-maze-ws/pac-maze-ws
+  - hostname: pb.yishi.site
+    path: ^/pac-maze-ws
+    service: http://pac-maze-ws:8791
+    originRequest:
+      connectTimeout: 30s
+      tcpKeepAlive: 30s
+      keepAliveTimeout: 90s
+      keepAliveConnections: 100
+      httpHostHeader: pb.yishi.site
   - hostname: pb.yishi.site
     service: http://pocketbase:8090
   # 旧独立子域（可选保留）

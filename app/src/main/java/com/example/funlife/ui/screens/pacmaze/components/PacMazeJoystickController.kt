@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.example.funlife.social.game.engine.pacmaze.Direction
+import com.example.funlife.social.game.engine.pacmaze.PacMazeRawJoystickSample
 import com.example.funlife.ui.screens.pacmaze.PacMazePalette
 import com.example.funlife.viewmodel.PacMazeLocalViewModel
 import kotlin.math.atan2
@@ -40,10 +40,17 @@ class PacMazeJoystickState {
     var knobOffset by mutableStateOf(Offset.Zero)
     var isActive by mutableStateOf(false)
     var areaSize by mutableStateOf(IntSize.Zero)
+    var maxRadiusPx by mutableStateOf(1f)
 }
 
 @Composable
 fun rememberPacMazeJoystickState(): PacMazeJoystickState = remember { PacMazeJoystickState() }
+
+/** 新开一局或重进关卡时重置摇杆视觉，避免与逻辑输入不同步。 */
+fun PacMazeJoystickState.resetVisual() {
+    knobOffset = Offset.Zero
+    isActive = false
+}
 
 /**
  * 挂在全屏稳定容器上的摇杆触摸层。
@@ -69,13 +76,13 @@ fun Modifier.pacMazeJoystickInput(
                 down.consume()
                 val center = joystickCenter(zoneWidthPx, zoneHeightPx)
                 val maxRadius = min(zoneWidthPx, zoneHeightPx) * 0.32f
+                joystickState.maxRadiusPx = maxRadius
 
                 applyJoystickOffset(
                     viewModel = viewModel,
                     joystickState = joystickState,
                     offset = clampJoystickOffset(down.position - center, maxRadius),
                     maxRadius = maxRadius,
-                    deadZone = deadZone,
                 )
 
                 drag(down.id) { change ->
@@ -85,13 +92,54 @@ fun Modifier.pacMazeJoystickInput(
                         joystickState = joystickState,
                         offset = clampJoystickOffset(change.position - center, maxRadius),
                         maxRadius = maxRadius,
-                        deadZone = deadZone,
                     )
                 }
 
-                joystickState.knobOffset = Offset.Zero
-                joystickState.isActive = false
-                viewModel.pushDirection(null)
+                joystickState.resetVisual()
+                viewModel.releaseJoystick()
+            }
+        },
+    )
+}
+
+@Composable
+fun Modifier.pacMazeJoystickInput(
+    joystickState: PacMazeJoystickState,
+    zoneWidth: Dp = 120.dp,
+    zoneHeight: Dp = 200.dp,
+    onSample: (PacMazeRawJoystickSample) -> Unit,
+): Modifier {
+    val density = LocalDensity.current
+    val zoneWidthPx = with(density) { zoneWidth.toPx() }
+    val zoneHeightPx = with(density) { zoneHeight.toPx() }
+    return this.then(
+        pointerInput(zoneWidthPx, zoneHeightPx, onSample) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                if (!isInJoystickZone(down.position, zoneWidthPx, zoneHeightPx)) return@awaitEachGesture
+                down.consume()
+                val center = joystickCenter(zoneWidthPx, zoneHeightPx)
+                val maxRadius = min(zoneWidthPx, zoneHeightPx) * 0.32f
+                joystickState.maxRadiusPx = maxRadius
+                fun push(offset: Offset) {
+                    joystickState.knobOffset = offset
+                    joystickState.isActive = true
+                    onSample(
+                        PacMazeRawJoystickSample(
+                            offsetX = offset.x,
+                            offsetY = offset.y,
+                            maxRadius = maxRadius,
+                            fingerDown = true,
+                        ),
+                    )
+                }
+                push(clampJoystickOffset(down.position - center, maxRadius))
+                drag(down.id) { change ->
+                    change.consume()
+                    push(clampJoystickOffset(change.position - center, maxRadius))
+                }
+                joystickState.resetVisual()
+                onSample(PacMazeRawJoystickSample.Released)
             }
         },
     )
@@ -179,31 +227,18 @@ private fun applyJoystickOffset(
     joystickState: PacMazeJoystickState,
     offset: Offset,
     maxRadius: Float,
-    deadZone: Float,
 ) {
     joystickState.knobOffset = offset
-    joystickState.isActive = offset != Offset.Zero
-    val strength = sqrt(offset.x * offset.x + offset.y * offset.y) / maxRadius
-    try {
-        if (strength < deadZone) {
-            viewModel.pushDirection(null)
-        } else {
-            viewModel.pushDirection(offsetToDirection(offset))
-        }
-    } catch (_: Throwable) {
-        viewModel.pushDirection(null)
-    }
-}
-
-private fun offsetToDirection(offset: Offset): Direction {
-    val angleDeg = Math.toDegrees(atan2(-offset.y.toDouble(), offset.x.toDouble())).toFloat()
-    val normalized = ((angleDeg % 360f) + 360f) % 360f
-    return when {
-        normalized >= 45f && normalized < 135f -> Direction.UP
-        normalized >= 135f && normalized < 225f -> Direction.LEFT
-        normalized >= 225f && normalized < 315f -> Direction.DOWN
-        else -> Direction.RIGHT
-    }
+    joystickState.isActive = true
+    joystickState.maxRadiusPx = maxRadius
+    viewModel.updateJoystickRaw(
+        PacMazeRawJoystickSample(
+            offsetX = offset.x,
+            offsetY = offset.y,
+            maxRadius = maxRadius,
+            fingerDown = true,
+        ),
+    )
 }
 
 private fun clampJoystickOffset(offset: Offset, maxRadius: Float): Offset {

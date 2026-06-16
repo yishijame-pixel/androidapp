@@ -1,62 +1,385 @@
 package com.example.funlife.social.game.engine.pacmaze
 
+import kotlin.math.abs
+
 /**
- * 程序生成完美迷宫（Recursive Backtracker），输出与关卡 JSON 兼容的字符串。
+ * 程序生成迷宫：钥印门 + 线索豆 + 动态墙 + 多鬼，按 [PacMazeMazeRunOptions] 组合规则。
  */
 object PacMazeMazeGenerator {
 
-    fun buildLevelJson(seed: Long, width: Int = 15, height: Int = 15): String {
-        val w = (width.coerceAtLeast(9) or 1)
-        val h = (height.coerceAtLeast(9) or 1)
+    fun buildLevelJson(options: PacMazeMazeRunOptions): String = buildLevelJson(
+        seed = options.seed,
+        options = options,
+    )
+
+    fun buildLevelJson(seed: Long, options: PacMazeMazeRunOptions): String {
+        val w = (options.effectiveMapSize.coerceAtLeast(9) or 1)
+        val h = w
         val rng = PacMazeDeterministicRng(seed)
         val cells = Array(h) { BooleanArray(w) }
         carve(cells, w, h, 1, 1, rng)
 
         val grid = Array(h) { y ->
-            CharArray(w) { x -> if (cells[y][x]) '.' else '#' }
+            CharArray(w) { x -> if (cells[y][x]) 'o' else '#' }
         }
 
         val startX = 1
         val startY = 1
-        val exitX = w - 2
-        val exitY = h - 2
-        grid[startY][startX] = '.'
+        grid[startY][startX] = 'o'
+
+        val reachable = bfsDistances(cells, w, h, startX, startY)
+        val sortedByDist = reachable.entries.sortedByDescending { it.value }
+        val exitCell = sortedByDist.firstOrNull()?.key ?: (w - 2 to h - 2)
+        val (exitX, exitY) = exitCell
         grid[exitY][exitX] = 'E'
 
+        val keyTags = (1..options.effectiveKeyCount).map { "MAZE_KEY_$it" }
+        val keyCells = pickKeyCells(sortedByDist, keyTags.size, exclude = setOf(startX to startY, exitX to exitY))
+        val markers = mutableListOf<String>()
+        markers.add("""{ "type": "start", "x": $startX, "y": $startY, "label": "起点" }""")
+        keyCells.zip(keyTags).forEach { (cell, tag) ->
+            val (kx, ky) = cell
+            grid[ky][kx] = '='
+            markers.add("""{ "type": "checkpoint", "x": $kx, "y": $ky, "label": "钥印", "tag": "$tag" }""")
+        }
+        markers.add("""{ "type": "exit", "x": $exitX, "y": $exitY, "label": "出口" }""")
+
+        val deadEnds = findDeadEnds(cells, w, h).filter { (x, y) ->
+            (x to y) !in keyCells && (x to y) != (startX to startY) && (x to y) != (exitX to exitY)
+        }
+        deadEnds.take((deadEnds.size * 0.6f).toInt().coerceAtLeast(1)).forEach { (x, y) ->
+            grid[y][x] = '.'
+        }
+
+        val hintCells = if (options.hintPelletsEnabled) {
+            pickHintPellets(cells, w, h, startX, startY, exitX, exitY, keyCells, rng)
+        } else {
+            emptyList()
+        }
+        hintCells.forEach { (x, y) ->
+            if (grid[y][x] == 'o') grid[y][x] = '.'
+            markers.add("""{ "type": "checkpoint", "x": $x, "y": $y, "label": "", "tag": "HINT" }""")
+        }
+
+        if (options.placeTwinPortals) {
+            placePortalPair(cells, grid, w, h, rng, markers, exclude = keyCells + listOf(startX to startY, exitX to exitY))
+        }
+
+        if (options.difficulty.dynamicWalls && options.contract != PacMazeMazeContract.SILENT) {
+            placeDynamicWalls(cells, grid, w, h, rng, exclude = keyCells + listOf(startX to startY, exitX to exitY))
+        }
+
+        val itemSpawnerJson = if (options.placeItemRooms) {
+            buildItemSpawners(cells, w, h, rng, keyCells, deadEnds)
+        } else {
+            ""
+        }
+
+        val signatures = PacMazeMazeGhostSignature.forDailySeed(seed, options.effectiveGhostCount)
+        val ghostJson = buildGhostSpawns(cells, w, h, options, rng, startX, startY, signatures)
         val gridJson = grid.joinToString(
             prefix = "[\n    \"",
             postfix = "\"\n  ]",
             separator = "\",\n    \"",
         ) { String(it) }
 
+        val markersJson = markers.joinToString(prefix = "[\n    ", postfix = "\n  ]", separator = ",\n    ")
+        val timeLimit = options.effectiveTimeLimitSeconds
+        val starMaxSec = (timeLimit * 0.55f).toInt() + options.starTimeBonusSeconds
+        val requiredTagsJson = keyTags.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        val ghostSpeed = when (options.difficulty) {
+            PacMazeMazeDifficulty.SCOUT -> 0f
+            PacMazeMazeDifficulty.STANDARD -> 0.88f
+            PacMazeMazeDifficulty.ABYSS -> 1.05f
+        }
+        val aggression = when (options.difficulty) {
+            PacMazeMazeDifficulty.SCOUT -> 0f
+            PacMazeMazeDifficulty.STANDARD -> 0.52f
+            PacMazeMazeDifficulty.ABYSS -> 0.72f
+        }
+
+        val orderedTagsJson = keyTags.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+        val signatureIdsJsonFixed = signatures.joinToString(prefix = "[", postfix = "]") { sig -> "\"${sig.id}\"" }
+
+        val title = buildString {
+            append(options.difficulty.displayName)
+            append("迷宫")
+            if (options.dailyChallenge) append(" · 每日")
+            if (options.variant != PacMazeMazeVariant.STANDARD) append(" · ${options.variant.displayName}")
+            if (options.contract != PacMazeMazeContract.NONE) append(" · ${options.contract.displayName}")
+        }
+
         return """
             {
               "id": 0,
-              "name": "程序迷宫",
+              "name": "$title",
               "width": $w,
               "height": $h,
               "grid": $gridJson,
               "spawn": {
                 "pac": [$startX, $startY],
-                "ghosts": [[${w / 2}, ${h / 2}]]
+                "ghosts": [$ghostJson]
               },
-              "difficulty": { "ghost_speed_mul": 0.65, "ai_aggression": 0.35 },
-              "markers": [
-                { "type": "start", "x": $startX, "y": $startY, "label": "起点" },
-                { "type": "exit", "x": $exitX, "y": $exitY, "label": "出口" }
-              ],
+              "difficulty": { "ghost_speed_mul": $ghostSpeed, "ai_aggression": $aggression },
+              "markers": $markersJson,
+              ${if (itemSpawnerJson.isNotBlank()) "\"itemSpawners\": [$itemSpawnerJson]," else ""}
               "modeRules": {
                 "winCondition": "reach_exit",
-                "timeLimitSeconds": 180
+                "timeLimitSeconds": $timeLimit,
+                "fogEnabled": true,
+                "fogRadius": ${options.effectiveFogRadius},
+                "radarEnabled": true,
+                "requiredKeyTags": $requiredTagsJson,
+                "orderedKeyTags": $orderedTagsJson,
+                "scoreMultiplier": ${options.scoreMultiplier},
+                "starTimeBonusSeconds": ${options.starTimeBonusSeconds},
+                "sealedKeyOrder": ${options.keyMode == PacMazeMazeKeyMode.SEALED},
+                "hintPelletsEnabled": ${options.hintPelletsEnabled},
+                "intelPointsMax": ${options.intelPointsMax},
+                "huntEscalation": ${options.huntEscalation},
+                "ghostSignatureIds": $signatureIdsJsonFixed,
+                "mutatorId": "${options.mutator.id}",
+                "variantId": "${options.variant.id}",
+                "mirrorDynamicWalls": ${options.mirrorDynamicWalls},
+                "radarCooldownMultiplier": ${options.radarCooldownMultiplier},
+                "revealExitOnLastKey": ${options.revealExitOnLastKey},
+                "dynamicWallSpeedMul": ${options.dynamicWallSpeedMul}
               },
               "starCriteria": {
-                "twoStarMinScore": 200,
-                "threeStarMinScore": 500,
-                "threeStarMaxSeconds": 90,
-                "threeStarNoDeath": true
+                "twoStarMinScore": 120,
+                "threeStarMinScore": 280,
+                "threeStarMaxSeconds": $starMaxSec,
+                "threeStarNoDeath": true,
+                "threeStarRequiredTags": $requiredTagsJson
               }
             }
         """.trimIndent()
+    }
+
+    private fun buildItemSpawners(
+        cells: Array<BooleanArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        keyCells: List<Pair<Int, Int>>,
+        deadEnds: List<Pair<Int, Int>>,
+    ): String {
+        val pool = listOf(
+            PacMazeItemKind.FROST,
+            PacMazeItemKind.SPEED,
+            PacMazeItemKind.SHIELD,
+        )
+        val candidates = (deadEnds + keyCells).distinct().shuffled(rng).take(2)
+        return candidates.mapIndexed { index, (x, y) ->
+            val kinds = pool.shuffled(rng).take(2).joinToString(prefix = "[", postfix = "]") { "\"${it.id}\"" }
+            """{ "id": "maze_item_$index", "x": $x, "y": $y, "intervalTicks": 900, "pool": $kinds }"""
+        }.joinToString(", ")
+    }
+
+    private fun placePortalPair(
+        cells: Array<BooleanArray>,
+        grid: Array<CharArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        markers: MutableList<String>,
+        exclude: List<Pair<Int, Int>>,
+    ) {
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        for (y in 2 until h - 2) {
+            for (x in 2 until w - 2) {
+                if (!cells[y][x] || (x to y) in exclude) continue
+                if (branchingCount(cells, w, h, x, y) >= 2) candidates.add(x to y)
+            }
+        }
+        val picks = candidates.shuffled(rng).take(2)
+        if (picks.size < 2) return
+        picks.forEach { (x, y) ->
+            grid[y][x] = '@'
+            markers.add("""{ "type": "checkpoint", "x": $x, "y": $y, "label": "门", "tag": "LINK" }""")
+        }
+    }
+
+    private fun buildGhostSpawns(
+        cells: Array<BooleanArray>,
+        w: Int,
+        h: Int,
+        options: PacMazeMazeRunOptions,
+        rng: PacMazeDeterministicRng,
+        startX: Int,
+        startY: Int,
+        signatures: List<PacMazeMazeGhostSignature>,
+    ): String {
+        if (options.effectiveGhostCount <= 0) return ""
+        val dist = bfsDistances(cells, w, h, startX, startY)
+        val farCells = dist.entries
+            .filter { it.value >= 4 }
+            .sortedByDescending { it.value }
+            .map { it.key }
+            .filter { (x, y) -> ghostSpawnViable(cells, w, h, x, y) }
+        return (0 until options.effectiveGhostCount).mapIndexed { index, _ ->
+            val cell = farCells.getOrElse(index) { w / 2 to h / 2 }
+            val sig = signatures.getOrNull(index)
+            val kind = sig?.ghostKind?.id ?: if (index == 0) "opportunist" else "flanker"
+            """{ "x": ${cell.first}, "y": ${cell.second}, "kind": "$kind" }"""
+        }.joinToString(", ")
+    }
+
+    private fun ghostSpawnViable(cells: Array<BooleanArray>, w: Int, h: Int, x: Int, y: Int): Boolean {
+        if (x !in 1 until w - 1 || y !in 1 until h - 1 || !cells[y][x]) return false
+        val exits = Direction.entries.count { dir ->
+            val (dx, dy) = dir.delta()
+            val nx = x + dx
+            val ny = y + dy
+            nx in 1 until w - 1 && ny in 1 until h - 1 && cells[ny][nx]
+        }
+        return exits >= 2
+    }
+
+    private fun pickKeyCells(
+        sortedByDist: List<Map.Entry<Pair<Int, Int>, Int>>,
+        count: Int,
+        exclude: Set<Pair<Int, Int>>,
+    ): List<Pair<Int, Int>> {
+        val picks = mutableListOf<Pair<Int, Int>>()
+        val step = (sortedByDist.size / (count + 1)).coerceAtLeast(2)
+        var i = step
+        while (picks.size < count && i < sortedByDist.size) {
+            val cell = sortedByDist[i].key
+            if (cell !in exclude && cell !in picks) picks.add(cell)
+            i += step
+        }
+        return picks
+    }
+
+    private fun findDeadEnds(cells: Array<BooleanArray>, w: Int, h: Int): List<Pair<Int, Int>> {
+        val result = mutableListOf<Pair<Int, Int>>()
+        for (y in 1 until h - 1) {
+            for (x in 1 until w - 1) {
+                if (!cells[y][x]) continue
+                val neighbors = Direction.entries.count { dir ->
+                    val (dx, dy) = dir.delta()
+                    val nx = x + dx
+                    val ny = y + dy
+                    nx in 1 until w - 1 && ny in 1 until h - 1 && cells[ny][nx]
+                }
+                if (neighbors == 1) result.add(x to y)
+            }
+        }
+        return result
+    }
+
+    private fun pickHintPellets(
+        cells: Array<BooleanArray>,
+        w: Int,
+        h: Int,
+        startX: Int,
+        startY: Int,
+        exitX: Int,
+        exitY: Int,
+        keyCells: List<Pair<Int, Int>>,
+        rng: PacMazeDeterministicRng,
+    ): List<Pair<Int, Int>> {
+        val path = bfsPath(cells, w, h, startX, startY, exitX, exitY) ?: return emptyList()
+        val junctions = path.filterIndexed { index, cell ->
+            index > 0 && index < path.lastIndex && branchingCount(cells, w, h, cell.first, cell.second) >= 3
+        }
+        return junctions.shuffled(rng).take(3)
+    }
+
+    private fun branchingCount(cells: Array<BooleanArray>, w: Int, h: Int, x: Int, y: Int): Int =
+        Direction.entries.count { dir ->
+            val (dx, dy) = dir.delta()
+            val nx = x + dx
+            val ny = y + dy
+            nx in 1 until w - 1 && ny in 1 until h - 1 && cells[ny][nx]
+        }
+
+    private fun placeDynamicWalls(
+        cells: Array<BooleanArray>,
+        grid: Array<CharArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        exclude: List<Pair<Int, Int>>,
+    ) {
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        for (y in 2 until h - 2) {
+            for (x in 2 until w - 2) {
+                if (!cells[y][x]) continue
+                if ((x to y) in exclude) continue
+                if (branchingCount(cells, w, h, x, y) != 2) continue
+                candidates.add(x to y)
+            }
+        }
+        candidates.shuffled(rng).take((candidates.size * 0.08f).toInt().coerceIn(2, 8)).forEach { (x, y) ->
+            grid[y][x] = '&'
+        }
+    }
+
+    private fun bfsDistances(cells: Array<BooleanArray>, w: Int, h: Int, sx: Int, sy: Int): Map<Pair<Int, Int>, Int> {
+        val dist = mutableMapOf<Pair<Int, Int>, Int>()
+        val queue = ArrayDeque<Pair<Int, Int>>()
+        queue.add(sx to sy)
+        dist[sx to sy] = 0
+        while (queue.isNotEmpty()) {
+            val (x, y) = queue.removeFirst()
+            val d = dist[x to y] ?: continue
+            Direction.entries.forEach { dir ->
+                val (dx, dy) = dir.delta()
+                val nx = x + dx
+                val ny = y + dy
+                if (nx !in 1 until w - 1 || ny !in 1 until h - 1) return@forEach
+                if (!cells[ny][nx]) return@forEach
+                val key = nx to ny
+                if (key !in dist) {
+                    dist[key] = d + 1
+                    queue.add(key)
+                }
+            }
+        }
+        return dist
+    }
+
+    private fun bfsPath(
+        cells: Array<BooleanArray>,
+        w: Int,
+        h: Int,
+        sx: Int,
+        sy: Int,
+        ex: Int,
+        ey: Int,
+    ): List<Pair<Int, Int>>? {
+        val prev = mutableMapOf<Pair<Int, Int>, Pair<Int, Int>?>()
+        val queue = ArrayDeque<Pair<Int, Int>>()
+        queue.add(sx to sy)
+        prev[sx to sy] = null
+        while (queue.isNotEmpty()) {
+            val cur = queue.removeFirst()
+            if (cur == ex to ey) {
+                val path = mutableListOf<Pair<Int, Int>>()
+                var node: Pair<Int, Int>? = cur
+                while (node != null) {
+                    path.add(node)
+                    node = prev[node]
+                }
+                return path.reversed()
+            }
+            val (x, y) = cur
+            Direction.entries.forEach { dir ->
+                val (dx, dy) = dir.delta()
+                val nx = x + dx
+                val ny = y + dy
+                if (nx !in 1 until w - 1 || ny !in 1 until h - 1) return@forEach
+                if (!cells[ny][nx]) return@forEach
+                val key = nx to ny
+                if (key !in prev) {
+                    prev[key] = cur
+                    queue.add(key)
+                }
+            }
+        }
+        return null
     }
 
     private fun carve(
@@ -81,6 +404,17 @@ object PacMazeMazeGenerator {
 
     private fun shuffleDirections(rng: PacMazeDeterministicRng): List<Direction> {
         val list = Direction.entries.toMutableList()
+        for (i in list.lastIndex downTo 1) {
+            val j = rng.nextInt(i + 1)
+            val tmp = list[i]
+            list[i] = list[j]
+            list[j] = tmp
+        }
+        return list
+    }
+
+    private fun <T> List<T>.shuffled(rng: PacMazeDeterministicRng): List<T> {
+        val list = toMutableList()
         for (i in list.lastIndex downTo 1) {
             val j = rng.nextInt(i + 1)
             val tmp = list[i]

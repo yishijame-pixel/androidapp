@@ -69,14 +69,14 @@ class GameRoomInteractor(
             }
         }
 
-    suspend fun createOpenRoom(gameId: String): Result<String> =
+    suspend fun createOpenRoom(gameId: String, pacSubMode: String? = null, pacLevelId: Int? = null): Result<String> =
         SocialOperationGate.run(
             ctx = ctx,
             userId = userId,
             operation = "开房间",
             forceSession = true,
         ) { cred ->
-            repo.createOpenRoom(userId, cred.pbRecordId, cred.token, gameId)
+            repo.createOpenRoom(userId, cred.pbRecordId, cred.token, gameId, pacSubMode, pacLevelId)
         }
 
     suspend fun inviteFriendToRoom(roomId: String, guestPbId: String): Result<Unit> =
@@ -142,6 +142,11 @@ class GameRoomInteractor(
             repo.startGame(userId, cred.pbRecordId, cred.token, roomId)
         }
 
+    suspend fun togglePacMazeReady(roomId: String, ready: Boolean): Result<Unit> =
+        mutateRoom(roomId, if (ready) "准备" else "取消准备", forceSession = false) { cred ->
+            repo.togglePacMazeReady(userId, cred.pbRecordId, cred.token, roomId, ready).map { Unit }
+        }
+
     suspend fun abandonPlay(roomId: String): Result<Unit> =
         mutateRoom(roomId, "退出对局", forceSession = true) { cred ->
             repo.abandonPlay(userId, cred.pbRecordId, cred.token, roomId)
@@ -183,6 +188,8 @@ class GameRoomInteractor(
                 raw.contains("requested resource", ignoreCase = true) ||
                     raw.contains("wasn't found", ignoreCase = true) ->
                     "房间不存在或无权访问，可能已结束"
+                raw.contains("Invalid value pac_maze", ignoreCase = true) ->
+                    "服务端尚未启用豆人迷宫房间类型，请更新 PocketBase 并执行 pb_migrations"
                 else -> raw.ifBlank { "网络异常，请稍后重试" }
             }
         }

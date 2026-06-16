@@ -20,6 +20,8 @@ import com.example.funlife.social.game.model.LobbyMemberStatus
 import com.example.funlife.social.game.model.LocalGameRoomDraft
 import com.example.funlife.social.game.model.DrawGuessPhase
 import com.example.funlife.social.game.model.GomokuEndReason
+import com.example.funlife.social.game.model.PacMazePlayerMeta
+import com.example.funlife.social.game.model.PacMazePlayState
 import com.example.funlife.social.game.model.PlayStateFactory
 import com.example.funlife.social.game.model.GameRoomStateMachine
 import com.example.funlife.social.model.FriendshipStatus
@@ -204,11 +206,111 @@ class GameRoomRepository(
         }
     }
 
+    suspend fun finishPacMazeMatch(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+        result: com.example.funlife.social.game.model.PacMazeMatchResultWire,
+    ): Result<GameRoomDto> = withContext(Dispatchers.IO) {
+        try {
+            val dto = mutateRoomState(
+                token = token,
+                roomId = roomId,
+                userId = userId,
+                myPbId = myPbId,
+                transform = { current, state ->
+                    val pac = state.pacMaze ?: throw IllegalStateException("非豆人迷宫对局")
+                    LobbyPatchOptions(
+                        state = state.copy(
+                            pacMaze = pac.copy(
+                                phase = "ended",
+                                result = result,
+                            ),
+                        ),
+                        status = GameRoomStatus.FINISHED,
+                        winnerPbId = result.winnerPbId,
+                    )
+                },
+                verify = { dto, _ -> dto.status == GameRoomStatus.FINISHED },
+            )
+            Result.success(dto)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun togglePacMazeReady(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+        ready: Boolean,
+    ): Result<GameRoomDto> = withContext(Dispatchers.IO) {
+        try {
+            val dto = mutateRoomState(
+                token = token,
+                roomId = roomId,
+                userId = userId,
+                myPbId = myPbId,
+                transform = { current, state ->
+                    val pac = state.pacMaze ?: throw IllegalStateException("非豆人迷宫房间")
+                    GameRoomStateMachine.requireMember(state, myPbId)
+                    val isHost = current.hostPbId == myPbId
+                    val updated = if (isHost) {
+                        pac.copy(playerA = pac.playerA.copy(pbId = myPbId, entityId = "pac_a", ready = ready))
+                    } else {
+                        pac.copy(
+                            guestPbId = myPbId,
+                            playerB = pac.playerB.copy(pbId = myPbId, entityId = "pac_b", ready = ready),
+                        )
+                    }
+                    LobbyPatchOptions(
+                        state = state.copy(pacMaze = updated),
+                        hostReady = if (isHost) ready else null,
+                        guestReady = if (!isHost) ready else null,
+                    )
+                },
+                verify = { _, _ -> true },
+            )
+            Result.success(dto)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun patchPacMazeLobby(
+        userId: Long,
+        myPbId: String,
+        token: String,
+        roomId: String,
+        transform: (PacMazePlayState) -> PacMazePlayState,
+    ): Result<GameRoomDto> = withContext(Dispatchers.IO) {
+        try {
+            val dto = mutateRoomState(
+                token = token,
+                roomId = roomId,
+                userId = userId,
+                myPbId = myPbId,
+                transform = { _, state ->
+                    val pac = state.pacMaze ?: throw IllegalStateException("非豆人迷宫房间")
+                    LobbyPatchOptions(state = state.copy(pacMaze = transform(pac)))
+                },
+                verify = { _, _ -> true },
+            )
+            Result.success(dto)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun createOpenRoom(
         userId: Long,
         myPbId: String,
         token: String,
         gameId: String,
+        pacSubMode: String? = null,
+        pacLevelId: Int? = null,
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             reconcileExclusiveSession(userId, myPbId, token, keepRoomId = null, localCache = true, server = false)
@@ -217,7 +319,16 @@ class GameRoomRepository(
             val maxPlayers = entry?.maxPlayers?.coerceIn(2, 4) ?: 2
             val minPlayers = entry?.minPlayers?.coerceIn(2, maxPlayers) ?: 2
             val roomCode = generateUniqueRoomCode(token)
-            val state = GameRoomStateCodec.initial(myPbId, maxPlayers, minPlayers)
+            var state = GameRoomStateCodec.initial(myPbId, maxPlayers, minPlayers)
+            if (gameId == "pac_maze") {
+                state = state.copy(
+                    pacMaze = PlayStateFactory.initialPacMazeLobby(
+                        hostPbId = myPbId,
+                        matchMode = pacSubMode ?: "versus_duel",
+                        levelId = pacLevelId ?: 1,
+                    ),
+                )
+            }
             val body = mapOf(
                 "game_type" to gameId,
                 "invite_mode" to InviteMode.OPEN.wire,
@@ -533,7 +644,7 @@ class GameRoomRepository(
                 transform = { current, state ->
                     GameRoomStateMachine.requireHost(current, myPbId)
                     GameRoomStateMachine.requireActiveRoom(current)
-                    GameRoomStateMachine.requireReadyToStart(state)
+                    GameRoomStateMachine.requireReadyToStart(state, current.gameType)
                     val guestPbId = state.members
                         .filter { it.status == LobbyMemberStatus.JOINED.wire && it.pbId != current.hostPbId }
                         .firstOrNull()?.pbId
@@ -1001,14 +1112,37 @@ class GameRoomRepository(
         current: GameRoomDto,
         guestPbId: String,
         status: GameRoomStatus,
-    ) = LobbyPatchOptions(
-        state = state,
-        status = status,
-        inviteMode = current.inviteMode,
-        guestPbId = guestPbId,
-        guestReady = true,
-        hostReady = true,
-    )
+    ): LobbyPatchOptions {
+        if (current.gameType == "pac_maze") {
+            val pac = state.pacMaze ?: PlayStateFactory.initialPacMazeLobby(current.hostPbId)
+            val adjusted = state.copy(
+                pacMaze = pac.copy(
+                    guestPbId = guestPbId,
+                    playerB = PacMazePlayerMeta(
+                        pbId = guestPbId,
+                        entityId = "pac_b",
+                        ready = false,
+                    ),
+                ),
+            )
+            return LobbyPatchOptions(
+                state = adjusted,
+                status = status,
+                inviteMode = current.inviteMode,
+                guestPbId = guestPbId,
+                guestReady = false,
+                hostReady = current.hostReady,
+            )
+        }
+        return LobbyPatchOptions(
+            state = state,
+            status = status,
+            inviteMode = current.inviteMode,
+            guestPbId = guestPbId,
+            guestReady = true,
+            hostReady = true,
+        )
+    }
 
     /** 宾客离座：以 game_state.members 为准；status 强制回到 waiting 以便再次邀请。 */
     private fun memberLeftPatch(
@@ -1184,6 +1318,9 @@ class GameRoomRepository(
             maxPlayers = state.maxPlayers,
             minPlayers = state.minPlayers,
             pendingInvitePbId = state.pendingInvitePbId.orEmpty(),
+            hostReady = hostReady,
+            guestReady = guestReady,
+            pacMazeJson = state.pacMaze?.let { gson.toJson(it) }.orEmpty(),
             createdAtMs = createdAtMs,
             updatedAtMs = updatedAtMs,
         )
@@ -1311,6 +1448,11 @@ class GameRoomRepository(
             pendingInvitePbId = pendingInvitePbId.takeIf { it.isNotBlank() },
             createdAtMs = createdAtMs,
             updatedAtMs = updatedAtMs,
+            hostReady = hostReady,
+            guestReady = guestReady,
+            pacMaze = pacMazeJson.takeIf { it.isNotBlank() }?.let {
+                runCatching { gson.fromJson(it, PacMazePlayState::class.java) }.getOrNull()
+            },
         )
     }
 }

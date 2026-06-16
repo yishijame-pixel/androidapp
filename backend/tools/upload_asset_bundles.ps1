@@ -21,6 +21,11 @@ function Ensure-Zip($folderName, $existingZip = $null) {
     }
     $src = Join-Path $AssetsRoot $folderName
     if (-not (Test-Path $src)) {
+        if ($existingZip -and (Test-Path $existingZip)) {
+            Copy-Item $existingZip $zipPath -Force
+            Write-Host "  reuse $folderName.zip from dist"
+            return $zipPath
+        }
         Write-Host "  skip $folderName (missing)"
         return $null
     }
@@ -39,7 +44,9 @@ $bundles = @(
     @{ Name = "renge"; Existing = $null },
     @{ Name = "login"; Existing = $null },
     @{ Name = "pet"; Existing = $null },
-    @{ Name = "xiangkuang"; Existing = (Join-Path $AssetsRoot "xiangkuang.zip") }
+    @{ Name = "xiangkuang"; Existing = (Join-Path $AssetsRoot "xiangkuang.zip") },
+    @{ Name = "pac_maze_sfx"; Existing = (Join-Path $RepoRoot "dist\asset-bundles\pac_maze_sfx.zip") },
+    @{ Name = "pac_maze_skins"; Existing = (Join-Path $RepoRoot "dist\asset-bundles\pac_maze_skins.zip") }
 )
 
 $zipFiles = @()

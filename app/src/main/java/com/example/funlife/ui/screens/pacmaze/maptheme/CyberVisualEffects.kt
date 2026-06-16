@@ -117,21 +117,20 @@ internal object CyberMazeWallPass {
 
     fun draw(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
-        val cell = ctx.cell
-        val ox = ctx.offsetX
-        val oy = ctx.offsetY
         val breath = 0.75f + 0.25f * sin(ctx.animPhase * 1.4f)
-        val stroke = (cell * 0.10f).coerceIn(2.5f, 9f)
-        val inset = cell * 0.10f
-        val doubleGap = cell * 0.05f
 
         for (y in 0 until world.height) {
             for (x in 0 until world.width) {
                 if (!isSolidWall(ctx, x, y)) continue
-                val left = ox + x * cell
-                val top = oy + y * cell
-                val right = left + cell
-                val bottom = top + cell
+                val rect = ctx.tileRect(x, y)
+                val left = rect.left
+                val top = rect.top
+                val right = rect.right
+                val bottom = rect.bottom
+                val cell = ctx.tileMetric(rect)
+                val stroke = (cell * 0.10f).coerceIn(2.5f, 9f)
+                val inset = cell * 0.10f
+                val doubleGap = cell * 0.05f
 
                 if (!isSolidWall(ctx, x, y - 1)) {
                     drawDoubleEdge(
