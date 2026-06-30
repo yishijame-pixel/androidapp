@@ -17,7 +17,6 @@ object SuperTuxClassicLauncher {
         if (!nativeDir.isNullOrBlank() && File(nativeDir, NATIVE_LIB).exists()) {
             return true
         }
-        // extractNativeLibs=false 时 .so 留在 APK 内，nativeLibraryDir 可能为空目录
         return isNativeLibraryBundledInApk(context)
     }
 
@@ -47,13 +46,13 @@ object SuperTuxClassicLauncher {
     suspend fun prepareAndStart(
         context: Context,
         levelStl: String,
-        onProgress: (Int) -> Unit = {},
+        onProgress: (SuperTuxClassicDataPreparer.Progress) -> Unit = {},
     ): Boolean {
         if (!isNativeLibraryPresent(context)) return false
         if (!runCatching { context.assets.open("data.zip").close(); true }.getOrDefault(false)) {
             return false
         }
-        if (!SuperTuxClassicDataPreparer.ensureStaged(context, onProgress)) {
+        if (!SuperTuxClassicDataPreparer.ensureReady(context, onProgress)) {
             return false
         }
         start(context, levelStl = levelStl)

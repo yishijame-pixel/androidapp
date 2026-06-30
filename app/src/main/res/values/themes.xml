@@ -16,4 +16,10 @@
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
+
+    <!-- SuperTux SDL 启动前窗口背景（加载页接管前短暂显示） -->
+    <style name="Theme.FunLife.SuperTuxClassic" parent="android:Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@drawable/supertux_loading_background</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
 </resources>

@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 
 FAST_PATH_MARKER = "Mounted pre-staged Android data archive"
+DIR_MOUNT_MARKER = "Mounted pre-extracted Android data directory"
+ANDROID_JNI_MARKER = "android_notify_loading"
 PHYSFS_INIT_MARKER = "PHYSFS_AndroidInit physfsAndroidInit"
 WRONG_PHYSFS_MARKER = "physfs_android_base"
 SDL_SYSTEM_INCLUDE_ANCHOR = "#include <SDL_ttf.h>"
@@ -50,7 +52,22 @@ PHYSFS_INIT_REPLACEMENT = (
     '    msg << "Couldn\'t initialize physfs: " << physfsutil::get_last_error();'
 )
 FAST_PATH_BLOCK = """
-  // FunLife: reuse pre-extracted archive (SuperTuxClassicDataPreparer writes to
+  // FunLife: prefer extracted directory (SuperTuxClassicDataPreparer -> supertux_data/).
+  {
+    std::string datadir = m_forced_userdir.value();
+    datadir.append("/supertux_data");
+    std::string images_probe = datadir + "/images";
+    if (FileSystem::is_directory(datadir) && FileSystem::exists(images_probe)) {
+      if (PHYSFS_mount(datadir.c_str(), nullptr, 1)) {
+        log_info << "Mounted pre-extracted Android data directory: " << datadir << std::endl;
+        return true;
+      }
+      log_warning << "Pre-extracted data directory mount failed: "
+                  << PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()) << std::endl;
+    }
+  }
+
+  // FunLife: reuse pre-staged archive (SuperTuxClassicDataPreparer writes to
   // getExternalFilesDir()/data.zip). Avoids loading the entire APK asset into RAM.
   if (FileSystem::exists(newzip)) {
     try {
@@ -73,8 +90,17 @@ FAST_PATH_BLOCK = """
 
 def apply_android_datadir_fast_path(main_cpp: Path) -> None:
     text = main_cpp.read_text(encoding="utf-8")
-    if FAST_PATH_MARKER in text:
-        print(f"skip (already applied): {main_cpp.name}")
+    if DIR_MOUNT_MARKER in text and FAST_PATH_MARKER in text:
+        print(f"skip (already applied): datadir fast-path in {main_cpp.name}")
+        return
+    if FAST_PATH_MARKER in text and DIR_MOUNT_MARKER not in text:
+        idx = text.find("  // FunLife: reuse pre-")
+        if idx < 0:
+            raise SystemExit(f"zip fast-path present but anchor missing in {main_cpp}")
+        dir_prefix = FAST_PATH_BLOCK.split("  // FunLife: reuse pre-staged archive")[0]
+        text = text[:idx] + dir_prefix + text[idx:]
+        main_cpp.write_text(text, encoding="utf-8", newline="\n")
+        print(f"upgraded datadir fast-path (directory mount) -> {main_cpp}")
         return
     if FAST_PATH_ANCHOR not in text:
         raise SystemExit(f"anchor not found in {main_cpp}")
@@ -85,6 +111,74 @@ def apply_android_datadir_fast_path(main_cpp: Path) -> None:
     )
     main_cpp.write_text(text, encoding="utf-8", newline="\n")
     print(f"applied android datadir fast-path -> {main_cpp}")
+
+
+ANDROID_JNI_ANCHOR = "PhysfsSubsystem::PhysfsSubsystem(const char* argv0,"
+ANDROID_JNI_BLOCK = """
+#ifdef __ANDROID__
+#include <jni.h>
+
+static void android_notify_loading(int progress, const char* stage)
+{
+  JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+  jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+  if (!env || !activity) return;
+  jclass cls = env->GetObjectClass(activity);
+  if (!cls) return;
+  jmethodID mid = env->GetMethodID(cls, "onEngineLoadingProgress", "(ILjava/lang/String;)V");
+  if (mid) {
+    jstring jstage = env->NewStringUTF(stage ? stage : "");
+    env->CallVoidMethod(activity, mid, progress, jstage);
+    env->DeleteLocalRef(jstage);
+  }
+  env->DeleteLocalRef(cls);
+}
+
+static void android_notify_ready()
+{
+  JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+  jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+  if (!env || !activity) return;
+  jclass cls = env->GetObjectClass(activity);
+  if (!cls) return;
+  jmethodID mid = env->GetMethodID(cls, "onEngineReady", "()V");
+  if (mid) env->CallVoidMethod(activity, mid);
+  env->DeleteLocalRef(cls);
+}
+#endif
+
+"""
+
+LAUNCH_GAME_READY_ANCHOR = "  m_screen_manager->run();"
+LAUNCH_GAME_READY_REPLACEMENT = """#ifdef __ANDROID__
+  android_notify_loading(95, "\\xe5\\x8d\\xb3\\xe5\\xb0\\x86\\xe8\\xbf\\x9b\\xe5\\x85\\xa5\\xe5\\x85\\xb3\\xe5\\x8d\\xa1\\xe2\\x80\\xa6");
+  android_notify_ready();
+#endif
+  m_screen_manager->run();"""
+
+LAUNCH_PROGRESS_ANCHORS = [
+    ('  s_timelog.log("addons");', '  s_timelog.log("addons");\n#ifdef __ANDROID__\n  android_notify_loading(12, "\\xe5\\x88\\x9d\\xe5\\xa7\\x8b\\xe5\\x8c\\x96\\xe9\\x99\\x84\\xe5\\x8a\\xa0\\xe5\\x86\\x85\\xe5\\xae\\xb9\\xe2\\x80\\xa6");\n#endif'),
+    ('  s_timelog.log("video");', '  s_timelog.log("video");\n#ifdef __ANDROID__\n  android_notify_loading(45, "\\xe5\\x88\\x9d\\xe5\\xa7\\x8b\\xe5\\x8c\\x96\\xe6\\x98\\xbe\\xe7\\xa4\\xba\\xe2\\x80\\xa6");\n#endif'),
+    ('  s_timelog.log("audio");', '  s_timelog.log("audio");\n#ifdef __ANDROID__\n  android_notify_loading(62, "\\xe5\\x88\\x9d\\xe5\\xa7\\x8b\\xe5\\x8c\\x96\\xe9\\x9f\\xb3\\xe9\\xa2\\x91\\xe2\\x80\\xa6");\n#endif'),
+    ('  s_timelog.log("resources");', '  s_timelog.log("resources");\n#ifdef __ANDROID__\n  android_notify_loading(78, "\\xe5\\x8a\\xa0\\xe8\\xbd\\xbd\\xe5\\x9b\\xbe\\xe5\\x9d\\x97\\xe4\\xb8\\x8e\\xe7\\xb2\\xbe\\xe7\\x81\\xb5\\xe2\\x80\\xa6");\n#endif'),
+]
+
+
+def apply_android_engine_loading_jni(main_cpp: Path) -> None:
+    text = main_cpp.read_text(encoding="utf-8")
+    if ANDROID_JNI_MARKER in text:
+        print(f"skip (already applied): android loading jni in {main_cpp.name}")
+        return
+    if ANDROID_JNI_ANCHOR not in text:
+        raise SystemExit(f"android jni anchor not found in {main_cpp}")
+    text = text.replace(ANDROID_JNI_ANCHOR, ANDROID_JNI_BLOCK + ANDROID_JNI_ANCHOR, 1)
+    for anchor, replacement in LAUNCH_PROGRESS_ANCHORS:
+        if anchor in text and replacement not in text:
+            text = text.replace(anchor, replacement, 1)
+    if LAUNCH_GAME_READY_ANCHOR in text:
+        text = text.replace(LAUNCH_GAME_READY_ANCHOR, LAUNCH_GAME_READY_REPLACEMENT, 1)
+    main_cpp.write_text(text, encoding="utf-8", newline="\n")
+    print(f"applied android engine loading jni -> {main_cpp}")
 
 
 def apply_sdl_system_include(main_cpp: Path) -> None:
@@ -120,6 +214,7 @@ def main() -> None:
     apply_android_datadir_fast_path(main_cpp)
     apply_sdl_system_include(main_cpp)
     apply_physfs_init_android(main_cpp)
+    apply_android_engine_loading_jni(main_cpp)
 
 
 if __name__ == "__main__":

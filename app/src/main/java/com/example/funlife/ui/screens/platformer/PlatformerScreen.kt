@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.withFrameNanos
@@ -67,6 +68,7 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
     val classicEngineReady = remember(context) { SuperTuxClassicLauncher.isReady(context) }
     val scope = rememberCoroutineScope()
     var classicPrepProgress by remember { mutableIntStateOf(-1) }
+    var classicPrepStage by remember { mutableStateOf("") }
     var classicPrepLevel by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -163,6 +165,7 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
         if (classicPrepProgress >= 0) {
             SuperTuxClassicPrepOverlay(
                 progress = classicPrepProgress,
+                stage = classicPrepStage,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -205,10 +208,13 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
                         scope.launch {
                             classicPrepLevel = stl
                             classicPrepProgress = 0
-                            val ok = SuperTuxClassicLauncher.prepareAndStart(context, stl) { pct ->
-                                classicPrepProgress = pct
+                            classicPrepStage = "准备 SuperTux 经典引擎…"
+                            val ok = SuperTuxClassicLauncher.prepareAndStart(context, stl) { p ->
+                                classicPrepProgress = p.percent
+                                classicPrepStage = p.stage
                             }
                             classicPrepProgress = -1
+                            classicPrepStage = ""
                             classicPrepLevel = null
                             if (!ok) {
                                 Toast.makeText(
@@ -928,33 +934,60 @@ private fun LevelClearOverlay(
 @Composable
 private fun SuperTuxClassicPrepOverlay(
     progress: Int,
+    stage: String,
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier.background(Color.Black.copy(alpha = 0.72f)),
+        modifier = modifier.background(Color(0xFF0D1B2A).copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center,
     ) {
-        Card(shape = RoundedCornerShape(20.dp)) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B263B)),
+        ) {
             Column(
                 modifier = Modifier.padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Text(
-                    "正在准备 SuperTux 引擎",
-                    fontSize = 20.sp,
+                    "SuperTux 经典引擎",
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
+                    color = Color.White,
                 )
                 Text(
-                    if (progress >= 100) "即将启动…" else "首次需解压游戏资源（约 274MB）",
+                    stage.ifBlank {
+                        if (progress >= 100) "即将启动…" else "正在准备资源…"
+                    },
                     fontSize = 14.sp,
-                    color = Color.Gray,
+                    color = Color(0xFFB0BEC5),
+                    textAlign = TextAlign.Center,
                 )
                 LinearProgressIndicator(
                     progress = progress.coerceIn(0, 100) / 100f,
                     modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF4FC3F7),
+                    trackColor = Color(0x33FFFFFF),
                 )
-                Text("$progress%", fontSize = 13.sp, color = Color.Gray)
+                Text(
+                    "${progress.coerceIn(0, 100)}%",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                )
+                Text(
+                    if (progress < 35) {
+                        "首次需复制约 274MB 资源包"
+                    } else if (progress < 100) {
+                        "首次需解压图块与音效（仅需一次）"
+                    } else {
+                        "准备完成，正在打开引擎…"
+                    },
+                    fontSize = 12.sp,
+                    color = Color(0xFF78909C),
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
