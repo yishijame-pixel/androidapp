@@ -7,6 +7,8 @@ on:
       - 'engine/supertux-fork/**'
       - 'backend/tools/bootstrap_supertux_fork.*'
       - 'backend/tools/bootstrap_supertux_android.sh'
+      - 'backend/tools/init_supertux_submodules.sh'
+      - 'backend/tools/verify_supertux_fork_tree.sh'
       - 'backend/tools/clone_supertux_upstream.*'
       - '.github/workflows/supertux-fork-android.yml'
   pull_request:
@@ -25,6 +27,7 @@ jobs:
       SDK_VERSION: "35"
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
       VCPKG_TRIPLET: arm64-android
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
 
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +47,10 @@ jobs:
           ref: ${{ steps.supertux_pin.outputs.commit }}
           path: reference-assets/supertux
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: Init nested submodules (simplesquirrel → squirrel)
+        run: bash backend/tools/init_supertux_submodules.sh reference-assets/supertux
 
       - name: Bootstrap fork worktree
         run: bash backend/tools/bootstrap_supertux_fork.sh
@@ -54,7 +60,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vcpkg
-          key: supertux-android-arm64-vcpkg-v3-${{ hashFiles('.github/workflows/supertux-fork-android.yml', 'backend/tools/bootstrap_supertux_android.sh') }}
+          key: supertux-android-arm64-vcpkg-v4-${{ hashFiles('.github/workflows/supertux-fork-android.yml') }}
 
       - name: Install vcpkg ports (arm64-android)
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -88,23 +94,39 @@ jobs:
             ndk;${{ env.NDK_VERSION }}
             build-tools;${{ env.B_T_VERSION }}
 
-      - name: Write mk/android/local.properties
+      - name: Write mk/android/local.properties and CI gradle tuning
         run: |
+          test -d "${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
           mkdir -p engine/supertux-fork/mk/android
           {
             echo "vcpkg_root=${VCPKG_ROOT}"
             echo "ndk_home=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
           } > engine/supertux-fork/mk/android/local.properties
           cat engine/supertux-fork/mk/android/local.properties
+          cat >> engine/supertux-fork/mk/android/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m
+          org.gradle.parallel=false
+          org.gradle.workers.max=2
+          EOF
 
-      - name: Build debug APK (arm64-v8a)
+      - name: Build release APK (arm64-v8a)
         working-directory: engine/supertux-fork/mk/android
         run: |
+          set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew assembleDebug \
+          # Match upstream android.yml: Release build, no sq interpreter, no PCH (saves CI RAM).
+          if ! ./gradlew assembleRelease \
             -Pcpuarch=arm64-v8a \
-            -Pcmake_args="-DGIT_HASH=ci;-DGIT_BRANCH=main" \
-            --stacktrace
+            -Pcmake_args="-DGIT_HASH=ci;-DGIT_BRANCH=main;-DSUPERTUX_PCH=OFF;-DSQ_DISABLE_INTERPRETER=ON" \
+            --info --stacktrace 2>&1 | tee gradle-build.log; then
+            echo "=== Gradle/native build failed — diagnostic tail ==="
+            tail -n 200 gradle-build.log || true
+            find app/.cxx -type f \( -name 'CMakeError.log' -o -name 'CMakeOutput.log' \) 2>/dev/null | while read -r f; do
+              echo "==== $f ===="
+              tail -n 80 "$f" || true
+            done
+            exit 1
+          fi
 
       - name: Upload libsupertux2.so
         uses: actions/upload-artifact@v4
@@ -115,9 +137,18 @@ jobs:
             engine/supertux-fork/mk/android/app/build/intermediates/**/libc++_shared.so
           if-no-files-found: warn
 
-      - name: Upload debug APK
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: supertux-fork-apk-arm64-debug
-          path: engine/supertux-fork/mk/android/app/build/outputs/apk/debug/*.apk
+          name: supertux-fork-apk-arm64-release
+          path: |
+            engine/supertux-fork/mk/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Upload gradle log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertux-android-gradle-log
+          path: engine/supertux-fork/mk/android/gradle-build.log
+          if-no-files-found: ignore

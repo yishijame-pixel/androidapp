@@ -26,7 +26,7 @@ echo "Cloning SuperTux @ ${COMMIT} -> ${UPSTREAM}"
 git clone --depth 1 --revision="${COMMIT}" \
   https://github.com/SuperTux/supertux.git "${UPSTREAM}"
 
-git -C "${UPSTREAM}" submodule update --init --recursive --depth 1 || true
+git -C "${UPSTREAM}" submodule update --init --recursive --depth 1
 
 HEAD="$(git -C "${UPSTREAM}" rev-parse HEAD)"
 if [[ "${HEAD}" != "${COMMIT}" ]]; then

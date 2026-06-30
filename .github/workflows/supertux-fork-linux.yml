@@ -33,7 +33,10 @@ jobs:
           ref: ${{ steps.supertux_pin.outputs.commit }}
           path: reference-assets/supertux
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: Init nested submodules
+        run: bash backend/tools/init_supertux_submodules.sh reference-assets/supertux
 
       - name: Bootstrap fork worktree
         run: bash backend/tools/bootstrap_supertux_fork.sh

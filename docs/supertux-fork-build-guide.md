@@ -73,5 +73,7 @@ cd mk/android && ./gradlew assembleDebug -Pcpuarch=arm64-v8a
 | 现象 | 处理 |
 |------|------|
 | vcpkg Android triplet 失败 | 对照 upstream nightly workflow |
+| ninja 在 squirrel/supertux2 失败 | CI 已加：nested submodule 校验、`-DSUPERTUX_PCH=OFF`、`-DSQ_DISABLE_INTERPRETER=ON`、`assembleRelease`、并行度 2 |
+| submodule 目录空 | 跑 `init_supertux_submodules.sh` 后再 bootstrap |
 | data/ 资源缺失 | 确保 git LFS / 完整 data 子树 |
 | APK 体积过大 | asset pack 分包 World |

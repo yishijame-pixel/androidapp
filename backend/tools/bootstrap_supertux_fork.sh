@@ -20,4 +20,7 @@ rsync -a --delete \
   --exclude .gitignore \
   "$UPSTREAM/" "$FORK/"
 
+# Fail if nested submodules (e.g. simplesquirrel/libs/squirrel) were not copied.
+bash "$(dirname "$0")/verify_supertux_fork_tree.sh"
+
 echo "Bootstrap OK -> $FORK"
