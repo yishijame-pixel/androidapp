@@ -37,6 +37,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FunLife"
         android:usesCleartextTraffic="false"
+        android:largeHeap="true"
         tools:targetApi="31">
         <activity
             android:name=".MainActivity"
@@ -53,8 +54,11 @@
         <activity
             android:name=".ui.screens.platformer.SuperTuxClassicActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:theme="@style/Theme.FunLife" />
+            android:process=":supertux"
+            android:screenOrientation="landscape"
+            android:launchMode="singleTask"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
         
         <!-- 纪念日提醒广播接收器 -->
         <receiver

@@ -1,0 +1,26 @@
+--- a/src/supertux/main.cpp
++++ b/src/supertux/main.cpp
+@@ -426,6 +426,25 @@ PhysfsSubsystem::setup_android_datadir() const
+   newzip.append("/");
+   newzip.append(zippath);
+ 
++  // FunLife: reuse pre-extracted archive (SuperTuxClassicDataPreparer writes to
++  // getExternalFilesDir()/data.zip). Avoids loading the entire APK asset into RAM.
++  if (FileSystem::exists(newzip)) {
++    try {
++      const auto size = std::filesystem::file_size(newzip);
++      if (size > 32 * 1024 * 1024) {
++        if (PHYSFS_mount(newzip.c_str(), nullptr, 1)) {
++          log_info << "Mounted pre-staged Android data archive: " << newzip << std::endl;
++          return true;
++        }
++        log_warning << "Pre-staged data archive mount failed: "
++                    << PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()) << std::endl;
++      }
++    } catch (const std::exception& e) {
++      log_warning << "Pre-staged data archive check failed: " << e.what() << std::endl;
++    }
++  }
++
+   size_t zipsz;
+   void* zipdata = SDL_LoadFile(zippath.c_str(), &zipsz);

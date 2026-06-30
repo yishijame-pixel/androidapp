@@ -64,9 +64,26 @@ cd mk/android && ./gradlew assembleDebug -Pcpuarch=arm64-v8a
 
 ## FunLife App 集成（Phase 4）
 
-- `SuperTuxClassicActivity` — SDL 壳（当前为占位，待 `libsupertux2.so` 就绪）
-- Intent：`levelStl`, `playerSprite`, `saveSlot`
-- 详见战略文档 §八
+1. 下载 CI 产物（需 `GITHUB_TOKEN` 或手动下载 artifact zip）：
+   ```powershell
+   $env:GITHUB_TOKEN="ghp_..."
+   powershell -File backend/tools/prepare_supertux_classic_android.ps1
+   ```
+   写入：
+   - `app/src/main/jniLibs/arm64-v8a/libsupertux2.so`
+   - `app/src/main/jniLibs/arm64-v8a/libc++_shared.so`
+   - `app/src/main/assets/data.zip`（自 CI APK 内提取）
+
+2. 编译 FunLife：`.\gradlew.bat :app:assembleDebug`
+
+3. App 内：横版冒险 → 南极/SuperTux 章节 → 打开 **「经典引擎 · 官方 SuperTux」** → 点关卡
+
+| 组件 | 路径 |
+|------|------|
+| SDL 壳 | `SuperTuxClassicActivity.java` |
+| 启动器 | `SuperTuxClassicLauncher.kt` |
+| STL 映射 | `PlatformerSuperTuxClassicPaths.kt` |
+| Intent | `level_stl` → `levels/world1/….stl` |
 
 ## 故障排查
 

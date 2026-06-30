@@ -70,7 +70,10 @@
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
 
-# ─── 安全相关：保留关键校验逻辑的方法不被内联（让 hook 难度上升）───
+-keep class com.example.funlife.ui.screens.platformer.SuperTuxClassicActivity { *; }
+-keep class org.supertux.supertux2.MainActivity { *; }
+-keep class org.libsdl.app.** { *; }
+-dontwarn org.libsdl.app.**
 -keepclassmembers class com.example.funlife.security.MonotonicClock {
     public *;
 }

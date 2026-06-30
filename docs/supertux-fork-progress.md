@@ -1,6 +1,6 @@
 # SuperTux Fork 进度看板（ST-FORK）
 
-> **最后更新：** 2026-06-30（Android CI run #6 失败，已修 bootstrap 路径）  
+> **最后更新：** 2026-06-30 — Android CI run #8 ✅  
 > **仓库：** [yishijame-pixel/androidapp](https://github.com/yishijame-pixel/androidapp)  
 > **一键看 CI：** [GitHub Actions 总览](https://github.com/yishijame-pixel/androidapp/actions)
 
@@ -10,21 +10,21 @@
 
 ```
 产品决策 ✅  Fork 经典模式 = 主线
-Push GitHub ✅  main @ 6cd204d
-Phase 1 PC   🔄  supertux-fork-linux 重跑中（~7 min）
-Phase 2 APK  ❌  run #6 失败（17 min）→ 已修 monorepo bootstrap 路径
-改编 bundle  ✅  platformer-supertux-validate 已通过
-App 集成     ⏳  SuperTuxClassicActivity 仍为占位
+Push GitHub ✅  main @ c6aea29
+Phase 1 PC   ✅  supertux-fork-linux
+Phase 2 APK  ✅  supertux-fork-android run #8（17m 44s）
+改编 bundle  ✅  platformer-supertux-validate
+App 集成     🔄  Phase 4 进行中 — SDL 壳 + 选关已接，待本地 .so/data.zip
 ```
 
 | 阶段 | 内容 | 状态 | 说明 |
 |------|------|------|------|
 | **0** | 脚手架、文档、NOTICE | ✅ 完成 | `engine/supertux-fork/` 元数据 |
 | **1** | PC 编译 `supertux2` | ✅ **CI 绿** | [Linux run #28417068861](https://github.com/yishijame-pixel/androidapp/actions/runs/28417068861) |
-| **2** | Android `libsupertux2.so` | 🔄 **CI 进行中** | 当前步骤：`Install vcpkg ports` · [Run #28417748230](https://github.com/yishijame-pixel/androidapp/actions/runs/28417748230) |
+| **2** | Android `libsupertux2.so` | ✅ **CI 绿** | [Run #28449235537](https://github.com/yishijame-pixel/androidapp/actions/runs/28449235537) · Artifacts 已产出 |
 | **2b** | 改编 bundle 校验 | ✅ **已通过** | [Validate run #28417748232](https://github.com/yishijame-pixel/androidapp/actions/runs/28417748232) |
 | **3** | Logo / 品牌 Mod | ⏳ 未开始 | |
-| **4** | FunLife 选关 → 引擎 | ⏳ 占位 Activity | `SuperTuxClassicActivity.kt` |
+| **4** | FunLife 选关 → 引擎 | 🔄 进行中 | `SuperTuxClassicActivity` + `SuperTuxClassicLauncher` + 经典/改编切换 |
 | **5** | 可配置角色 sprite | ⏳ 未开始 | |
 | **6–7** | 账号 / 排行榜 / 商城 | ⏳ 未开始 | 见 [产品路线图](./supertux-funlife-product-roadmap.md) |
 
@@ -34,15 +34,15 @@ App 集成     ⏳  SuperTuxClassicActivity 仍为占位
 
 | Workflow | 作用 | 最新结果 | 链接 |
 |----------|------|----------|------|
-| **supertux-fork-linux** | PC 编 SuperTux | 🔄 in_progress | [Run #28417748222](https://github.com/yishijame-pixel/androidapp/actions/runs/28417748222) |
-| **supertux-fork-android** | NDK + vcpkg + APK | 🔄 in_progress | [Run #28417748230](https://github.com/yishijame-pixel/androidapp/actions/runs/28417748230) |
+| **supertux-fork-linux** | PC 编 SuperTux | ✅ success | [Workflow](https://github.com/yishijame-pixel/androidapp/actions/workflows/supertux-fork-linux.yml) |
+| **supertux-fork-android** | NDK + vcpkg + APK | ✅ success | [Run #8](https://github.com/yishijame-pixel/androidapp/actions/runs/28449235537) |
 | **platformer-supertux-validate** | 改编 bundle 107 关 | ✅ success | [Run #28417748232](https://github.com/yishijame-pixel/androidapp/actions/runs/28417748232) |
 
 ### 最新 commit
 
 | 项 | 值 |
 |----|-----|
-| `main` HEAD | `6cd204d` — fix(ci): Android NDK via setup-android v2 and sdkmanager |
+| `main` HEAD | `c6aea29` — fix(ci): harden Android native build |
 | upstream pin | `94996de`（见 `engine/supertux-fork/source_pin.json`） |
 
 ---
@@ -75,7 +75,7 @@ App 集成     ⏳  SuperTuxClassicActivity 仍为占位
 
 | 模式 | 引擎 | 关卡 | 进度 |
 |------|------|------|------|
-| **经典 Fork（主线）** | SuperTux C++ | 原生 `.stl` + 脚本/Boss | Phase 1 ✅ · Phase 2 修 CI 中 |
+| **经典 Fork（主线）** | SuperTux C++ | 原生 `.stl` + 脚本/Boss | Phase 1 ✅ · Phase 2 ✅ · Phase 4 进行中 |
 | **改编 Kotlin（备用）** | FunLife | bundle v4 · 107 关 | 已进 APK assets · 非 1:1 |
 
 ---
@@ -128,10 +128,9 @@ python backend/tools/validate_platformer_supertux.py
 
 ## 下一步（开发队列）
 
-1. **Android CI** — setup-android@v2 + sdkmanager 显式装 NDK（已 push，待绿）
-2. **重跑 validate** — workflow path 已修复
-3. **Android CI 绿** — 下载 artifact：`supertux-fork-apk-arm64-debug`、`libsupertux2-arm64-v8a`
-4. **Phase 4** — 真 SDL 壳 + FunLife 选关进引擎
+1. ~~**Android CI 绿**~~ ✅ — artifact：`supertux-fork-apk-arm64-release`、`libsupertux2-arm64-v8a`
+2. **Phase 4** 🔄 — 代码已接；本地执行 `prepare_supertux_classic_android.ps1` 拉 `.so` + `data.zip` → 真机 smoke test
+3. **Phase 3** — Logo / 品牌 Mod
 
 ---
 

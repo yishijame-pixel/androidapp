@@ -44,6 +44,9 @@ android {
         buildConfigField("String", "AI_MODEL", "\"${props.getProperty("AI_MODEL", "")}\"")
         buildConfigField("String", "VIP_BACKEND_URL", "\"${props.getProperty("VIP_BACKEND_URL", "")}\"")
         buildConfigField("String", "VIP_HMAC_SECRET", "\"${props.getProperty("VIP_HMAC_SECRET", "")}\"")
+        // 游戏资源静态 manifest（优先于 CloudBase asset_bundle 云函数）
+        buildConfigField("String", "ASSET_MANIFEST_URL", "\"${props.getProperty("ASSET_MANIFEST_URL", "")}\"")
+        buildConfigField("String", "ASSET_MANIFEST_PIN", "\"${props.getProperty("ASSET_MANIFEST_PIN", "")}\"")
         // 🔒 Cert Pinning：云函数证书的 SHA-256 指纹（多个用逗号分隔，如 "sha256/AAA=,sha256/BBB="）
         //    获取方法：openssl s_client -connect <你的域名>:443 -servername <域名> < /dev/null \
         //               | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \
@@ -122,6 +125,12 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            pickFirsts += setOf("**/libc++_shared.so", "**/libsupertux2.so")
+        }
+    }
+    androidResources {
+        noCompress += setOf("zip")
     }
 }
 

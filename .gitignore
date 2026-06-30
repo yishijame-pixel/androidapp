@@ -148,3 +148,8 @@ engine/supertux-fork/*
 !engine/supertux-fork/source_pin.json
 !engine/supertux-fork/FUNLIFE.md
 !engine/supertux-fork/.gitignore
+
+# SuperTux classic engine binaries (from CI artifacts; see prepare_supertux_classic_android.ps1)
+app/src/main/jniLibs/**/*.so
+app/src/main/assets/data.zip
+.tmp_supertux_classic/

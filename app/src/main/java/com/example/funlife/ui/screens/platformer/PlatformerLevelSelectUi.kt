@@ -221,6 +221,8 @@ fun PlatformerLevelSelectPanel(
     onCharacterSelect: (PlatformerCharacterId) -> Unit,
     onUnlockAll: () -> Unit,
     onSelect: (Int) -> Unit,
+    onStartClassic: (Int) -> Unit = {},
+    classicEngineReady: Boolean = false,
     onStartEndless: () -> Unit,
     onStartTempleRun: () -> Unit = {},
     onStartPlaneShooter: () -> Unit = {},
@@ -235,6 +237,13 @@ fun PlatformerLevelSelectPanel(
         }
 
         var chapter by remember { mutableStateOf(PlatformerChapterFilter.ALL) }
+        var classicEngine by remember(classicEngineReady) {
+            mutableStateOf(classicEngineReady)
+        }
+        val showClassicToggle = chapter == PlatformerChapterFilter.SUPERTUX ||
+            chapter == PlatformerChapterFilter.SUPERTUX_W1 ||
+            chapter == PlatformerChapterFilter.SUPERTUX_W2 ||
+            chapter == PlatformerChapterFilter.SUPERTUX_BONUS
         val levels = remember(chapter) {
             PlatformerLevels.all.filter { it.id in chapter.range }
         }
@@ -312,6 +321,11 @@ fun PlatformerLevelSelectPanel(
                         selectedCharacter = selectedCharacter,
                         onCharacterSelect = onCharacterSelect,
                         onSelect = onSelect,
+                        classicEngine = classicEngine,
+                        showClassicToggle = showClassicToggle,
+                        classicEngineReady = classicEngineReady,
+                        onClassicEngineChange = { classicEngine = it },
+                        onStartClassic = onStartClassic,
                     )
                 }
             }
@@ -332,6 +346,11 @@ private fun PlatformerHubCatalogPanel(
     selectedCharacter: PlatformerCharacterId,
     onCharacterSelect: (PlatformerCharacterId) -> Unit,
     onSelect: (Int) -> Unit,
+    classicEngine: Boolean = false,
+    showClassicToggle: Boolean = false,
+    classicEngineReady: Boolean = false,
+    onClassicEngineChange: (Boolean) -> Unit = {},
+    onStartClassic: (Int) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -370,6 +389,15 @@ private fun PlatformerHubCatalogPanel(
             onSelect = onChapterSelect,
             layout = layout,
         )
+        if (showClassicToggle) {
+            Spacer(Modifier.height(layout.dp(4.dp)))
+            PlatformerClassicEngineToggle(
+                classicEngine = classicEngine,
+                ready = classicEngineReady,
+                onChange = onClassicEngineChange,
+                layout = layout,
+            )
+        }
         Spacer(Modifier.height(layout.dp(4.dp)))
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = layout.gridCellMin),
@@ -390,7 +418,10 @@ private fun PlatformerHubCatalogPanel(
                     isCurrent = isCurrent,
                     layout = layout,
                     onClick = {
-                        if (unlocked) {
+                        if (!unlocked) return@PlatformerLevelTile
+                        if (classicEngine && level.id >= PlatformerSuperTuxLengthSpec.SUPERTUX_LEVEL_START) {
+                            onStartClassic(level.id)
+                        } else {
                             onSelect(PlatformerLevels.all.indexOfFirst { it.id == level.id })
                         }
                     },
@@ -994,6 +1025,54 @@ private fun PlatformerSectionLabel(text: String, layout: PlatformerHubLayoutSpec
             color = PlatformerHubArt.creamMuted,
             fontSize = layout.microSp,
             fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun PlatformerClassicEngineToggle(
+    classicEngine: Boolean,
+    ready: Boolean,
+    onChange: (Boolean) -> Unit,
+    layout: PlatformerHubLayoutSpec,
+) {
+    val label = when {
+        classicEngine && ready -> "经典引擎 · 官方 SuperTux"
+        classicEngine && !ready -> "经典引擎 · 需准备 native 资源"
+        else -> "改编引擎 · FunLife"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+                if (classicEngine) Color(0xFF01579B).copy(alpha = 0.35f)
+                else Color.White.copy(alpha = 0.06f),
+            )
+            .border(
+                1.dp,
+                if (classicEngine) Color(0xFF4FC3F7).copy(alpha = 0.5f) else PlatformerHubArt.panelBorderSoft,
+                RoundedCornerShape(999.dp),
+            )
+            .clickable { onChange(!classicEngine) }
+            .padding(horizontal = layout.dp(10.dp), vertical = layout.dp(6.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            label,
+            color = if (classicEngine) PlatformerHubArt.cream else PlatformerHubArt.creamMuted,
+            fontSize = layout.captionSp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            if (classicEngine) "ON" else "OFF",
+            color = if (classicEngine) PlatformerHubArt.gold else PlatformerHubArt.inkSoft,
+            fontSize = layout.microSp,
+            fontWeight = FontWeight.Bold,
         )
     }
 }

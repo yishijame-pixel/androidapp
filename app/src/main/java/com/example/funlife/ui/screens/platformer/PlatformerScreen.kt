@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import android.widget.Toast
 import com.example.funlife.game.platformer.*
+import com.example.funlife.game.platformer.PlatformerSuperTuxClassicPaths
 import com.example.funlife.game.platformer.PlatformerAssets
 import com.example.funlife.game.platformer.tmx.PlatformerTmxWorldBuilder
 import com.example.funlife.game.platformer.catalog.PlatformerAssetService
@@ -62,6 +64,10 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
     var bootProgress by remember { mutableIntStateOf(0) }
     var bootPhase by remember { mutableStateOf(PlatformerBootLoader.BootPhase.INIT) }
     var bootReady by remember { mutableStateOf(false) }
+    val classicEngineReady = remember(context) { SuperTuxClassicLauncher.isReady(context) }
+    val scope = rememberCoroutineScope()
+    var classicPrepProgress by remember { mutableIntStateOf(-1) }
+    var classicPrepLevel by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         PlatformerAssetService.ensureInitialized(context)
@@ -154,6 +160,12 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
                 .align(Alignment.BottomEnd)
                 .padding(12.dp),
         )
+        if (classicPrepProgress >= 0) {
+            SuperTuxClassicPrepOverlay(
+                progress = classicPrepProgress,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         when (screen) {
             PlatformerUiScreen.LevelSelect -> {
                 PlatformerLevelSelectPanel(
@@ -176,6 +188,38 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
                         playSession++
                         screen = PlatformerUiScreen.Playing
                     },
+                    onStartClassic = { levelId ->
+                        val stl = PlatformerSuperTuxClassicPaths.levelStlPath(levelId)
+                        if (stl == null) {
+                            Toast.makeText(context, "该关暂无经典 STL 映射", Toast.LENGTH_SHORT).show()
+                            return@PlatformerLevelSelectPanel
+                        }
+                        if (!SuperTuxClassicLauncher.isNativeLibraryPresent(context)) {
+                            Toast.makeText(
+                                context,
+                                "经典引擎 native 库未就绪，请运行 prepare_supertux_classic_android.ps1",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            return@PlatformerLevelSelectPanel
+                        }
+                        scope.launch {
+                            classicPrepLevel = stl
+                            classicPrepProgress = 0
+                            val ok = SuperTuxClassicLauncher.prepareAndStart(context, stl) { pct ->
+                                classicPrepProgress = pct
+                            }
+                            classicPrepProgress = -1
+                            classicPrepLevel = null
+                            if (!ok) {
+                                Toast.makeText(
+                                    context,
+                                    "SuperTux 资源解压失败，请检查存储空间后重试",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                    classicEngineReady = classicEngineReady,
                     onStartEndless = {
                         endlessSession++
                         screen = PlatformerUiScreen.EndlessPlaying
@@ -876,6 +920,41 @@ private fun LevelClearOverlay(
                         Button(onClick = onNext) { Text("下一关") }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuperTuxClassicPrepOverlay(
+    progress: Int,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.background(Color.Black.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(
+                modifier = Modifier.padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    "正在准备 SuperTux 引擎",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    if (progress >= 100) "即将启动…" else "首次需解压游戏资源（约 274MB）",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                )
+                LinearProgressIndicator(
+                    progress = progress.coerceIn(0, 100) / 100f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("$progress%", fontSize = 13.sp, color = Color.Gray)
             }
         }
     }
