@@ -23,7 +23,7 @@ jobs:
       - name: Read SuperTux upstream pin
         id: supertux_pin
         run: |
-          commit=$(python3 -c "import json; print(json.load(open('engine/supertux-fork/source_pin.json'))['commit'])")
+          commit=$(python3 -c "import json; print(json.load(open('engine/supertux-fork/source_pin.json', encoding='utf-8-sig'))['commit'])")
           echo "commit=${commit}" >> "$GITHUB_OUTPUT"
       - name: Checkout SuperTux upstream
         uses: actions/checkout@v4
