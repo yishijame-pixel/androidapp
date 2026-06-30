@@ -11,7 +11,7 @@ if [[ ! -f "$PIN_FILE" ]]; then
   exit 1
 fi
 
-COMMIT="$(python3 -c "import json, pathlib; print(json.loads(pathlib.Path('${PIN_FILE}').read_text())['commit'])")"
+COMMIT="$(python3 -c "import json, pathlib; print(json.loads(pathlib.Path('${PIN_FILE}').read_text(encoding='utf-8-sig'))['commit'])")"
 COMMIT="${COMMIT//[[:space:]]/}"
 if [[ -z "$COMMIT" || "$COMMIT" == "None" ]]; then
   echo "Invalid commit in $PIN_FILE" >&2

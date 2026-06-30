@@ -67,7 +67,7 @@ if ($commit) {
         updatedAt = (Get-Date).ToString("yyyy-MM-dd")
         productDecision = "FunLife classic fork = primary; Kotlin adaptation = fallback"
     } | ConvertTo-Json -Depth 3
-    Set-Content -Path $pinPath -Value $pin -Encoding UTF8
+    Set-Content -Path $pinPath -Value $pin -Encoding utf8NoBOM
     Write-Host "OK source_pin.json -> $commit" -ForegroundColor Green
 }
 
