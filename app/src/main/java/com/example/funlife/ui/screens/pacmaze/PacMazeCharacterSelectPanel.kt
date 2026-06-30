@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterStagePreview
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeAvatarLoadout
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterStageDecor
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeCosmeticCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
@@ -105,7 +105,7 @@ fun PacMazeCharacterSelectHero(
             Spacer(Modifier.weight(0.06f))
 
             Box(contentAlignment = Alignment.Center) {
-                val ikun = PacMazeIkunCatalog.contains(skinId)
+                val ikun = PacMazeBitmapWalkCatalog.contains(skinId)
                 val previewScale = if (ikun) 1.72f else 1f
                 PacMazeCharacterStagePreview(
                     skinId = skinId,

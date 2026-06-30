@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 3,
+  "skinId": "jack",
+  "normalized": true,
+  "canvas": {
+    "w": 778,
+    "h": 874
+  },
+  "anchorFrac": {
+    "x": 0.465296,
+    "y": 0.797483
+  },
+  "clips": {
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 778,
+        "cellH": 874
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 778,
+        "cellH": 874
+      }
+    },
+    "jump": {
+      "count": 10,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 778,
+        "cellH": 874
+      }
+    },
+    "run": {
+      "count": 8,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 778,
+        "cellH": 874
+      }
+    },
+    "slide": {
+      "count": 10,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 778,
+        "cellH": 874
+      }
+    },
+    "walk": {
+      "count": 10,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 778,
+        "cellH": 874
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "hero",
+    "title": "杰克",
+    "subtitle": "滑铲 · 跑酷",
+    "unlock": {
+      "type": "level_clear",
+      "value": 8
+    },
+    "abilities": [
+      "slide"
+    ],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

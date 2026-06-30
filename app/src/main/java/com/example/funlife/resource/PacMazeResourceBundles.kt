@@ -5,14 +5,10 @@ object PacMazeResourceBundles {
     const val SFX = "pac_maze_sfx"
     const val SKINS = "pac_maze_skins"
 
-    /** 加载页按顺序确保：先皮肤包（体积大、选角依赖），再音效包。 */
-    val bootOrder: List<String> = listOf(SKINS, SFX)
+    /** @see GameResourceBundles.gameBootOrder */
+    val bootOrder: List<String> get() = GameResourceBundles.gameBootOrder
 
-    fun displayName(bundleId: String): String = when (bundleId) {
-        SFX -> "音效与背景音乐"
-        SKINS -> "角色动画资源"
-        else -> bundleId
-    }
+    fun displayName(bundleId: String): String = GameResourceBundles.displayName(bundleId)
 }
 
 data class PacMazeResourceUpdateStatus(
@@ -25,7 +21,50 @@ data class PacMazeResourceUpdateStatus(
         get() = when {
             pendingBundleIds.isEmpty() -> ""
             pendingBundleIds.size == 1 ->
-                "${PacMazeResourceBundles.displayName(pendingBundleIds.first())}有更新"
-            else -> "角色与音效资源有更新（${pendingBundleIds.size} 项）"
+                "${GameResourceBundles.displayName(pendingBundleIds.first())}待下载"
+            else -> "游戏资源待下载（${pendingBundleIds.size} 项）"
+        }
+
+    val detailLine: String
+        get() = pendingBundleIds.joinToString(" · ") { GameResourceBundles.shortDisplayName(it) }
+}
+
+data class GameResourceLocalStatus(
+    val readyBundleIds: List<String> = emptyList(),
+    val pendingBundleIds: List<String> = emptyList(),
+) {
+    val totalCount: Int get() = GameResourceBundles.gameBootOrder.size
+    val readyCount: Int get() = readyBundleIds.size
+    val allReady: Boolean get() = pendingBundleIds.isEmpty()
+}
+
+data class GameResourceSyncUiState(
+    val isSyncing: Boolean = false,
+    val overallPercent: Int = 0,
+    val activeBundleId: String? = null,
+    val statusMessage: String? = null,
+    val errorMessage: String? = null,
+) {
+    val progressLabel: String?
+        get() = errorMessage?.takeIf { it.isNotBlank() }
+            ?: statusMessage
+            ?: activeBundleId?.let { id ->
+                val name = GameResourceBundles.displayName(id)
+                if (overallPercent > 0) "正在下载 $name… $overallPercent%" else "正在下载 $name…"
+            }
+}
+
+data class ActiveBundleDownloadProgress(
+    val bundleId: String,
+    val phase: String,
+    val percent: Int,
+) {
+    val label: String
+        get() = when (phase) {
+            "manifest" -> "检查 ${GameResourceBundles.shortDisplayName(bundleId)}…"
+            "download" -> "下载 ${GameResourceBundles.shortDisplayName(bundleId)}… $percent%"
+            "unzip" -> "解压 ${GameResourceBundles.shortDisplayName(bundleId)}…"
+            "ready" -> "${GameResourceBundles.shortDisplayName(bundleId)} 已就绪"
+            else -> GameResourceBundles.shortDisplayName(bundleId)
         }
 }

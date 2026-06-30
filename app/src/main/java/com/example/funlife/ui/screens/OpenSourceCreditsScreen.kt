@@ -1,23 +1,34 @@
 // OpenSourceCreditsScreen.kt — 开源许可与 SuperTux 致谢
 package com.example.funlife.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.funlife.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenSourceCreditsScreen(onNavigateBack: () -> Unit) {
+    val appName = LocalContext.current.getString(R.string.app_name)
     val scroll = rememberScrollState()
     Scaffold(
         topBar = {
@@ -48,13 +59,11 @@ fun OpenSourceCreditsScreen(onNavigateBack: () -> Unit) {
 
                     • 项目：https://github.com/SuperTux/supertux
                     • 许可：GPL v2+ 与 CC-BY-SA 3.0（双选，见上游 data/AUTHOR)
-                    • 改编：FunLife 离线转换为 platformer_supertux bundle，非 1:1 引擎复刻
-
-                    100% 经典玩法计划采用 Fork 引擎（见 docs/supertux-fork-strategy.md）。
+                    • 改编：$appName 离线转换为 platformer_supertux 资源包，非 1:1 引擎复刻
                 """.trimIndent(),
             )
             CreditSection(
-                title = "FunLife 改编 bundle",
+                title = "$appName 改编资源",
                 body = """
                     • platformer_supertux — 107 关（World1/2/Bonus/Redmond）
                     • platformer_sfx — 横版音效精选
@@ -64,7 +73,7 @@ fun OpenSourceCreditsScreen(onNavigateBack: () -> Unit) {
             CreditSection(
                 title = "其他开源组件",
                 body = """
-                    FunLife 还使用 Android Jetpack、Compose、Gson、PocketBase 客户端等开源库。
+                    $appName 还使用 Android Jetpack、Compose、Gson、PocketBase 客户端等开源库。
                     完整依赖列表见 Gradle 构建配置与各库官方许可。
                 """.trimIndent(),
             )

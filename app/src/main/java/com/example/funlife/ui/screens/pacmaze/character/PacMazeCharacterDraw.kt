@@ -34,6 +34,8 @@ data class PacMazeCharacterPose(
     val attackCooldownTotal: Int = 0,
     val speedBoostActive: Boolean = false,
     val isDead: Boolean = false,
+    /** 横版/跳跃：离地时优先 jump 片段 */
+    val airborne: Boolean = false,
     /** 云端皮肤：仅绘制 preview 封面（网格未选中时） */
     val preferCoverOnly: Boolean = false,
     /** 局内速度 X（格/秒），供 ikun 横版位图在上下移动时保持水平朝向 */

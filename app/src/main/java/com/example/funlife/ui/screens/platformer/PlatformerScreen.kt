@@ -206,12 +206,17 @@ fun PlatformerScreen(onNavigateBack: () -> Unit) {
                             return@PlatformerLevelSelectPanel
                         }
                         scope.launch {
-                            classicPrepLevel = stl
-                            classicPrepProgress = 0
-                            classicPrepStage = "准备 SuperTux 经典引擎…"
+                            val needsPrep = !SuperTuxClassicLauncher.isGameDataReady(context)
+                            if (needsPrep) {
+                                classicPrepLevel = stl
+                                classicPrepProgress = 0
+                                classicPrepStage = "准备 SuperTux 经典引擎…"
+                            }
                             val ok = SuperTuxClassicLauncher.prepareAndStart(context, stl) { p ->
-                                classicPrepProgress = p.percent
-                                classicPrepStage = p.stage
+                                if (needsPrep) {
+                                    classicPrepProgress = p.percent
+                                    classicPrepStage = p.stage
+                                }
                             }
                             classicPrepProgress = -1
                             classicPrepStage = ""

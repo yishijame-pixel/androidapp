@@ -66,8 +66,8 @@ object PlayStateFactory {
         val existing = lobby.pacMaze ?: initialPacMazeLobby(hostPbId)
         val seed = existing.matchSeed.takeIf { it != 0L }
             ?: (hostPbId.hashCode().toLong() xor guestPbId.hashCode().toLong() xor System.currentTimeMillis())
-        val arenaIndex = (kotlin.math.abs(seed) % 3).toInt()
-        val arenaId = "arena_00${arenaIndex + 1}"
+        val arenaIndex = (kotlin.math.abs(seed) % 6).toInt()
+        val arenaId = "arena_%03d".format(arenaIndex + 1)
         return lobby.copy(
             pacMaze = existing.copy(
                 matchSeed = seed,

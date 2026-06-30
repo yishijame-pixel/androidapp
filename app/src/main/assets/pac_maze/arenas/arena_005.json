@@ -1,0 +1,46 @@
+{
+  "id": "arena_005",
+  "name": "双门回廊",
+  "width": 15,
+  "height": 17,
+  "grid": [
+    "###############",
+    "#*o.b.o|b.o.b*#",
+    "#o.obo.|bo.obo#",
+    "#.o.b.o|b.o.b.#",
+    "#o.o@o.|bo@obo#",
+    "#.o.b.o|b.o.b.#",
+    "#o.obo.|bo.obo#",
+    "#.o.b.o|b.o.b.#",
+    "#o=obo.|bo.obo#",
+    "#.o.b.o|b.o.b.#",
+    "#o.obo.|bo.obo#",
+    "#.o.b.o|b.o.b.#",
+    "#o.obo.|bo.obo#",
+    "#.o.b.o|b.o.b.#",
+    "#o.obo.|bo.obo#",
+    "#*o.b.o|b.o.b*#",
+    "###############"
+  ],
+  "spawn": {
+    "pac_a": [
+      1,
+      8
+    ],
+    "pac_b": [
+      13,
+      8
+    ],
+    "ghosts": [
+      [
+        7,
+        3
+      ],
+      [
+        7,
+        13
+      ]
+    ]
+  },
+  "themeId": "garden"
+}

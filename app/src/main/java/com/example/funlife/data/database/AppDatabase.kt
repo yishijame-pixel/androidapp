@@ -126,8 +126,9 @@ import com.example.funlife.data.dao.RecurringBillDao
         com.example.funlife.data.model.SocialMessageCache::class,      // 🆕 v58：私聊消息缓存
         com.example.funlife.data.model.SocialGameRoomCache::class,     // 🆕 v59：趣玩中心房间缓存
         com.example.funlife.data.model.PacMazeProgress::class,         // 🆕 v64：豆人迷宫进度
+        com.example.funlife.data.model.PlatformerClipCacheEntity::class, // 🆕 v67：横版 clip 磁盘索引
     ],
-    version = 66,  // 🆕 v66 - social game room pac_maze lobby cache
+    version = 67,  // 🆕 v67 - platformer clip cache metadata (Room)
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -180,6 +181,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun diaryDao(): com.example.funlife.data.dao.DiaryDao                          // 🆕 v55
     abstract fun socialDao(): com.example.funlife.data.dao.SocialDao                        // 🆕 v57
     abstract fun pacMazeProgressDao(): com.example.funlife.data.dao.PacMazeProgressDao      // 🆕 v64
+    abstract fun platformerClipCacheDao(): com.example.funlife.data.dao.PlatformerClipCacheDao // 🆕 v67
 
     companion object {
         @Volatile
@@ -1687,6 +1689,32 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         // v56 日记本分册：bookSkinId + pageSlot，按页槽位存储，皮肤间隔离
+        private val MIGRATION_66_67 = object : Migration(66, 67) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `platformer_clip_cache` (
+                        `id` TEXT NOT NULL,
+                        `catalogId` TEXT NOT NULL,
+                        `clipFolder` TEXT NOT NULL,
+                        `frameCount` INTEGER NOT NULL,
+                        `decodeTag` TEXT NOT NULL,
+                        `bundleVersion` INTEGER NOT NULL,
+                        `format` TEXT NOT NULL,
+                        `updatedAtMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_platformer_clip_cache_catalogId` ON `platformer_clip_cache` (`catalogId`)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_platformer_clip_cache_decodeTag_bundleVersion` ON `platformer_clip_cache` (`decodeTag`, `bundleVersion`)",
+                )
+            }
+        }
+
         private val MIGRATION_65_66 = object : Migration(65, 66) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
@@ -2051,6 +2079,7 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_63_64,
                 MIGRATION_64_65,
                 MIGRATION_65_66,
+                MIGRATION_66_67,
             )
             // Release 禁止 destructive migration，避免升级误删全库
             if (BuildConfig.DEBUG) {

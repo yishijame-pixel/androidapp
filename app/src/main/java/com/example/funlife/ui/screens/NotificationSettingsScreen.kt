@@ -403,4 +403,5 @@ private fun channelColor(ch: FunChannel): Color = when (ch) {
     FunChannel.BOOKKEEPING -> Color(0xFFFFA726)
     FunChannel.LETTER -> Color(0xFFB39DDB)
     FunChannel.SOCIAL -> Color(0xFF2563EB)
+    FunChannel.GAME_RESOURCE -> Color(0xFF7B1FA2)
 }

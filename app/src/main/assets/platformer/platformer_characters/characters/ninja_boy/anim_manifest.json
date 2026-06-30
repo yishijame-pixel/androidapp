@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 3,
+  "skinId": "ninja_boy",
+  "normalized": true,
+  "canvas": {
+    "w": 593,
+    "h": 555
+  },
+  "anchorFrac": {
+    "x": 0.478921,
+    "y": 0.794595
+  },
+  "clips": {
+    "attack": {
+      "count": 10,
+      "folder": "attack",
+      "prefix": "attack",
+      "sheet": {
+        "file": "attack_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "climb": {
+      "count": 10,
+      "folder": "climb",
+      "prefix": "climb",
+      "sheet": {
+        "file": "climb_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "glide": {
+      "count": 10,
+      "folder": "glide",
+      "prefix": "glide",
+      "sheet": {
+        "file": "glide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "jump": {
+      "count": 10,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "jump_attack": {
+      "count": 10,
+      "folder": "jump_attack",
+      "prefix": "jump_attack",
+      "sheet": {
+        "file": "jump_attack_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "jump_throw": {
+      "count": 10,
+      "folder": "jump_throw",
+      "prefix": "jump_throw",
+      "sheet": {
+        "file": "jump_throw_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "run": {
+      "count": 10,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "slide": {
+      "count": 10,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    },
+    "throw": {
+      "count": 10,
+      "folder": "throw",
+      "prefix": "throw",
+      "sheet": {
+        "file": "throw_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 593,
+        "cellH": 555
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "hero",
+    "title": "忍者少年",
+    "subtitle": "攀爬 · 滑翔 · 苦无",
+    "unlock": {
+      "type": "endless_tiles",
+      "value": 500
+    },
+    "abilities": [
+      "climb",
+      "glide",
+      "throw"
+    ],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

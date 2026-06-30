@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "bundleVersion": 4,
+  "bundleVersion": 5,
   "sourcePin": "94996deae99ec9a787896694a4c74f2b7186efe5",
   "levelRange": [
     901,
@@ -79,7 +79,7 @@
     },
     {
       "id": 903,
-      "title": "Somewhat Smaller Bath",
+      "title": "略小的浴池",
       "sourceStl": "world1/somewhat_smaller_bath.stl",
       "chapterId": "supertux_antarctic"
     },
@@ -115,13 +115,13 @@
     },
     {
       "id": 909,
-      "title": "Above Arctic Skies",
+      "title": "北极上空",
       "sourceStl": "world1/above_arctic_skies.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 910,
-      "title": "23rd Airborne",
+      "title": "第23空降旅",
       "sourceStl": "world1/23rd_airborne.stl",
       "chapterId": "supertux_antarctic"
     },
@@ -139,43 +139,43 @@
     },
     {
       "id": 913,
-      "title": "Entrance Cave",
+      "title": "入口洞穴",
       "sourceStl": "world1/entrance_cave.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 914,
-      "title": "Under The Ice",
+      "title": "冰层之下",
       "sourceStl": "world1/under_the_ice.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 915,
-      "title": "Living Inside Fridge",
+      "title": "冰箱之中",
       "sourceStl": "world1/living_inside_fridge.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 916,
-      "title": "Or Just Me",
+      "title": "或者只有我",
       "sourceStl": "world1/or_just_me.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 917,
-      "title": "Deep Dive Chill",
+      "title": "深潜极寒",
       "sourceStl": "world1/deep_dive_chill.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 918,
-      "title": "Ice In The Hole",
+      "title": "冰洞危机",
       "sourceStl": "world1/ice_in_the_hole.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 919,
-      "title": "End Of Tunnel",
+      "title": "隧道尽头",
       "sourceStl": "world1/end_of_tunnel.stl",
       "chapterId": "supertux_antarctic"
     },
@@ -187,19 +187,19 @@
     },
     {
       "id": 921,
-      "title": "Slippery Slide",
+      "title": "湿滑滑道",
       "sourceStl": "world1/slippery_slide.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 922,
-      "title": "Shattered Bridge",
+      "title": "破碎桥梁",
       "sourceStl": "world1/shattered_bridge.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 923,
-      "title": "Antarctic Outpost",
+      "title": "南极前哨",
       "sourceStl": "world1/antarctic_outpost.stl",
       "chapterId": "supertux_antarctic"
     },
@@ -217,13 +217,13 @@
     },
     {
       "id": 926,
-      "title": "Crystal Mine",
+      "title": "水晶矿洞",
       "sourceStl": "world1/crystal_mine.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 927,
-      "title": "Between Glaciers",
+      "title": "冰川之间",
       "sourceStl": "world1/between_glaciers.stl",
       "chapterId": "supertux_antarctic"
     },
@@ -235,19 +235,19 @@
     },
     {
       "id": 929,
-      "title": "Yeti Cutscene",
+      "title": "雪人剧情",
       "sourceStl": "world1/yeti_cutscene.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 930,
-      "title": "Castle Cutscene",
+      "title": "城堡剧情",
       "sourceStl": "world1/castle_cutscene.stl",
       "chapterId": "supertux_antarctic"
     },
     {
       "id": 931,
-      "title": "Yetiwin Cutscene",
+      "title": "雪人胜利剧情",
       "sourceStl": "world1/yetiwin_cutscene.stl",
       "chapterId": "supertux_antarctic"
     },
@@ -259,193 +259,193 @@
     },
     {
       "id": 942,
-      "title": "Rock Roll",
+      "title": "滚石奇遇",
       "sourceStl": "world2/rock_roll.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 943,
-      "title": "Shallow Green",
+      "title": "浅绿之地",
       "sourceStl": "world2/shallow_green.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 944,
-      "title": "Find Bigger Fish",
+      "title": "更大的鱼",
       "sourceStl": "world2/find_bigger_fish.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 945,
-      "title": "Mount Crushmore",
+      "title": "碎石山",
       "sourceStl": "world2/mount_crushmore.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 946,
-      "title": "Tux Builder",
+      "title": "Tux 建造师",
       "sourceStl": "world2/tux_builder.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 947,
-      "title": "Mouldy Grotto",
+      "title": "霉穴",
       "sourceStl": "world2/mouldy_grotto.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 948,
-      "title": "Wooden Roots",
+      "title": "木根迷宫",
       "sourceStl": "world2/wooden_roots.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 949,
-      "title": "Penguin On Tree",
+      "title": "树上企鹅",
       "sourceStl": "world2/penguin_on_tree.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 950,
-      "title": "Three Sheets Wind",
+      "title": "三口之风",
       "sourceStl": "world2/three_sheets_wind.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 951,
-      "title": "Bouncy Coils",
+      "title": "弹跳线圈",
       "sourceStl": "world2/bouncy_coils.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 952,
-      "title": "Granito Village",
+      "title": "花岗岩村",
       "sourceStl": "world2/granito_village.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 953,
-      "title": "Flooded Chambers",
+      "title": "淹没密室",
       "sourceStl": "world2/flooded_chambers.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 954,
-      "title": "Drop Ball",
+      "title": "落球机关",
       "sourceStl": "world2/drop_ball.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 955,
-      "title": "Crumbling Path",
+      "title": "崩裂之路",
       "sourceStl": "world2/crumbling_path.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 956,
-      "title": "Owls Skydive Commando",
+      "title": "猫头鹰跳伞队",
       "sourceStl": "world2/owls_skydive_commando.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 957,
-      "title": "Shocking",
+      "title": "电击陷阱",
       "sourceStl": "world2/shocking.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 958,
-      "title": "Going Underground",
+      "title": "地下行进",
       "sourceStl": "world2/going_underground.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 959,
-      "title": "Cave Patrol",
+      "title": "洞穴巡逻",
       "sourceStl": "world2/cave_patrol.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 960,
-      "title": "Through Dark",
+      "title": "穿越黑暗",
       "sourceStl": "world2/through_dark.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 961,
-      "title": "Entangled Roots",
+      "title": "缠绕之根",
       "sourceStl": "world2/entangled_roots.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 962,
-      "title": "Square Root Agony",
+      "title": "平方根之痛",
       "sourceStl": "world2/square_root_agony.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 963,
-      "title": "Worse Salmonella",
+      "title": "沙门菌危机",
       "sourceStl": "world2/worse_salmonella.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 964,
-      "title": "Home Dead Home",
+      "title": "家不成家",
       "sourceStl": "world2/home_dead_home.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 965,
-      "title": "Hollow Earth",
+      "title": "空心地球",
       "sourceStl": "world2/hollow_earth.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 966,
-      "title": "Sticks Stones",
+      "title": "棍石齐飞",
       "sourceStl": "world2/sticks_stones.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 967,
-      "title": "Root For You",
+      "title": "为你扎根",
       "sourceStl": "world2/root_for_you.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 968,
-      "title": "Striking Wood",
+      "title": "击木成路",
       "sourceStl": "world2/striking_wood.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 969,
-      "title": "Collapse Imminent",
+      "title": "崩塌在即",
       "sourceStl": "world2/collapse_imminent.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 970,
-      "title": "Rooted Tower",
+      "title": "根须高塔",
       "sourceStl": "world2/rooted_tower.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 971,
-      "title": "Floral Blossom",
+      "title": "花开时节",
       "sourceStl": "world2/floral_blossom.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 972,
-      "title": "Ancient Ruin",
+      "title": "古代遗迹",
       "sourceStl": "world2/ancient_ruin.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 973,
-      "title": "Lost Sanctuary",
+      "title": "失落圣所",
       "sourceStl": "world2/lost_sanctuary.stl",
       "chapterId": "supertux_forest"
     },
@@ -457,253 +457,253 @@
     },
     {
       "id": 975,
-      "title": "Forest Intro",
+      "title": "森林序章",
       "sourceStl": "world2/forest_intro.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 976,
-      "title": "Corrupted Cutscene",
+      "title": "腐化剧情",
       "sourceStl": "world2/corrupted_cutscene.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 977,
-      "title": "Ghosttreewin Cutscene",
+      "title": "幽灵树胜利剧情",
       "sourceStl": "world2/ghosttreewin_cutscene.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 978,
-      "title": "Ghosttree Cutscene",
+      "title": "幽灵树剧情",
       "sourceStl": "world2/ghosttree_cutscene.stl",
       "chapterId": "supertux_forest"
     },
     {
       "id": 981,
-      "title": "Where Everything Possible",
+      "title": "一切皆有可能",
       "sourceStl": "bonus1/where_everything_possible.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 982,
-      "title": "Fjerd",
+      "title": "峡湾",
       "sourceStl": "bonus1/fjerd.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 983,
-      "title": "Bonus Dias",
+      "title": "奖励 Dias",
       "sourceStl": "bonus1/bonus_dias.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 984,
-      "title": "Maze In Sky",
+      "title": "空中迷宫",
       "sourceStl": "bonus1/maze_in_sky.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 985,
-      "title": "Mysterious House Of Ice",
+      "title": "神秘冰屋",
       "sourceStl": "bonus1/mysterious_house_of_ice.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 986,
-      "title": "Snow Bowling",
+      "title": "雪地保龄",
       "sourceStl": "bonus1/snow_bowling.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 987,
-      "title": "Pipe Down Over There",
+      "title": "管道入口",
       "sourceStl": "bonus1/pipe_down_over_there.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 988,
-      "title": "Tip Of Iceberg",
+      "title": "冰山一角",
       "sourceStl": "bonus1/tip_of_iceberg.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 989,
-      "title": "Train Leaves In One Minute",
+      "title": "一分钟发车",
       "sourceStl": "bonus1/train_leaves_in_one_minute.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 990,
-      "title": "Cave Of Mirrors",
+      "title": "镜之洞穴",
       "sourceStl": "bonus1/cave_of_mirrors.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 991,
-      "title": "Crumbel Cavern",
+      "title": "面包屑洞穴",
       "sourceStl": "bonus1/crumbel_cavern.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 992,
-      "title": "All That Glistens",
+      "title": "闪光皆诱惑",
       "sourceStl": "bonus1/all_that_glistens.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 993,
-      "title": "Luft Airship",
+      "title": "Luft 飞艇",
       "sourceStl": "bonus1/luft_airship.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 994,
-      "title": "Mario",
+      "title": "马里奥致敬关",
       "sourceStl": "bonus1/mario.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 995,
-      "title": "High Gravity",
+      "title": "高重力",
       "sourceStl": "bonus1/high_gravity.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 996,
-      "title": "Snowmans Land",
+      "title": "雪人国",
       "sourceStl": "bonus1/snowmans_land.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 997,
-      "title": "Let Us Snow",
+      "title": "让雪落下",
       "sourceStl": "bonus1/let_us_snow.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 998,
-      "title": "Ice Test",
+      "title": "冰雪试炼",
       "sourceStl": "bonus1/ice_test.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 999,
-      "title": "End Of Ice Age",
+      "title": "冰河期末日",
       "sourceStl": "bonus1/end_of_ice_age.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1000,
-      "title": "Penguins Cant Fly",
+      "title": "企鹅不会飞",
       "sourceStl": "bonus1/penguins_cant_fly.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1001,
-      "title": "Lies",
+      "title": "谎言",
       "sourceStl": "bonus1/lies.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1002,
-      "title": "Area 42",
+      "title": "42 区",
       "sourceStl": "bonus1/area_42.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1003,
-      "title": "Noloks Party Pit",
+      "title": "Nolok 派对坑",
       "sourceStl": "bonus1/noloks_party_pit.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1004,
-      "title": "Semi Frozen",
+      "title": "半冻结",
       "sourceStl": "bonus1/semi_frozen.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1005,
-      "title": "Fire In The Sky",
+      "title": "空中烈火",
       "sourceStl": "bonus1/fire_in_the_sky.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1006,
-      "title": "Castle In Sky",
+      "title": "天空城堡",
       "sourceStl": "bonus1/castle_in_sky.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1007,
-      "title": "Flanders Ice Field",
+      "title": "弗兰德冰原",
       "sourceStl": "bonus1/flanders_ice_field.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1008,
-      "title": "Another Cold Day",
+      "title": "又一个寒冷日",
       "sourceStl": "bonus1/another_cold_day.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1009,
-      "title": "Snowy Sunset",
+      "title": "雪色夕阳",
       "sourceStl": "bonus1/snowy_sunset.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1010,
-      "title": "Refisherator",
+      "title": "制冷再制",
       "sourceStl": "bonus1/refisherator.stl",
       "chapterId": "supertux_bonus"
     },
     {
       "id": 1011,
-      "title": "Antarctica",
+      "title": "南极",
       "sourceStl": "revenge_in_redmond/antarctica.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1012,
-      "title": "Who Is Gown",
+      "title": "谁在穿袍",
       "sourceStl": "revenge_in_redmond/who_is_gown.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1013,
-      "title": "Long Office Nights",
+      "title": "漫长办公夜",
       "sourceStl": "revenge_in_redmond/long_office_nights.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1014,
-      "title": "Get To Choppa",
+      "title": "快上直升机",
       "sourceStl": "revenge_in_redmond/get_to_choppa.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1015,
-      "title": "Where My Super Cape",
+      "title": "我的超级披风呢",
       "sourceStl": "revenge_in_redmond/where_my_super_cape.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1016,
-      "title": "Redmond Headquarters",
+      "title": "Redmond 总部",
       "sourceStl": "revenge_in_redmond/redmond_headquarters.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1017,
-      "title": "Intro",
+      "title": "Redmond 序章",
       "sourceStl": "revenge_in_redmond/intro.stl",
       "chapterId": "supertux_redmond"
     },
     {
       "id": 1018,
-      "title": "Outro",
+      "title": "Redmond 终章",
       "sourceStl": "revenge_in_redmond/outro.stl",
       "chapterId": "supertux_redmond"
     }

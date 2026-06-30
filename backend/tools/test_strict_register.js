@@ -10,8 +10,9 @@
 
 const crypto = require("crypto");
 const https = require("https");
+const { loadBaseUrl } = require("./_loadBaseUrl");
 
-const BASE_URL = "https://funlife-prod-d8gxf7og0518b8253-1333176506.ap-shanghai.app.tcloudbase.com";
+const BASE_URL = loadBaseUrl();
 
 // 已知"已 used"的内测码（用户截图中确认作废）
 const USED_BETA_CODE = "FL-AUEX-ZABY-JBQN";

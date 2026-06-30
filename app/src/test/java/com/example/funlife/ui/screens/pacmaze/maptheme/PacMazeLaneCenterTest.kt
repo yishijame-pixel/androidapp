@@ -48,7 +48,7 @@ class PacMazeLaneCenterTest {
     }
 
     @Test
-    fun assetBitmapDrawCenter_matchesPathCenter() {
+    fun bitmapDrawCenter_usesWalkableCorridorCenter() {
         val entity = PacMazeEntity(
             id = "pac",
             role = "pac",
@@ -58,10 +58,10 @@ class PacMazeLaneCenterTest {
             speed = 0f,
         )
         val ctx = context(entity)
-        val logical = ctx.entityCenter(entity)
         val draw = ctx.playerDrawCenter(entity, PacMazeSkinId.FOOD_CHICK_DAZE)
-        assertEquals(logical.x, draw.x, 0.001f)
-        assertEquals(logical.y, draw.y, 0.001f)
+        val corridor = ctx.entityBitmapCorridorCenter(entity)
+        assertEquals(corridor.x, draw.x, 0.001f)
+        assertEquals(corridor.y, draw.y, 0.001f)
     }
 
     @Test
@@ -79,6 +79,42 @@ class PacMazeLaneCenterTest {
         val draw = ctx.playerDrawCenter(entity, PacMazeSkinId.LINE_BUNNY)
         assertEquals(logical.x, draw.x, 0.001f)
         assertNotEquals(logical.y, draw.y, 0.001f)
+    }
+
+    @Test
+    fun bitmapCorridorCenterY_smoothAcrossTileBoundary() {
+        val entity = PacMazeEntity(
+            id = "pac",
+            role = "pac",
+            x = 1f,
+            y = 1f,
+            direction = Direction.UP,
+            speed = 1f,
+            velY = -1f,
+        )
+        val ctx = context(entity)
+        val before = ctx.entityBitmapCorridorCenter(entity.copy(y = 1.95f)).y
+        val after = ctx.entityBitmapCorridorCenter(entity.copy(y = 2.05f)).y
+        val delta = kotlin.math.abs(after - before)
+        assertTrue(delta in 0.5f..15f)
+    }
+
+    @Test
+    fun bitmapWallBox_top_smoothAcrossTileBoundary() {
+        val entity = PacMazeEntity(
+            id = "pac",
+            role = "pac",
+            x = 1f,
+            y = 1f,
+            direction = Direction.UP,
+            speed = 1f,
+            velY = -1f,
+        )
+        val ctx = context(entity)
+        val before = ctx.entityBitmapWallBox(entity.copy(y = 1.95f)).top
+        val after = ctx.entityBitmapWallBox(entity.copy(y = 2.05f)).top
+        val delta = kotlin.math.abs(after - before)
+        assertTrue(delta in 0.5f..15f)
     }
 
     @Test

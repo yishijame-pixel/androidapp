@@ -5,12 +5,18 @@ import com.example.funlife.BuildConfig
 import com.example.funlife.resource.BundleEnsureFailure
 import com.example.funlife.resource.BundleEnsureResult
 import com.example.funlife.resource.BundleLoadProgress
+import com.example.funlife.game.platformer.catalog.PlatformerAssetService
+import com.example.funlife.game.platformer.catalog.PlatformerDecodeWorker
+import com.example.funlife.resource.GameResourceBundles
 import com.example.funlife.resource.PacMazeResourceBundles
 import com.example.funlife.resource.PacMazeResourceUpdateNotifier
 import com.example.funlife.resource.ResourceStore
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCache
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinAssetCache
+import com.example.funlife.ui.screens.platformer.PlatformerBootCache
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 enum class PacMazeBootStatus {
     LOADING,
@@ -72,6 +78,7 @@ object PacMazeBootstrap {
 
         val skinsCached = ResourceStore.isPacMazeBundleReady(PacMazeResourceBundles.SKINS)
         val sfxCached = ResourceStore.isPacMazeBundleReady(PacMazeResourceBundles.SFX)
+        val platformerCached = ResourceStore.isPacMazeBundleReady(GameResourceBundles.PLATFORMER)
 
         if (offlineBackend) {
             val resourcesReady = skinsCached && sfxCached
@@ -89,16 +96,23 @@ object PacMazeBootstrap {
                 else -> "未连接资源服务器，云端资源不可用"
             }
             emit("进入大厅", 100, hint)
-            delay(280L)
+            delay(180L)
+            if (skinsCached || sfxCached) {
+                PlatformerAssetService.ensureInitialized(context)
+                withContext(Dispatchers.IO) { PlatformerBootCache.warmMapAssets(context) }
+                PlatformerAssetService.prewarmAsync(context)
+            }
             return PacMazeBootResult.Success(audioReady = audioReady, resourcesReady = resourcesReady)
         }
 
-        if (skinsCached && sfxCached) {
-            emit("校验本地资源", 12, "皮肤与音效包已缓存…")
+        if (skinsCached && sfxCached && platformerCached) {
+            emit("校验本地资源", 12, "游戏资源包已缓存…")
+        } else if (skinsCached && sfxCached) {
+            emit("校验本地资源", 12, "角色与音效已缓存，同步坤坤大冒险资源…")
         }
 
         val bundlesOk = ResourceStore.ensurePacMazeBootBundles(
-            bundleIds = PacMazeResourceBundles.bootOrder,
+            bundleIds = GameResourceBundles.gameBootOrder,
         ) { bundleId, progress, overall ->
             emit(
                 phase = bootPhaseLabel(progress),
@@ -138,21 +152,34 @@ object PacMazeBootstrap {
             )
         }
 
+        if (resourcesReady && skinsCached) {
+            PacMazeRemoteSkinAnimCache.warmCoverCacheAsync()
+        }
         if (resourcesReady) {
-            if (!skinsCached) {
-                PacMazeRemoteSkinAnimCache.invalidateAllCaches()
-            } else {
-                PacMazeRemoteSkinAnimCache.warmCoverCacheAsync()
-            }
             PacMazeResourceUpdateNotifier.markManifestSeen(ResourceStore.lastFetchedManifestVersion())
         }
 
+        val platformerReady = ResourceStore.isPacMazeBundleReady(GameResourceBundles.PLATFORMER)
+        if (platformerReady || resourcesReady) {
+            PlatformerAssetService.ensureInitialized(context)
+            withContext(Dispatchers.IO) {
+                PlatformerBootCache.warmMapAssets(context)
+            }
+            PlatformerAssetService.prewarmAsync(context)
+            PlatformerDecodeWorker.scheduleIdle(context.applicationContext)
+        }
+
         val readyHint = when {
+            resourcesReady && platformerReady && audioReady && diag.bgmPlaying ->
+                "游戏资源已就绪（含坤坤大冒险）"
+            resourcesReady && platformerReady && audioReady ->
+                "游戏资源已就绪，正在启动 BGM…"
             resourcesReady && audioReady && diag.bgmPlaying -> "角色与音效已就绪"
             resourcesReady && audioReady -> "资源已就绪，正在启动 BGM…"
-            resourcesReady -> "角色资源已就绪，音效可能不可用"
+            resourcesReady && platformerReady -> "角色资源已就绪，音效可能不可用"
+            resourcesReady -> "角色资源已就绪，坤坤大冒险资源待同步"
             audioReady -> "音效已就绪，部分角色资源待同步"
-            skinsCached || sfxCached -> "部分资源可用，可进入大厅"
+            skinsCached || sfxCached || platformerCached -> "部分资源可用，可进入大厅"
             else -> "资源不完整，可稍后在大厅更新"
         }
         onUpdate(
@@ -165,7 +192,7 @@ object PacMazeBootstrap {
                 resourcesReady = resourcesReady,
             ),
         )
-        delay(if (audioReady && resourcesReady) 520L else 320L)
+        delay(if (audioReady && resourcesReady) 220L else 180L)
         return PacMazeBootResult.Success(
             audioReady = audioReady,
             resourcesReady = resourcesReady,
@@ -181,11 +208,11 @@ object PacMazeBootstrap {
     }
 
     private fun bootSubtitle(bundleId: String, progress: BundleLoadProgress): String {
-        val name = PacMazeResourceBundles.displayName(bundleId)
+        val name = GameResourceBundles.displayName(bundleId)
         return when (progress.phase) {
             "download" -> "下载$name… ${progress.percent}%"
             "unzip" -> "解压$name…"
-            "manifest" -> "同步云端清单…"
+            "manifest" -> "同步资源清单…"
             "ready" -> "$name 已就绪"
             else -> name
         }

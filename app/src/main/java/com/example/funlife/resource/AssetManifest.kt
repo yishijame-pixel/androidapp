@@ -5,6 +5,10 @@ data class AssetBundleInfo(
     val file: String,
     val targetDir: String,
     val url: String?,
+    /** 可选：SHA-256 hex（小写），App 下载后校验 */
+    val sha256: String? = null,
+    /** 包内 bundle_version.txt，由发布脚本写入 manifest，App 以此为准而非硬编码常量 */
+    val bundleVersion: Int? = null,
 )
 
 data class AssetManifestResponse(
@@ -43,7 +47,7 @@ sealed class BundleEnsureResult {
             BundleEnsureFailure.MANIFEST_UNAVAILABLE ->
                 "无法连接资源服务器，请稍后重试"
             BundleEnsureFailure.BUNDLE_NOT_IN_MANIFEST ->
-                "云端尚未发布豆人迷宫资源包"
+                detail ?: "云端尚未发布该游戏资源包"
             BundleEnsureFailure.DOWNLOAD_URL_UNAVAILABLE ->
                 "无法获取资源下载链接，请确认云存储已上传"
             BundleEnsureFailure.DOWNLOAD_FAILED ->

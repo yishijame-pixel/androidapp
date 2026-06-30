@@ -163,6 +163,34 @@ object SocialGameCatalog {
             accentColors = listOf(0xFFFF6E40, 0xFF7C4DFF),
             durationLabel = "随时开玩",
         ),
+        SocialGameEntry(
+            gameId = "platformer_game",
+            title = "坤坤大冒险",
+            subtitle = "横版闯关，收集与战斗",
+            iconEmoji = "🏃",
+            category = GameCategory.LOCAL_PARTY,
+            playersLabel = "单人",
+            status = GameCatalogStatus.LIVE,
+            localRoute = "platformer_game",
+            sortOrder = 24,
+            tags = listOf("单机", "横屏"),
+            accentColors = listOf(0xFF66BB6A, 0xFF26A69A),
+            durationLabel = "随时开玩",
+        ),
+        SocialGameEntry(
+            gameId = "treasure_hunter_game",
+            title = "宝藏猎人",
+            subtitle = "探索地牢，寻找宝藏",
+            iconEmoji = "💎",
+            category = GameCategory.LOCAL_PARTY,
+            playersLabel = "单人",
+            status = GameCatalogStatus.LIVE,
+            localRoute = "treasure_hunter_game",
+            sortOrder = 25,
+            tags = listOf("单机"),
+            accentColors = listOf(0xFF5C6BC0, 0xFF7E57C2),
+            durationLabel = "随时开玩",
+        ),
     )
 
     fun find(gameId: String): SocialGameEntry? = all.firstOrNull { it.gameId == gameId }
@@ -172,6 +200,8 @@ object SocialGameCatalog {
             .sortedWith(compareBy({ it.status.ordinal }, { it.sortOrder }))
 
     fun localPartyGames(): List<SocialGameEntry> =
-        all.filter { it.category == GameCategory.LOCAL_PARTY || it.gameId == "pac_maze" }
-            .sortedBy { it.sortOrder }
+        all.filter {
+            it.category == GameCategory.LOCAL_PARTY ||
+                it.gameId == "pac_maze"
+        }.sortedBy { it.sortOrder }
 }

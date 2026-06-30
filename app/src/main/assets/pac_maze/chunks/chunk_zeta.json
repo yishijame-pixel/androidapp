@@ -1,0 +1,67 @@
+{
+  "id": 106,
+  "name": "无尽块·糖霜",
+  "width": 13,
+  "height": 13,
+  "grid": [
+    "#############",
+    "#o.owo.owo.o#",
+    "#.*.o.o.o.*.#",
+    "#o.o.o.o.o.o#",
+    "#.o.w.G.w.o.#",
+    "#o.o.o.o.o.o#",
+    "#.o.o.&.o@o.#",
+    "#o.owo.owo.o#",
+    "#.o.o.o.o.o.#",
+    "#o.o.o.o.o.o#",
+    "#.*.w.o.w.*.#",
+    "#o.o.o.o.o.o#",
+    "#############"
+  ],
+  "spawn": {
+    "pac": [
+      6,
+      11
+    ],
+    "ghosts": [
+      [
+        2,
+        2
+      ],
+      [
+        10,
+        2
+      ],
+      [
+        6,
+        5
+      ]
+    ]
+  },
+  "itemSpawners": [
+    {
+      "id": "zeta_a",
+      "x": 4,
+      "y": 9,
+      "intervalTicks": 700,
+      "pool": [
+        "speed",
+        "double"
+      ]
+    },
+    {
+      "id": "zeta_b",
+      "x": 8,
+      "y": 9,
+      "intervalTicks": 700,
+      "pool": [
+        "shield",
+        "magnet"
+      ]
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 0.95,
+    "ai_aggression": 0.55
+  }
+}

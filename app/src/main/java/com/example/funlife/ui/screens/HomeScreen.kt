@@ -46,8 +46,8 @@ import com.example.funlife.data.model.UserPreferences
 import com.example.funlife.utils.AvatarImageLoader
 import com.example.funlife.utils.UserAvatarBitmapCache
 import com.example.funlife.utils.AvatarStorageHelper
+import com.example.funlife.ui.components.GameResourceBanner
 import com.example.funlife.viewmodel.AnniversaryViewModel
-import com.example.funlife.viewmodel.ScoreViewModel
 import com.example.funlife.viewmodel.GoalViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,14 +67,12 @@ import kotlin.math.PI
 fun HomeScreen(
     navController: NavController,
     anniversaryViewModel: AnniversaryViewModel,
-    scoreViewModel: ScoreViewModel,
     authViewModel: com.example.funlife.viewmodel.AuthViewModel,
     goalViewModel: GoalViewModel
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val anniversaries by anniversaryViewModel.anniversaries.collectAsState()
     val pinnedAnniversary by anniversaryViewModel.pinnedAnniversary.collectAsState()
-    val players by scoreViewModel.players.collectAsState()
     val userSession = authViewModel.getCurrentSession()
     val sessionUserId = remember(userSession?.userId) {
         userSession?.userId?.takeIf { it > 0L }
@@ -292,6 +290,15 @@ fun HomeScreen(
             }
         }
 
+        // 游戏资源待下载 / 下载中 / 失败重试（与趣玩中心共用 [GameResourceBanner]）
+        item {
+            GameResourceBanner(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+
         // 装饰性波浪元素
         item {
             DecorativeWaves(
@@ -339,15 +346,6 @@ fun HomeScreen(
             }
         }
 
-        // 游戏排行榜预览
-        if (players.isNotEmpty()) {
-            item {
-                LeaderboardSection(
-                    players = players.take(3),
-                    onViewAll = { navController.navigate("score_counter") },
-                )
-            }
-        }
     }
     }
 }
@@ -1915,14 +1913,11 @@ fun FunctionCardsSection(navController: NavController) {
     val items = listOf(
         FuncItem("纪念日", "🎂", listOf(Color(0xFFB39DDB), Color(0xFF9575CD)), "anniversary"),
         FuncItem("幸运转盘", "🎡", listOf(Color(0xFF64B5F6), Color(0xFF42A5F5)), "spin_wheel"),
-        FuncItem("游戏计分", "🎵", listOf(Color(0xFFFFD54F), Color(0xFFFFCA28)), "score_counter"),
         FuncItem("商城", "🛒", listOf(Color(0xFFFF6B9D), Color(0xFFFF8FB3)), "shop"),
         FuncItem("背包", "🎒", listOf(Color(0xFFFFB74D), Color(0xFFFFA726)), "inventory"),
         FuncItem("宠物屋", "🐾", listOf(Color(0xFFFFB6C1), Color(0xFFFF69B4)), "pet"),
         FuncItem("习惯打卡", "✅", listOf(Color(0xFF4DD0E1), Color(0xFF26C6DA)), "habit"),
         FuncItem("目标管理", "🎯", listOf(Color(0xFFFFB74D), Color(0xFFFFA726)), "goal"),
-        FuncItem("猜谜游戏", "🧩", listOf(Color(0xFFFF6FAE), Color(0xFF8B5CF6)), "riddle_game"),
-        FuncItem("骰子游戏", "🎲", listOf(Color(0xFFFF80AB), Color(0xFFEC407A)), "dice_game"),
         FuncItem("心情日记", "📝", listOf(Color(0xFF90CAF9), Color(0xFF64B5F6)), "mood"),
         FuncItem("VIP会员", "👑", listOf(Color(0xFFFFD700), Color(0xFFFF6B9D)), "vip"),
         FuncItem("聊天记账", "💬", listOf(Color(0xFFFF8A80), Color(0xFFFF5252)), "chat_bill"),

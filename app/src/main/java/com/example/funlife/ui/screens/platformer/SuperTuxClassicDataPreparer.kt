@@ -23,6 +23,11 @@ object SuperTuxClassicDataPreparer {
     private const val MARKER_NAME = ".extract_complete"
     private const val MIN_BYTES = 32L * 1024 * 1024
     private const val BUFFER_SIZE = 256 * 1024
+    /** Sanity probes — incomplete extractions must not pass as ready. */
+    private val PROBE_FILES = arrayOf(
+        "images/engine/icons/supertux-nightly-256x256.png",
+        "levels/world1/welcome_antarctica.stl",
+    )
 
     data class Progress(val percent: Int, val stage: String)
 
@@ -44,10 +49,11 @@ object SuperTuxClassicDataPreparer {
     fun isExtracted(context: Context): Boolean {
         val appContext = context.applicationContext
         val zip = targetFile(appContext)
-        val marker = File(dataDir(appContext), MARKER_NAME)
-        val images = File(dataDir(appContext), "images")
-        if (!marker.isFile || !images.isDirectory) return false
-        return marker.readText().trim() == zip.length().toString()
+        if (!zip.isFile || zip.length() < MIN_BYTES) return false
+        val base = dataDir(appContext)
+        val marker = File(base, MARKER_NAME)
+        if (!marker.isFile || marker.readText().trim() != zip.length().toString()) return false
+        return PROBE_FILES.all { File(base, it).isFile }
     }
 
     /** Full prepare: copy zip (0–35%) then extract (35–100%). */

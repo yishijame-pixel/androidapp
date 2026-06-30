@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 3,
+  "skinId": "red_hat",
+  "normalized": true,
+  "canvas": {
+    "w": 580,
+    "h": 582
+  },
+  "anchorFrac": {
+    "x": 0.577586,
+    "y": 0.800687
+  },
+  "clips": {
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 580,
+        "cellH": 582
+      }
+    },
+    "hurt": {
+      "count": 8,
+      "folder": "hurt",
+      "prefix": "hurt",
+      "sheet": {
+        "file": "hurt_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 580,
+        "cellH": 582
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 580,
+        "cellH": 582
+      }
+    },
+    "jump": {
+      "count": 12,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 580,
+        "cellH": 582
+      }
+    },
+    "run": {
+      "count": 8,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 580,
+        "cellH": 582
+      }
+    },
+    "slide": {
+      "count": 5,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 3,
+        "rows": 2,
+        "cellW": 580,
+        "cellH": 582
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "hero",
+    "title": "小红帽",
+    "subtitle": "受击反馈",
+    "unlock": {
+      "type": "level_clear",
+      "value": 15
+    },
+    "abilities": [
+      "hurt"
+    ],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

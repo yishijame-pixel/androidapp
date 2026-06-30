@@ -11,6 +11,10 @@ import com.example.funlife.resource.ResourceStore
  */
 object PlatformerSuperTuxLevelCatalog {
 
+    private const val TAG = "PlatformerSuperTux"
+    /** Reject stale v3 cloud catalog that only listed 10 demo levels. */
+    private const val SUPERTUX_MIN_CATALOG_LEVELS = 100
+
     private val gson = Gson()
 
     data class LevelMeta(
@@ -27,8 +31,16 @@ object PlatformerSuperTuxLevelCatalog {
     )
 
     val orderedLevelIds: List<Int> by lazy {
-        loadCatalog()?.levels?.map { it.id }?.sorted()
-            ?: fallbackLevelIds()
+        val fromCatalog = loadCatalog()?.levels?.map { it.id }?.sorted()
+        if (fromCatalog != null && fromCatalog.size >= SUPERTUX_MIN_CATALOG_LEVELS) {
+            fromCatalog
+        } else {
+            android.util.Log.w(
+                TAG,
+                "SuperTux catalog incomplete (count=${fromCatalog?.size ?: 0}), using fallback 107 ids",
+            )
+            fallbackLevelIds()
+        }
     }
 
     val all: List<PlatformerLevelDef> by lazy {
@@ -40,6 +52,15 @@ object PlatformerSuperTuxLevelCatalog {
     fun isSuperTuxLevel(levelId: Int): Boolean =
         PlatformerSuperTuxLengthSpec.isSuperTuxLevel(levelId) &&
             orderedLevelIds.contains(levelId)
+
+    /** 经典引擎 `.stl` 相对路径，如 `world1/welcome_antarctica.stl`。 */
+    fun sourceStl(levelId: Int): String? {
+        loadLevelJson(levelId)?.sourceStl?.takeIf { it.isNotBlank() }?.let { return it }
+        return loadCatalog()?.levels
+            ?.firstOrNull { it.id == levelId }
+            ?.sourceStl
+            ?.takeIf { it.isNotBlank() }
+    }
 
     fun nextLevelId(currentId: Int): Int? {
         val ids = orderedLevelIds
@@ -90,7 +111,7 @@ object PlatformerSuperTuxLevelCatalog {
         val range = chapter?.levelRange ?: listOf(SUPERTUX_LEVEL_START, SUPERTUX_LEVEL_END)
         val orderBase = range.firstOrNull() ?: SUPERTUX_LEVEL_START
         val order = (levelId - orderBase + 1).coerceAtLeast(1)
-        val resolvedTitle = title ?: catalogTitle(levelId) ?: json?.title ?: "SuperTux $levelId"
+        val resolvedTitle = catalogTitle(levelId) ?: title ?: json?.title ?: "SuperTux $levelId"
         val subtitle = chapter?.subtitle ?: "SuperTux · 改编"
         return LevelMeta(
             id = levelId,
@@ -196,6 +217,7 @@ object PlatformerSuperTuxLevelCatalog {
         val id: Int,
         val title: String,
         val chapterId: String? = null,
+        @SerializedName("sourceStl") val sourceStl: String? = null,
     )
 
     private data class ChapterEntry(
@@ -211,6 +233,7 @@ object PlatformerSuperTuxLevelCatalog {
         val id: Int = 0,
         val title: String = "",
         val subtitle: String = "",
+        @SerializedName("sourceStl") val sourceStl: String? = null,
         @SerializedName("chapterId") val chapterId: String? = null,
         @SerializedName("seriesId") val seriesId: String? = null,
         @SerializedName("bgmEvent") val bgmEvent: String? = null,

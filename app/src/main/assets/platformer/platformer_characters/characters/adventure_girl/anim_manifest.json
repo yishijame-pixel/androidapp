@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 3,
+  "skinId": "adventure_girl",
+  "normalized": true,
+  "canvas": {
+    "w": 624,
+    "h": 610
+  },
+  "anchorFrac": {
+    "x": 0.429487,
+    "y": 0.808197
+  },
+  "clips": {
+    "attack": {
+      "count": 7,
+      "folder": "attack",
+      "prefix": "attack",
+      "sheet": {
+        "file": "attack_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 624,
+        "cellH": 610
+      }
+    },
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 624,
+        "cellH": 610
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 624,
+        "cellH": 610
+      }
+    },
+    "jump": {
+      "count": 10,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 624,
+        "cellH": 610
+      }
+    },
+    "run": {
+      "count": 8,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 624,
+        "cellH": 610
+      }
+    },
+    "shoot": {
+      "count": 3,
+      "folder": "shoot",
+      "prefix": "shoot",
+      "sheet": {
+        "file": "shoot_sheet.webp",
+        "columns": 2,
+        "rows": 2,
+        "cellW": 624,
+        "cellH": 610
+      }
+    },
+    "slide": {
+      "count": 5,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 3,
+        "rows": 2,
+        "cellW": 624,
+        "cellH": 610
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "hero",
+    "title": "冒险少女",
+    "subtitle": "近战 · 射击",
+    "unlock": {
+      "type": "level_clear",
+      "value": 5
+    },
+    "abilities": [
+      "shoot",
+      "melee"
+    ],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

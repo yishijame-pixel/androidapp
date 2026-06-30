@@ -1,0 +1,579 @@
+{
+  "schemaVersion": 1,
+  "bundleVersion": 1,
+  "generatedFrom": "d:\\download",
+  "characters": [
+    {
+      "id": "temple_runner",
+      "title": "神庙跑者",
+      "subtitle": "跑酷 · 滑铲",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/temple_runner",
+      "sourceZip": "templerun.zip",
+      "unlock": {
+        "type": "default",
+        "value": 0
+      },
+      "abilities": [],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "adventure_girl",
+      "title": "冒险少女",
+      "subtitle": "近战 · 射击",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/adventure_girl",
+      "sourceZip": "adventure_girl.zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 5
+      },
+      "abilities": [
+        "shoot",
+        "melee"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "ninja_girl",
+      "title": "忍者少女",
+      "subtitle": "攀爬 · 滑翔 · 苦无",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/ninja_girl",
+      "sourceZip": "ninjagirlnew.zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 12
+      },
+      "abilities": [
+        "climb",
+        "glide",
+        "throw"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "ninja_boy",
+      "title": "忍者少年",
+      "subtitle": "攀爬 · 滑翔 · 苦无",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/ninja_boy",
+      "sourceZip": "ninjaadventurenew.zip",
+      "unlock": {
+        "type": "endless_tiles",
+        "value": 500
+      },
+      "abilities": [
+        "climb",
+        "glide",
+        "throw"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "jack",
+      "title": "杰克",
+      "subtitle": "滑铲 · 跑酷",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/jack",
+      "sourceZip": "jackfree.zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 8
+      },
+      "abilities": [
+        "slide"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "red_hat",
+      "title": "小红帽",
+      "subtitle": "受击反馈",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/red_hat",
+      "sourceZip": "redhatfiles.zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 15
+      },
+      "abilities": [
+        "hurt"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "robot",
+      "title": "战斗机器人",
+      "subtitle": "射击 · 近战",
+      "group": "hero",
+      "assetRoot": "platformer_characters/characters/robot",
+      "sourceZip": "robotfree.zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 20
+      },
+      "abilities": [
+        "shoot",
+        "melee"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "dino",
+      "title": "小恐龙",
+      "subtitle": "重型跳跃",
+      "group": "heavy",
+      "assetRoot": "platformer_characters/characters/dino",
+      "sourceZip": "freedinosprite.zip",
+      "unlock": {
+        "type": "endless_tiles",
+        "value": 300
+      },
+      "abilities": [],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "knight",
+      "title": "圣骑士",
+      "subtitle": "攻击 · 跳攻",
+      "group": "heavy",
+      "assetRoot": "platformer_characters/characters/knight",
+      "sourceZip": "freeknight.zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 25
+      },
+      "abilities": [
+        "attack",
+        "jump_attack"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "santa",
+      "title": "圣诞老人",
+      "subtitle": "节日限定",
+      "group": "event",
+      "assetRoot": "platformer_characters/characters/santa",
+      "sourceZip": "santasprites.zip",
+      "unlock": {
+        "type": "event",
+        "value": 1
+      },
+      "abilities": [
+        "slide"
+      ],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "cat",
+      "title": "猫咪",
+      "subtitle": "宠物系",
+      "group": "pet",
+      "assetRoot": "platformer_characters/characters/cat",
+      "sourceZip": "catndog (1).zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 10
+      },
+      "abilities": [],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "dog",
+      "title": "狗狗",
+      "subtitle": "宠物系",
+      "group": "pet",
+      "assetRoot": "platformer_characters/characters/dog",
+      "sourceZip": "catndog (1).zip",
+      "unlock": {
+        "type": "level_clear",
+        "value": 10
+      },
+      "abilities": [],
+      "render": {
+        "heightCellFrac": 1.55,
+        "mirrorDefault": true
+      },
+      "requiredClips": [
+        "idle",
+        "run",
+        "jump",
+        "die"
+      ]
+    },
+    {
+      "id": "chick_pro_max",
+      "title": "行走小鸡 Pro Max",
+      "subtitle": "官方角色 · 默认",
+      "group": "default",
+      "assetRoot": "pac_maze_skins/food_chick_walker_pro_max",
+      "source": "pac_maze",
+      "unlock": {
+        "type": "default",
+        "value": 0
+      }
+    },
+    {
+      "id": "treasure_hunter",
+      "title": "宝藏猎人",
+      "subtitle": "本地像素",
+      "group": "legacy",
+      "assetRoot": "platformer/characters/treasure_hunter",
+      "source": "local_apk",
+      "unlock": {
+        "type": "default",
+        "value": 0
+      }
+    },
+    {
+      "id": "pixel_walker",
+      "title": "像素行者",
+      "subtitle": "本地行走",
+      "group": "legacy",
+      "assetRoot": "platformer/player",
+      "source": "local_apk",
+      "unlock": {
+        "type": "default",
+        "value": 0
+      }
+    }
+  ],
+  "enemies": [
+    {
+      "id": "zombie_male",
+      "title": "僵尸(男)",
+      "group": "undead",
+      "assetRoot": "platformer_characters/enemies/zombie_male",
+      "sourceZip": "zombiefiles.zip",
+      "behavior": "PATROL"
+    },
+    {
+      "id": "zombie_female",
+      "title": "僵尸(女)",
+      "group": "undead",
+      "assetRoot": "platformer_characters/enemies/zombie_female",
+      "sourceZip": "zombiefiles.zip",
+      "behavior": "PATROL"
+    },
+    {
+      "id": "wild_dog",
+      "title": "野狗",
+      "group": "beast",
+      "assetRoot": "platformer_characters/enemies/wild_dog",
+      "sourceZip": "catndog (1).zip",
+      "behavior": "PATROL"
+    },
+    {
+      "id": "dino_enemy",
+      "title": "恐龙",
+      "group": "beast",
+      "assetRoot": "platformer_characters/enemies/dino_enemy",
+      "sourceZip": "freedinosprite.zip",
+      "behavior": "PATROL"
+    },
+    {
+      "id": "robot_sentry",
+      "title": "机械哨兵",
+      "group": "mech",
+      "assetRoot": "platformer_characters/enemies/robot_sentry",
+      "sourceZip": "robotfree.zip",
+      "behavior": "PATROL"
+    }
+  ],
+  "tilesets": [
+    {
+      "id": "forest",
+      "assetRoot": "platformer/tilesets/forest",
+      "theme": "PACK_FOREST",
+      "tileCount": 18,
+      "sourceZip": "freetileset (1).zip"
+    },
+    {
+      "id": "graveyard",
+      "assetRoot": "platformer/tilesets/graveyard",
+      "theme": "PACK_GRAVEYARD",
+      "tileCount": 20,
+      "sourceZip": "graveyardtilesetnew.zip"
+    },
+    {
+      "id": "scifi",
+      "assetRoot": "platformer/tilesets/scifi",
+      "theme": "PACK_SCIFI",
+      "tileCount": 15,
+      "sourceZip": "freescifiplatform (1).zip"
+    },
+    {
+      "id": "desert",
+      "assetRoot": "platformer/tilesets/desert",
+      "theme": "PACK_DESERT",
+      "tileCount": 16,
+      "sourceZip": "deserttileset (1).zip"
+    },
+    {
+      "id": "winter",
+      "assetRoot": "platformer/tilesets/winter",
+      "theme": "PACK_WINTER",
+      "tileCount": 18,
+      "sourceZip": "wintertileset (1).zip"
+    }
+  ],
+  "modes": [
+    {
+      "id": "campaign",
+      "title": "闯关",
+      "entry": "hub_default"
+    },
+    {
+      "id": "endless",
+      "title": "无尽跑酷",
+      "entry": "hub_chip"
+    },
+    {
+      "id": "temple_run",
+      "title": "神庙跑酷",
+      "characterId": "temple_runner",
+      "entry": "hub_mode",
+      "sourceZip": "templerun.zip"
+    },
+    {
+      "id": "plane_shooter",
+      "title": "天空射击",
+      "entry": "hub_mode",
+      "sourceZip": "free_plane_sprite.zip"
+    },
+    {
+      "id": "hill_climb",
+      "title": "登山挑战",
+      "entry": "hub_mode",
+      "sourceZip": "hillclimb.zip"
+    },
+    {
+      "id": "jelly_decor",
+      "title": "果冻换装",
+      "entry": "character_detail",
+      "sourceZip": "jelly.zip"
+    }
+  ],
+  "campaign": {
+    "heroChapter": {
+      "id": "heroes",
+      "title": "群英荟萃",
+      "filter": "HEROES",
+      "levelRange": [
+        63,
+        74
+      ],
+      "levels": [
+        {
+          "id": 63,
+          "title": "神庙试炼",
+          "chapter": "HEROES",
+          "tilesetId": "forest",
+          "featuredCharacterId": "temple_runner",
+          "featuredEnemyId": null,
+          "segmentProfile": "TEMPLE_TRIAL"
+        },
+        {
+          "id": 64,
+          "title": "少女远征",
+          "chapter": "HEROES",
+          "tilesetId": "desert",
+          "featuredCharacterId": "adventure_girl",
+          "featuredEnemyId": "zombie_female",
+          "segmentProfile": "SHOOT_GALLERY"
+        },
+        {
+          "id": 65,
+          "title": "忍者道场",
+          "chapter": "HEROES",
+          "tilesetId": "scifi",
+          "featuredCharacterId": "ninja_girl",
+          "featuredEnemyId": "robot_sentry",
+          "segmentProfile": "CLIMB_WALL"
+        },
+        {
+          "id": 66,
+          "title": "杰克大冒险",
+          "chapter": "HEROES",
+          "tilesetId": "winter",
+          "featuredCharacterId": "jack",
+          "featuredEnemyId": "wild_dog",
+          "segmentProfile": "SLIDE_TUNNEL"
+        },
+        {
+          "id": 67,
+          "title": "小红帽森林",
+          "chapter": "HEROES",
+          "tilesetId": "forest",
+          "featuredCharacterId": "red_hat",
+          "featuredEnemyId": "zombie_male",
+          "segmentProfile": "HURT_SPIKES"
+        },
+        {
+          "id": 68,
+          "title": "机械废墟",
+          "chapter": "HEROES",
+          "tilesetId": "scifi",
+          "featuredCharacterId": "robot",
+          "featuredEnemyId": "robot_sentry",
+          "segmentProfile": "TURRET_ALLEY"
+        },
+        {
+          "id": 69,
+          "title": "恐龙峡谷",
+          "chapter": "HEROES",
+          "tilesetId": "desert",
+          "featuredCharacterId": "dino",
+          "featuredEnemyId": "dino_enemy",
+          "segmentProfile": "HEAVY_JUMP"
+        },
+        {
+          "id": 70,
+          "title": "骑士远征",
+          "chapter": "HEROES",
+          "tilesetId": "graveyard",
+          "featuredCharacterId": "knight",
+          "featuredEnemyId": "zombie_male",
+          "segmentProfile": "MELEE_ARENA"
+        },
+        {
+          "id": 71,
+          "title": "圣诞夜行",
+          "chapter": "HEROES",
+          "tilesetId": "winter",
+          "featuredCharacterId": "santa",
+          "featuredEnemyId": null,
+          "segmentProfile": "GIFT_COLLECT"
+        },
+        {
+          "id": 72,
+          "title": "猫狗大战",
+          "chapter": "HEROES",
+          "tilesetId": "forest",
+          "featuredCharacterId": "cat",
+          "featuredEnemyId": "wild_dog",
+          "segmentProfile": "PET_DASH"
+        },
+        {
+          "id": 73,
+          "title": "果冻沼泽",
+          "chapter": "HEROES",
+          "tilesetId": "forest",
+          "featuredCharacterId": null,
+          "featuredEnemyId": "jelly_slime",
+          "segmentProfile": "BOUNCE_MARSH"
+        },
+        {
+          "id": 74,
+          "title": "群英终章",
+          "chapter": "HEROES",
+          "tilesetId": "scifi",
+          "featuredCharacterId": null,
+          "featuredEnemyId": null,
+          "segmentProfile": "HERO_FINALE"
+        }
+      ]
+    }
+  }
+}

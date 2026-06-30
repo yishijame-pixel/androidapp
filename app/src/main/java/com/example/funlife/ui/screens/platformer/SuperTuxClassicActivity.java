@@ -2,12 +2,14 @@ package com.example.funlife.ui.screens.platformer;
 
 import android.animation.ObjectAnimator;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import com.example.funlife.R;
@@ -26,8 +28,9 @@ public class SuperTuxClassicActivity extends SDLActivity {
     public static final String EXTRA_SAVE_SLOT = "save_slot";
 
     private static final String DEFAULT_LEVEL = "levels/world1/welcome_antarctica.stl";
-    private static final long MIN_OVERLAY_MS = 400L;
+    private static final long MIN_OVERLAY_MS = 500L;
     private static final long MAX_OVERLAY_MS = 120_000L;
+    private static final long TIP_ROTATE_MS = 3_500L;
 
     private static final String[] FALLBACK_STATUS = {
             "正在挂载游戏资源…",
@@ -36,14 +39,25 @@ public class SuperTuxClassicActivity extends SDLActivity {
             "正在加载关卡…",
     };
 
+    private static final String[] LOADING_TIPS = {
+            "💡 方向键控制 Tux 移动与跳跃",
+            "⭐ 收集金币可以获得更高分数",
+            "🧊 小心冰面，Tux 会滑得更远",
+            "👾 踩扁敌人可以得分",
+            "🎁 找到隐藏区域可能有奖励",
+            "⏱ 首次加载约 15～30 秒，请稍候",
+    };
+
     private View loadingOverlay;
     private ProgressBar loadingProgress;
     private TextView loadingStatus;
     private TextView loadingPercent;
-    private TextView loadingHint;
+    private TextView loadingTip;
+    private TextView loadingMascot;
     private final Handler loadingHandler = new Handler(Looper.getMainLooper());
     private long overlayShownAtMs;
     private int fallbackIndex;
+    private int tipIndex;
     private int lastNativeProgress;
     private boolean engineReady;
     private boolean overlayDismissed;
@@ -53,11 +67,34 @@ public class SuperTuxClassicActivity extends SDLActivity {
         public void run() {
             if (overlayDismissed || loadingOverlay == null) return;
             if (lastNativeProgress < 10) {
-                int synthetic = Math.min(88, (int) ((System.currentTimeMillis() - overlayShownAtMs) / 1200L));
+                int synthetic = Math.min(85, (int) ((System.currentTimeMillis() - overlayShownAtMs) / 900L));
                 applyProgress(synthetic, FALLBACK_STATUS[fallbackIndex % FALLBACK_STATUS.length]);
                 fallbackIndex++;
             }
             loadingHandler.postDelayed(this, 1200L);
+        }
+    };
+
+    private final Runnable tipTicker = new Runnable() {
+        @Override
+        public void run() {
+            if (overlayDismissed || loadingTip == null) return;
+            tipIndex = (tipIndex + 1) % LOADING_TIPS.length;
+            loadingTip.setText(LOADING_TIPS[tipIndex]);
+            loadingHandler.postDelayed(this, TIP_ROTATE_MS);
+        }
+    };
+
+    private final Runnable mascotBounce = new Runnable() {
+        @Override
+        public void run() {
+            if (overlayDismissed || loadingMascot == null) return;
+            loadingMascot.animate().translationY(-12f).setDuration(400).withEndAction(() -> {
+                if (loadingMascot != null) {
+                    loadingMascot.animate().translationY(0f).setDuration(400).start();
+                }
+            }).start();
+            loadingHandler.postDelayed(this, 900L);
         }
     };
 
@@ -69,6 +106,7 @@ public class SuperTuxClassicActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         org.supertux.supertux2.MainActivity.syncLocale();
+        applyLoadingWindow();
         Intent intent = getIntent();
         String level = intent != null ? intent.getStringExtra(EXTRA_LEVEL_STL) : null;
         Log.i(TAG, "onCreate pid=" + android.os.Process.myPid()
@@ -85,6 +123,14 @@ public class SuperTuxClassicActivity extends SDLActivity {
         attachLoadingOverlay();
     }
 
+    private void applyLoadingWindow() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            getWindow().getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+    }
+
     private void attachLoadingOverlay() {
         ViewGroup root = (ViewGroup) SDLActivity.getContentView();
         if (root == null) {
@@ -95,16 +141,20 @@ public class SuperTuxClassicActivity extends SDLActivity {
         loadingProgress = loadingOverlay.findViewById(R.id.supertux_loading_progress);
         loadingStatus = loadingOverlay.findViewById(R.id.supertux_loading_status);
         loadingPercent = loadingOverlay.findViewById(R.id.supertux_loading_percent);
-        loadingHint = loadingOverlay.findViewById(R.id.supertux_loading_hint);
-        if (SuperTuxClassicDataPreparer.isExtracted(this)) {
-            loadingHint.setText("资源已解压，正在加载关卡（约 15～30 秒）");
-        }
-        loadingOverlay.setClickable(false);
-        loadingOverlay.setFocusable(false);
-        root.addView(loadingOverlay);
+        loadingTip = loadingOverlay.findViewById(R.id.supertux_loading_tip);
+        loadingMascot = loadingOverlay.findViewById(R.id.supertux_loading_mascot);
+        loadingOverlay.setElevation(100f);
+        loadingOverlay.setClickable(true);
+        loadingOverlay.setFocusable(true);
+        ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        root.addView(loadingOverlay, lp);
         overlayShownAtMs = System.currentTimeMillis();
         applyProgress(3, "正在启动 SuperTux 引擎…");
-        loadingHandler.postDelayed(fallbackTicker, 1200L);
+        loadingHandler.postDelayed(fallbackTicker, 800L);
+        loadingHandler.postDelayed(tipTicker, TIP_ROTATE_MS);
+        loadingHandler.postDelayed(mascotBounce, 600L);
         loadingHandler.postDelayed(forceDismissRunnable, MAX_OVERLAY_MS);
     }
 
@@ -112,7 +162,22 @@ public class SuperTuxClassicActivity extends SDLActivity {
     @SuppressWarnings("unused")
     public void onEngineLoadingProgress(int percent, String stage) {
         lastNativeProgress = percent;
-        runOnUiThread(() -> applyProgress(percent, stage));
+        runOnUiThread(() -> {
+            applyProgress(percent, stage);
+            if (percent >= 92 && !engineReady) {
+                applyProgress(percent, "即将进入关卡…");
+            }
+            // 若 native 未触发 onEngineReady，进度到 95% 后自动淡出
+            if (percent >= 95 && !overlayDismissed) {
+                loadingHandler.postDelayed(() -> {
+                    if (!overlayDismissed) {
+                        engineReady = true;
+                        applyProgress(100, "进入关卡！");
+                        dismissLoadingOverlay();
+                    }
+                }, 1800L);
+            }
+        });
     }
 
     @Override
@@ -137,7 +202,7 @@ public class SuperTuxClassicActivity extends SDLActivity {
     public void onEngineReady() {
         engineReady = true;
         runOnUiThread(() -> {
-            applyProgress(100, "即将进入关卡…");
+            applyProgress(100, "进入关卡！");
             dismissLoadingOverlay();
         });
     }
@@ -161,10 +226,12 @@ public class SuperTuxClassicActivity extends SDLActivity {
         }
         overlayDismissed = true;
         loadingHandler.removeCallbacks(fallbackTicker);
+        loadingHandler.removeCallbacks(tipTicker);
+        loadingHandler.removeCallbacks(mascotBounce);
         loadingHandler.removeCallbacks(forceDismissRunnable);
         View overlay = loadingOverlay;
         ObjectAnimator fade = ObjectAnimator.ofFloat(overlay, View.ALPHA, 1f, 0f);
-        fade.setDuration(350);
+        fade.setDuration(400);
         fade.addListener(new android.animation.AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(android.animation.Animator animation) {
@@ -179,6 +246,8 @@ public class SuperTuxClassicActivity extends SDLActivity {
     @Override
     protected void onDestroy() {
         loadingHandler.removeCallbacks(fallbackTicker);
+        loadingHandler.removeCallbacks(tipTicker);
+        loadingHandler.removeCallbacks(mascotBounce);
         loadingHandler.removeCallbacks(forceDismissRunnable);
         super.onDestroy();
     }

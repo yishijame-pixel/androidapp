@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -34,7 +35,25 @@ import kotlin.math.sin
 
 internal object PacMazeEntityDraw {
 
+    /** 玩家/幽灵/弹体统一裁剪到地图内缘，避免角色超出边框。 */
+    fun withEntityMapClip(scope: DrawScope, ctx: PacMazeMapRenderContext, block: DrawScope.() -> Unit) {
+        val clip = ctx.entityMapClipRect()
+        scope.clipRect(
+            left = clip.left,
+            top = clip.top,
+            right = clip.right,
+            bottom = clip.bottom,
+            block = block,
+        )
+    }
+
     fun drawEntities(scope: DrawScope, ctx: PacMazeMapRenderContext) {
+        withEntityMapClip(scope, ctx) {
+            drawEntitiesUnclipped(this, ctx)
+        }
+    }
+
+    private fun drawEntitiesUnclipped(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val world = ctx.world
         val cell = ctx.entityCell
         val animPhase = ctx.animPhase
@@ -106,6 +125,18 @@ internal object PacMazeEntityDraw {
         pacEntities.forEach { entity ->
             val skinId = ctx.avatarLoadout.skinId
             val center = ctx.playerDrawCenter(entity, skinId)
+            val (renderX, renderY) = ctx.renderAnchor(entity)
+            com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.onRenderSample(
+                entityId = entity.id,
+                direction = entity.direction ?: entity.facing,
+                logicX = entity.x,
+                logicY = entity.y,
+                renderX = renderX,
+                renderY = renderY,
+                screenCenterY = center.y,
+                blend = ctx.blend,
+                cellYPx = ctx.cellY,
+            )
             val visualCell = min(ctx.cellX, ctx.cellY)
             val radius = PacMazeCosmeticCatalog.visualRadius(
                 cell = visualCell,

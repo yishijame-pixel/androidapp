@@ -14,14 +14,15 @@ COPY shared ./shared
 COPY admin/package.json admin/package-lock.json ./admin/
 
 WORKDIR /app/admin
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
-COPY admin/server.js admin/auth.js admin/_loadEnv.js admin/_helpers.js ./
+COPY admin/server.js admin/auth.js admin/_loadEnv.js admin/_helpers.js admin/statsCache.js ./
 COPY admin/public ./public
 
 ENV NODE_ENV=production
 ENV PORT=3300
 ENV HOST=0.0.0.0
+ENV NODE_PATH=/app/admin/node_modules
 
 EXPOSE 3300
 

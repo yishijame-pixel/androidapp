@@ -15,7 +15,7 @@ class PacMazeSkinLayoutEngineTest {
         PacMazeIkunGameplayScale.corridorAcrossSpanPx(cellPerp)
 
     @Test
-    fun baseSize_fillsCorridorAt100Percent() {
+    fun baseSize_usesBitmapCorridorSpanWithDefaultContentFill() {
         val aspect = 1.45f
         val (h, _) = PacMazeSkinLayoutEngine.computeIkunUniformSize(
             aspect = aspect,
@@ -23,7 +23,10 @@ class PacMazeSkinLayoutEngineTest {
             corridorCellPx = corridorPx,
             cellHeightFrac = heightFrac,
         )
-        assertEquals(targetAcross(corridorPx), h, 1.5f)
+        val expected = PacMazeIkunGameplayScale.bitmapCorridorAcrossSpanPx(corridorPx) *
+            PacMazeIkunGameplayScale.bitmapContentFillMul(1f, 1f) *
+            PacMazeIkunGameplayScale.BITMAP_CORRIDOR_OPAQUE_BOOST
+        assertEquals(expected, h, 1.5f)
     }
 
     @Test
@@ -97,7 +100,10 @@ class PacMazeSkinLayoutEngineTest {
         val (h, w) = PacMazeSkinLayoutEngine.computeIkunUniformSize(
             aspect, verticalPx, corridorPx, heightFrac,
         )
-        assertEquals(targetAcross(corridorPx), h, 1.5f)
+        val expected = PacMazeIkunGameplayScale.bitmapCorridorAcrossSpanPx(corridorPx) *
+            PacMazeIkunGameplayScale.bitmapContentFillMul(1f, 1f) *
+            PacMazeIkunGameplayScale.BITMAP_CORRIDOR_OPAQUE_BOOST
+        assertEquals(expected, h, 1.5f)
         assertEquals(aspect, w / h, 0.02f)
     }
 }

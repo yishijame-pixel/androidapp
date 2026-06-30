@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 3,
+  "skinId": "robot_sentry",
+  "normalized": true,
+  "canvas": {
+    "w": 589,
+    "h": 594
+  },
+  "anchorFrac": {
+    "x": 0.483871,
+    "y": 0.787879
+  },
+  "clips": {
+    "attack": {
+      "count": 8,
+      "folder": "attack",
+      "prefix": "attack",
+      "sheet": {
+        "file": "attack_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "jump": {
+      "count": 10,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "jump_attack": {
+      "count": 8,
+      "folder": "jump_attack",
+      "prefix": "jump_attack",
+      "sheet": {
+        "file": "jump_attack_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "jump_shoot": {
+      "count": 5,
+      "folder": "jump_shoot",
+      "prefix": "jump_shoot",
+      "sheet": {
+        "file": "jump_shoot_sheet.webp",
+        "columns": 3,
+        "rows": 2,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "run": {
+      "count": 8,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "run_shoot": {
+      "count": 9,
+      "folder": "run_shoot",
+      "prefix": "run_shoot",
+      "sheet": {
+        "file": "run_shoot_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "shoot": {
+      "count": 4,
+      "folder": "shoot",
+      "prefix": "shoot",
+      "sheet": {
+        "file": "shoot_sheet.webp",
+        "columns": 2,
+        "rows": 2,
+        "cellW": 589,
+        "cellH": 594
+      }
+    },
+    "slide": {
+      "count": 10,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 589,
+        "cellH": 594
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "enemy",
+    "group": "mech",
+    "title": "机械哨兵",
+    "subtitle": "",
+    "unlock": {
+      "type": "default",
+      "value": 0
+    },
+    "abilities": [],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

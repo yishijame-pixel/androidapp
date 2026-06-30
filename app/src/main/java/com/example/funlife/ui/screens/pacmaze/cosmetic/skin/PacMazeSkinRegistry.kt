@@ -1,6 +1,7 @@
 package com.example.funlife.ui.screens.pacmaze.cosmetic.skin
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterPose
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
@@ -11,15 +12,24 @@ object PacMazeSkinRegistry {
 
     /** 局内绘制时由 [draw] 注入的真实格宽（像素），供位图皮肤裁剪走廊。 */
     internal var drawCorridorCellPx: Float? = null
+    internal var drawCellXPx: Float? = null
+    internal var drawCellYPx: Float? = null
     internal var drawVerticalCellPx: Float? = null
     internal var drawTileCellPx: Float? = null
     internal var drawTileBottomYPx: Float? = null
     internal var drawFeetAnchorPx: Offset? = null
+    internal var drawCorridorCenterPx: Offset? = null
+    internal var drawWallBoxRect: Rect? = null
+    internal var drawMapClipRect: Rect? = null
     internal var drawVisualFacing: com.example.funlife.social.game.engine.pacmaze.Direction? = null
     /** 移动轴（逻辑方向），用于脚点/枢轴布局；与 [drawVisualFacing] 解耦。 */
     internal var drawTravelFacing: com.example.funlife.social.game.engine.pacmaze.Direction? = null
     internal var drawUserScale: Float = 1f
     internal var drawEntityBoost: Float = 1f
+    /** DEBUG：布局脚点诊断 */
+    internal var drawDiagEntityId: String? = null
+    internal var drawDiagLogicY: Float = Float.NaN
+    internal var drawDiagFrameIndex: Int = -1
 
     private val lineArtRenderers: Map<PacMazeSkinId, PacMazeSkinRenderer> = mapOf(
         PacMazeSkinId.LINE_PUPPY to LinePuppySkinRenderer,
@@ -81,18 +91,18 @@ object PacMazeSkinRegistry {
         PacMazeSkinId.FOOD_CHICK_DAZE to AssetBitmapSkinRenderer(PacMazeSkinId.FOOD_CHICK_DAZE),
         PacMazeSkinId.FOOD_CHICK_BALLER to AssetBitmapSkinRenderer(PacMazeSkinId.FOOD_CHICK_BALLER),
         PacMazeSkinId.FOOD_CHICK_WALKER to AssetBitmapSkinRenderer(PacMazeSkinId.FOOD_CHICK_WALKER),
-        PacMazeSkinId.FOOD_CHICK_WALKER_PRO_MAX to RemoteAnimatedSkinRenderer(PacMazeSkinId.FOOD_CHICK_WALKER_PRO_MAX),
-        PacMazeSkinId.FOOD_XIA_WALK to RemoteAnimatedSkinRenderer(PacMazeSkinId.FOOD_XIA_WALK),
-        PacMazeSkinId.FOOD_MOUSE_WALK to RemoteAnimatedSkinRenderer(PacMazeSkinId.FOOD_MOUSE_WALK),
-        PacMazeSkinId.FOOD_QINGTING_WALK to RemoteAnimatedSkinRenderer(PacMazeSkinId.FOOD_QINGTING_WALK),
-        PacMazeSkinId.FOOD_MOSQUITO_WALK to RemoteAnimatedSkinRenderer(PacMazeSkinId.FOOD_MOSQUITO_WALK),
-        PacMazeSkinId.FOOD_TOUSHI_WALK to RemoteAnimatedSkinRenderer(PacMazeSkinId.FOOD_TOUSHI_WALK),
     )
+
+    private val remoteAnimatedRenderers: Map<PacMazeSkinId, PacMazeSkinRenderer> =
+        PacMazeRemoteSkinAnimCatalog.remoteSkinIds.associateWith { skinId ->
+            RemoteAnimatedSkinRenderer(skinId)
+        }
 
     private val renderers: Map<PacMazeSkinId, PacMazeSkinRenderer> = buildMap {
         putAll(lineArtRenderers)
         putAll(seaCreatureRenderers)
         putAll(familySkinRenderers)
+        putAll(remoteAnimatedRenderers)
         PacMazeSkinId.entries.forEach { skinId ->
             if (
                 !lineArtRenderers.containsKey(skinId) &&
@@ -125,41 +135,64 @@ object PacMazeSkinRegistry {
         themeId: PacMazeMapThemeId,
         palette: PacMazeThemePalette,
         corridorCellPx: Float? = null,
+        cellXPx: Float? = null,
+        cellYPx: Float? = null,
         verticalCellPx: Float? = null,
         tileCellPx: Float? = null,
         tileBottomYPx: Float? = null,
         feetAnchorPx: Offset? = null,
+        corridorCenterPx: Offset? = null,
+        wallBoxRect: Rect? = null,
+        mapClipRect: Rect? = null,
         visualFacing: com.example.funlife.social.game.engine.pacmaze.Direction? = null,
         travelFacing: com.example.funlife.social.game.engine.pacmaze.Direction? = null,
         userDrawScale: Float = 1f,
         entityDrawBoost: Float = 1f,
     ) {
         val prevCorridor = drawCorridorCellPx
+        val prevCellX = drawCellXPx
+        val prevCellY = drawCellYPx
         val prevVertical = drawVerticalCellPx
         val prevTile = drawTileCellPx
         val prevTileBottom = drawTileBottomYPx
         val prevFeet = drawFeetAnchorPx
+        val prevCorridorCenter = drawCorridorCenterPx
+        val prevWallBox = drawWallBoxRect
+        val prevMapClip = drawMapClipRect
         val prevVisualFacing = drawVisualFacing
         val prevTravelFacing = drawTravelFacing
         val prevUser = drawUserScale
         val prevBoost = drawEntityBoost
         if (corridorCellPx != null) drawCorridorCellPx = corridorCellPx
+        if (cellXPx != null) drawCellXPx = cellXPx
+        if (cellYPx != null) drawCellYPx = cellYPx
         if (verticalCellPx != null) drawVerticalCellPx = verticalCellPx
         if (tileCellPx != null) drawTileCellPx = tileCellPx
         if (tileBottomYPx != null) drawTileBottomYPx = tileBottomYPx
         drawFeetAnchorPx = feetAnchorPx
+        drawCorridorCenterPx = corridorCenterPx
+        drawWallBoxRect = wallBoxRect
+        drawMapClipRect = mapClipRect
         drawVisualFacing = visualFacing
         drawTravelFacing = travelFacing
         drawUserScale = userDrawScale
         drawEntityBoost = entityDrawBoost
+        drawDiagEntityId = null
+        drawDiagLogicY = Float.NaN
+        drawDiagFrameIndex = -1
         try {
             renderers[skinId]?.draw(scope, center, radius, pose, themeId, palette)
         } finally {
             drawCorridorCellPx = prevCorridor
+            drawCellXPx = prevCellX
+            drawCellYPx = prevCellY
             drawVerticalCellPx = prevVertical
             drawTileCellPx = prevTile
             drawTileBottomYPx = prevTileBottom
             drawFeetAnchorPx = prevFeet
+            drawCorridorCenterPx = prevCorridorCenter
+            drawWallBoxRect = prevWallBox
+            drawMapClipRect = prevMapClip
             drawVisualFacing = prevVisualFacing
             drawTravelFacing = prevTravelFacing
             drawUserScale = prevUser

@@ -51,6 +51,13 @@ object PacMazeMazeGenerator {
             grid[y][x] = '.'
         }
 
+        scatterCorridorPellets(grid, cells, w, h, rng, pelletDensity(options))
+        placePowerPellets(grid, sortedByDist, exclude = setOf(startX to startY, exitX to exitY) + keyCells.toSet())
+        applyThemedWalls(grid, w, h, rng, themeIndex = (seed % 4).toInt())
+        if (options.difficulty != PacMazeMazeDifficulty.SCOUT) {
+            addCorridorLoops(cells, grid, w, h, rng, loopCount(options))
+        }
+
         val hintCells = if (options.hintPelletsEnabled) {
             pickHintPellets(cells, w, h, startX, startY, exitX, exitY, keyCells, rng)
         } else {
@@ -69,8 +76,19 @@ object PacMazeMazeGenerator {
             placeDynamicWalls(cells, grid, w, h, rng, exclude = keyCells + listOf(startX to startY, exitX to exitY))
         }
 
+        placeMazeMechanisms(
+            options = options,
+            cells = cells,
+            grid = grid,
+            w = w,
+            h = h,
+            rng = rng,
+            sortedByDist = sortedByDist,
+            exclude = keyCells + listOf(startX to startY, exitX to exitY),
+        )
+
         val itemSpawnerJson = if (options.placeItemRooms) {
-            buildItemSpawners(cells, w, h, rng, keyCells, deadEnds)
+            buildItemSpawners(cells, w, h, rng, keyCells, deadEnds, options)
         } else {
             ""
         }
@@ -163,17 +181,226 @@ object PacMazeMazeGenerator {
         rng: PacMazeDeterministicRng,
         keyCells: List<Pair<Int, Int>>,
         deadEnds: List<Pair<Int, Int>>,
+        options: PacMazeMazeRunOptions,
     ): String {
-        val pool = listOf(
-            PacMazeItemKind.FROST,
-            PacMazeItemKind.SPEED,
-            PacMazeItemKind.SHIELD,
-        )
-        val candidates = (deadEnds + keyCells).distinct().shuffled(rng).take(2)
+        val pool = when (options.difficulty) {
+            PacMazeMazeDifficulty.SCOUT -> listOf(
+                PacMazeItemKind.FROST,
+                PacMazeItemKind.SHIELD,
+            )
+            PacMazeMazeDifficulty.STANDARD -> listOf(
+                PacMazeItemKind.FROST,
+                PacMazeItemKind.SPEED,
+                PacMazeItemKind.SHIELD,
+                PacMazeItemKind.MAGNET,
+            )
+            PacMazeMazeDifficulty.ABYSS -> listOf(
+                PacMazeItemKind.FROST,
+                PacMazeItemKind.SPEED,
+                PacMazeItemKind.SHIELD,
+                PacMazeItemKind.MAGNET,
+                PacMazeItemKind.DOUBLE,
+                PacMazeItemKind.CHARGE,
+            )
+        }
+        val target = when (options.difficulty) {
+            PacMazeMazeDifficulty.SCOUT -> 1
+            PacMazeMazeDifficulty.STANDARD -> 2
+            PacMazeMazeDifficulty.ABYSS -> 3
+        }
+        val walkable = mutableListOf<Pair<Int, Int>>()
+        for (y in 2 until h - 2) {
+            for (x in 2 until w - 2) {
+                if (cells[y][x]) walkable.add(x to y)
+            }
+        }
+        val candidates = (deadEnds + keyCells + walkable.filter { branchingCount(cells, w, h, it.first, it.second) >= 3 })
+            .distinct()
+            .shuffled(rng)
+            .take(target)
         return candidates.mapIndexed { index, (x, y) ->
-            val kinds = pool.shuffled(rng).take(2).joinToString(prefix = "[", postfix = "]") { "\"${it.id}\"" }
-            """{ "id": "maze_item_$index", "x": $x, "y": $y, "intervalTicks": 900, "pool": $kinds }"""
+            val kinds = pool.shuffled(rng).take(3).joinToString(prefix = "[", postfix = "]") { "\"${it.id}\"" }
+            """{ "id": "maze_item_$index", "x": $x, "y": $y, "intervalTicks": 780, "pool": $kinds }"""
         }.joinToString(", ")
+    }
+
+    private fun pelletDensity(options: PacMazeMazeRunOptions): Float = when (options.difficulty) {
+        PacMazeMazeDifficulty.SCOUT -> 0.38f
+        PacMazeMazeDifficulty.STANDARD -> 0.58f
+        PacMazeMazeDifficulty.ABYSS -> 0.72f
+    }
+
+    private fun loopCount(options: PacMazeMazeRunOptions): Int = when (options.difficulty) {
+        PacMazeMazeDifficulty.SCOUT -> 0
+        PacMazeMazeDifficulty.STANDARD -> 3
+        PacMazeMazeDifficulty.ABYSS -> 5
+    }
+
+    private fun scatterCorridorPellets(
+        grid: Array<CharArray>,
+        cells: Array<BooleanArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        density: Float,
+    ) {
+        for (y in 1 until h - 1) {
+            for (x in 1 until w - 1) {
+                if (!cells[y][x] || grid[y][x] != 'o') continue
+                if (rng.nextFloat() < density) grid[y][x] = '.'
+            }
+        }
+    }
+
+    private fun placePowerPellets(
+        grid: Array<CharArray>,
+        sortedByDist: List<Map.Entry<Pair<Int, Int>, Int>>,
+        exclude: Set<Pair<Int, Int>>,
+        count: Int = 4,
+    ) {
+        val picks = sortedByDist
+            .map { it.key }
+            .filter { it !in exclude }
+            .filterIndexed { index, _ -> index % (sortedByDist.size / count.coerceAtLeast(1)).coerceAtLeast(3) == 0 }
+            .take(count)
+        picks.forEach { (x, y) ->
+            if (grid[y][x] == 'o' || grid[y][x] == '.') grid[y][x] = '*'
+        }
+    }
+
+    private fun applyThemedWalls(
+        grid: Array<CharArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        themeIndex: Int,
+    ) {
+        val themed = when (themeIndex) {
+            0 -> 'b'
+            1 -> 'w'
+            2 -> 't'
+            else -> '#'
+        }
+        if (themed == '#') return
+        for (y in 1 until h - 1) {
+            for (x in 1 until w - 1) {
+                if (grid[y][x] != '#') continue
+                val touchesFloor = Direction.entries.any { dir ->
+                    val (dx, dy) = dir.delta()
+                    val nx = x + dx
+                    val ny = y + dy
+                    nx in 0 until w && ny in 0 until h && grid[ny][nx] != '#'
+                }
+                if (touchesFloor && rng.nextFloat() < 0.48f) {
+                    grid[y][x] = themed
+                }
+            }
+        }
+    }
+
+    private fun addCorridorLoops(
+        cells: Array<BooleanArray>,
+        grid: Array<CharArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        count: Int,
+    ) {
+        if (count <= 0) return
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        for (y in 2 until h - 2) {
+            for (x in 2 until w - 2) {
+                if (cells[y][x]) continue
+                val horizontal = cells[y][x - 1] && cells[y][x + 1]
+                val vertical = cells[y - 1][x] && cells[y + 1][x]
+                if (horizontal || vertical) candidates.add(x to y)
+            }
+        }
+        candidates.shuffled(rng).take(count).forEach { (x, y) ->
+            cells[y][x] = true
+            grid[y][x] = 'o'
+        }
+    }
+
+    private fun placeMazeMechanisms(
+        options: PacMazeMazeRunOptions,
+        cells: Array<BooleanArray>,
+        grid: Array<CharArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        sortedByDist: List<Map.Entry<Pair<Int, Int>, Int>>,
+        exclude: List<Pair<Int, Int>>,
+    ) {
+        val excludeSet = exclude.toSet()
+        val midCells = sortedByDist
+            .drop(sortedByDist.size / 3)
+            .take(sortedByDist.size / 3)
+            .map { it.key }
+            .filter { it !in excludeSet && cells[it.second][it.first] }
+
+        when (options.difficulty) {
+            PacMazeMazeDifficulty.SCOUT -> {
+                placeTunnelTile(cells, grid, w, h, rng, excludeSet)
+            }
+            PacMazeMazeDifficulty.STANDARD -> {
+                placeMechanismAt(midCells, grid, rng, excludeSet) { x, y -> grid[y][x] = 'G' }
+                placeMechanismAt(midCells, grid, rng, excludeSet) { x, y -> grid[y][x] = '>' }
+                placeLaserRow(grid, w, h)
+                placeTunnelTile(cells, grid, w, h, rng, excludeSet)
+            }
+            PacMazeMazeDifficulty.ABYSS -> {
+                repeat(2) { placeMechanismAt(midCells, grid, rng, excludeSet) { x, y -> grid[y][x] = 'G' } }
+                repeat(2) { placeMechanismAt(midCells, grid, rng, excludeSet) { x, y -> grid[y][x] = '>' } }
+                placeLaserRow(grid, w, h)
+                placeLaserColumn(grid, w, h)
+                repeat(2) { placeTunnelTile(cells, grid, w, h, rng, excludeSet) }
+            }
+        }
+    }
+
+    private fun placeMechanismAt(
+        candidates: List<Pair<Int, Int>>,
+        grid: Array<CharArray>,
+        rng: PacMazeDeterministicRng,
+        exclude: Set<Pair<Int, Int>>,
+        place: (Int, Int) -> Unit,
+    ) {
+        val cell = candidates.shuffled(rng).firstOrNull { (x, y) ->
+            (x to y) !in exclude && grid[y][x] in setOf('o', '.')
+        } ?: return
+        place(cell.first, cell.second)
+    }
+
+    private fun placeLaserRow(grid: Array<CharArray>, w: Int, h: Int) {
+        val y = (h / 2).coerceIn(2, h - 3)
+        val x = (w / 2).coerceIn(2, w - 3)
+        if (grid[y][x] == 'o' || grid[y][x] == '.') grid[y][x] = 'H'
+    }
+
+    private fun placeLaserColumn(grid: Array<CharArray>, w: Int, h: Int) {
+        val y = (h / 3).coerceIn(2, h - 3)
+        val x = (w / 3).coerceIn(2, w - 3)
+        if (grid[y][x] == 'o' || grid[y][x] == '.') grid[y][x] = 'I'
+    }
+
+    private fun placeTunnelTile(
+        cells: Array<BooleanArray>,
+        grid: Array<CharArray>,
+        w: Int,
+        h: Int,
+        rng: PacMazeDeterministicRng,
+        exclude: Set<Pair<Int, Int>>,
+    ) {
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        for (y in 2 until h - 2) {
+            for (x in 2 until w - 2) {
+                if (!cells[y][x] || (x to y) in exclude) continue
+                if (branchingCount(cells, w, h, x, y) == 2) candidates.add(x to y)
+            }
+        }
+        val cell = candidates.shuffled(rng).firstOrNull() ?: return
+        grid[cell.second][cell.first] = '-'
     }
 
     private fun placePortalPair(

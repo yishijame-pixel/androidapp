@@ -17,9 +17,12 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
-    <!-- SuperTux SDL 启动前窗口背景（加载页接管前短暂显示） -->
+    <!-- SuperTux SDL：渐变背景 + 切到全屏，启动瞬间即有视觉反馈 -->
     <style name="Theme.FunLife.SuperTuxClassic" parent="android:Theme.NoTitleBar.Fullscreen">
         <item name="android:windowBackground">@drawable/supertux_loading_background</item>
         <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:statusBarColor">#1B263B</item>
+        <item name="android:navigationBarColor">#0D1B2A</item>
     </style>
 </resources>

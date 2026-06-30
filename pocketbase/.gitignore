@@ -8,6 +8,10 @@ secrets/firebase-adminsdk.json
 # 本地工具依赖（npm install 生成）
 tools/**/node_modules/
 
+# 静态游戏资源 zip（体积大，不进 git）
+assets_public/bundles/*.zip
+assets_public/manifest.json
+
 # Docker 隧道凭证（勿提交）
 docker/cloudflared/*.json
 docker/cloudflared/config.yml

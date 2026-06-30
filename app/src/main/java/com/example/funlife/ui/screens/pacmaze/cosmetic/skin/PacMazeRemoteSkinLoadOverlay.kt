@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.funlife.ui.screens.platformer.GameResourceLoadCopy
 import com.example.funlife.ui.screens.pacmaze.PacMazePalette
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterPreviewAnim
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
@@ -51,7 +52,11 @@ fun rememberRemoteSkinLoadStatus(
             var coverReady by remember(skinId) {
                 mutableStateOf(PacMazeRemoteSkinAnimCache.isCoverReady(skinId))
             }
+            var coverCachedOnDisk by remember(skinId) { mutableStateOf(false) }
             LaunchedEffect(skinId) {
+                coverCachedOnDisk = withContext(Dispatchers.IO) {
+                    PacMazeRemoteSkinAnimCache.hasCoverCacheOnDisk(skinId)
+                }
                 if (!coverReady) {
                     withContext(Dispatchers.IO) {
                         if (!PacMazeRemoteSkinAnimCache.hydrateCoverFromDisk(skinId)) {
@@ -63,27 +68,33 @@ fun rememberRemoteSkinLoadStatus(
             }
             return if (coverReady) {
                 RemoteSkinLoadStatus(RemoteSkinLoadPhase.Ready, 100, "封面已就绪")
-            } else if (PacMazeRemoteSkinAnimCache.hasCoverCache(skinId)) {
+            } else if (coverCachedOnDisk || PacMazeRemoteSkinAnimCache.hasCoverCache(skinId)) {
                 RemoteSkinLoadStatus(RemoteSkinLoadPhase.Decoding, 90, "恢复封面…")
             } else {
-                RemoteSkinLoadStatus(RemoteSkinLoadPhase.Downloading, 0, "加载封面…")
+                RemoteSkinLoadStatus(RemoteSkinLoadPhase.Decoding, 0, "加载封面…")
             }
         }
         RemoteSkinLoadMode.FullAnimation -> {
             val allStatus by PacMazeRemoteSkinAnimCache.status.collectAsStateWithLifecycle()
+            val config = PacMazeRemoteSkinAnimCatalog.config(skinId)
             LaunchedEffect(skinId, loadMode) {
-                if (!PacMazeRemoteSkinAnimCache.isAnimInMemory(skinId)) {
+                if (PacMazeRemoteSkinAnimCache.isPlaybackReady(skinId)) return@LaunchedEffect
+                if (PacMazeRemoteSkinAnimCache.hasSheetBundle(skinId) && config != null) {
+                    PacMazeRemoteSkinAnimCache.requestSheetPlaybackAsync(skinId, config.primaryClip())
+                } else if (!PacMazeRemoteSkinAnimCache.isAnimInMemory(skinId)) {
                     PacMazeRemoteSkinAnimCache.preloadForSkin(skinId)
                 }
             }
             val cached = allStatus[skinId]
             return when {
-                PacMazeRemoteSkinAnimCache.isAnimInMemory(skinId) ->
+                PacMazeRemoteSkinAnimCache.isPlaybackReady(skinId) ->
                     RemoteSkinLoadStatus(RemoteSkinLoadPhase.Ready, 100, "已就绪")
                 cached != null -> cached
+                PacMazeRemoteSkinAnimCache.isCoverReady(skinId) ->
+                    RemoteSkinLoadStatus(RemoteSkinLoadPhase.Decoding, 72, "解析角色资源…")
                 PacMazeRemoteSkinAnimCache.isReady(skinId) ->
                     RemoteSkinLoadStatus(RemoteSkinLoadPhase.Decoding, 88, "从本地缓存恢复…")
-                else -> RemoteSkinLoadStatus(RemoteSkinLoadPhase.Downloading, 0, "准备下载…")
+                else -> RemoteSkinLoadStatus(RemoteSkinLoadPhase.Decoding, 0, "准备加载…")
             }
         }
     }
@@ -100,27 +111,36 @@ fun PacMazeRemoteSkinLoadOverlay(
     val accent = pacMazeSkinAccent(skinId)
     val scope = rememberCoroutineScope()
     val isRemote = PacMazeCharacterPreviewAnim.usesRemoteAnim(skinId)
-    val ready = when (loadMode) {
-        RemoteSkinLoadMode.CoverOnly -> PacMazeRemoteSkinAnimCache.isCoverReady(skinId)
-        RemoteSkinLoadMode.FullAnimation -> PacMazeRemoteSkinAnimCache.isAnimInMemory(skinId)
+    var coverCachedOnDisk by remember(skinId) { mutableStateOf(false) }
+    LaunchedEffect(skinId, loadMode) {
+        if (loadMode == RemoteSkinLoadMode.CoverOnly) {
+            coverCachedOnDisk = withContext(Dispatchers.IO) {
+                PacMazeRemoteSkinAnimCache.hasCoverCacheOnDisk(skinId)
+            }
+        }
     }
-    val coverCached = PacMazeRemoteSkinAnimCache.hasCoverCache(skinId)
-    val animCached = loadMode == RemoteSkinLoadMode.FullAnimation &&
-        PacMazeRemoteSkinAnimCache.isReady(skinId)
-    val showOverlay = isRemote && !ready && loadStatus.phase != RemoteSkinLoadPhase.Ready &&
-        !(loadMode == RemoteSkinLoadMode.CoverOnly && coverCached) &&
-        !(loadMode == RemoteSkinLoadMode.FullAnimation && animCached)
+    val coverReady = PacMazeRemoteSkinAnimCache.isCoverReady(skinId)
+    val playbackReady = PacMazeRemoteSkinAnimCache.isPlaybackReady(skinId)
+    val coverCached = coverCachedOnDisk || PacMazeRemoteSkinAnimCache.hasCoverCache(skinId) || coverReady
+    val ready = when (loadMode) {
+        RemoteSkinLoadMode.CoverOnly -> coverReady
+        RemoteSkinLoadMode.FullAnimation -> playbackReady
+    }
+    val hasVisualFallback = coverReady || coverCached
+    val showBlockingOverlay = isRemote && !ready && !hasVisualFallback &&
+        loadStatus.phase != RemoteSkinLoadPhase.Ready
+    val showDecodeBadge = isRemote && !ready && hasVisualFallback &&
+        loadStatus.phase != RemoteSkinLoadPhase.Ready &&
+        loadStatus.phase != RemoteSkinLoadPhase.Failed
 
     Box(modifier = modifier) {
-        if (!showOverlay) {
-            content()
-        }
-        if (showOverlay) {
+        content()
+        if (showBlockingOverlay || loadStatus.phase == RemoteSkinLoadPhase.Failed) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF121828).copy(alpha = 0.92f))
+                    .background(Color(0xFF121828).copy(alpha = if (loadStatus.phase == RemoteSkinLoadPhase.Failed) 0.92f else 0.88f))
                     .then(
                         if (loadStatus.phase == RemoteSkinLoadPhase.Failed) {
                             Modifier.clickable {
@@ -147,7 +167,9 @@ fun PacMazeRemoteSkinLoadOverlay(
                     if (loadStatus.phase == RemoteSkinLoadPhase.Failed) {
                         Text("⚠", fontSize = 28.sp)
                         Text(
-                            loadStatus.message.ifBlank { "下载失败" },
+                            GameResourceLoadCopy.forDisplay(
+                                loadStatus.message.ifBlank { "下载失败" },
+                            ),
                             color = PacMazePalette.accentOrange,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
@@ -159,36 +181,51 @@ fun PacMazeRemoteSkinLoadOverlay(
                             color = accent,
                             strokeWidth = 3.dp,
                         )
-                        if (loadMode == RemoteSkinLoadMode.FullAnimation) {
-                            LinearProgressIndicator(
-                                progress = loadStatus.percent.coerceIn(0, 100) / 100f,
-                                modifier = Modifier
-                                    .fillMaxWidth(0.72f)
-                                    .clip(RoundedCornerShape(999.dp)),
-                                color = accent,
-                                trackColor = Color.White.copy(alpha = 0.12f),
-                            )
-                        }
                         Text(
-                            loadStatus.message.ifBlank {
-                                when (loadMode) {
-                                    RemoteSkinLoadMode.CoverOnly -> "加载封面…"
-                                    RemoteSkinLoadMode.FullAnimation -> "解析全动画…"
-                                }
-                            },
+                            GameResourceLoadCopy.forDisplay(
+                                loadStatus.message.ifBlank {
+                                    when (loadMode) {
+                                        RemoteSkinLoadMode.CoverOnly -> "加载封面…"
+                                        RemoteSkinLoadMode.FullAnimation -> "解析角色资源…"
+                                    }
+                                },
+                            ),
                             color = PacMazePalette.inkSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
                         )
-                        if (loadMode == RemoteSkinLoadMode.FullAnimation) {
-                            Text(
-                                "${loadStatus.percent.coerceIn(0, 100)}%",
-                                color = accent.copy(alpha = 0.85f),
-                                fontSize = 10.sp,
-                            )
-                        }
                     }
+                }
+            }
+        } else if (showDecodeBadge) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF121828).copy(alpha = 0.72f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LinearProgressIndicator(
+                        progress = loadStatus.percent.coerceIn(0, 100) / 100f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(999.dp)),
+                        color = accent,
+                        trackColor = Color.White.copy(alpha = 0.12f),
+                    )
+                    Text(
+                        GameResourceLoadCopy.forDisplay(
+                            loadStatus.message.ifBlank { "解析角色资源…" },
+                        ),
+                        color = PacMazePalette.inkSecondary,
+                        fontSize = 9.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }

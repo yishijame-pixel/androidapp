@@ -195,6 +195,17 @@ object PacMazeCosmeticCatalog {
         PacMazeSkinId.FOOD_QINGTING_WALK to skinDef(PacMazeSkinId.FOOD_QINGTING_WALK, SkinStyleFamily.IKUN, BodyTier.M, PacMazeTrailId.RIBBON_MINT_BUBBLE),
         PacMazeSkinId.FOOD_MOSQUITO_WALK to skinDef(PacMazeSkinId.FOOD_MOSQUITO_WALK, SkinStyleFamily.IKUN, BodyTier.S, PacMazeTrailId.CANDY_CRUMB),
         PacMazeSkinId.FOOD_TOUSHI_WALK to skinDef(PacMazeSkinId.FOOD_TOUSHI_WALK, SkinStyleFamily.IKUN, BodyTier.M, PacMazeTrailId.RIPPLE_STEP),
+        PacMazeSkinId.FOOD_ZOMBIE_WALK to skinDef(PacMazeSkinId.FOOD_ZOMBIE_WALK, SkinStyleFamily.IKUN, BodyTier.L, PacMazeTrailId.RIBBON_NIGHT_INK),
+
+        PacMazeSkinId.YISHI_FIRE_LONG to skinDef(PacMazeSkinId.YISHI_FIRE_LONG, SkinStyleFamily.YISHI, BodyTier.L, PacMazeTrailId.RIBBON_PHOENIX),
+        PacMazeSkinId.YISHI_GREEN_LONG to skinDef(PacMazeSkinId.YISHI_GREEN_LONG, SkinStyleFamily.YISHI, BodyTier.L, PacMazeTrailId.RIBBON_JADE),
+        PacMazeSkinId.YISHI_HAIMIAN to skinDef(PacMazeSkinId.YISHI_HAIMIAN, SkinStyleFamily.YISHI, BodyTier.M, PacMazeTrailId.RIBBON_MINT_BUBBLE),
+        PacMazeSkinId.YISHI_ICE_LONG to skinDef(PacMazeSkinId.YISHI_ICE_LONG, SkinStyleFamily.YISHI, BodyTier.L, PacMazeTrailId.SNOW_SWIRL),
+        PacMazeSkinId.YISHI_LONG to skinDef(PacMazeSkinId.YISHI_LONG, SkinStyleFamily.YISHI, BodyTier.M, PacMazeTrailId.RIBBON_AURORA),
+        PacMazeSkinId.YISHI_MAGIC_DOG to skinDef(PacMazeSkinId.YISHI_MAGIC_DOG, SkinStyleFamily.YISHI, BodyTier.M, PacMazeTrailId.RIBBON_VIOLET),
+        PacMazeSkinId.YISHI_PAIDAXIN to skinDef(PacMazeSkinId.YISHI_PAIDAXIN, SkinStyleFamily.YISHI, BodyTier.L, PacMazeTrailId.STAR_COMET),
+        PacMazeSkinId.YISHI_QISHI_DOG to skinDef(PacMazeSkinId.YISHI_QISHI_DOG, SkinStyleFamily.YISHI, BodyTier.M, PacMazeTrailId.RIBBON_CINNABAR),
+        PacMazeSkinId.YISHI_BL_LONG to skinDef(PacMazeSkinId.YISHI_BL_LONG, SkinStyleFamily.YISHI, BodyTier.L, PacMazeTrailId.RIBBON_AURORA),
     )
 
     private fun skinDef(id: PacMazeSkinId, family: SkinStyleFamily, tier: BodyTier, trail: PacMazeTrailId) =

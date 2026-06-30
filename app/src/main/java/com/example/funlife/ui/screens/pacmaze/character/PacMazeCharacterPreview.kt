@@ -24,7 +24,7 @@ import com.example.funlife.social.game.engine.pacmaze.Direction
 import com.example.funlife.ui.screens.pacmaze.PacMazePalette
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeAvatarLoadout
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeCosmeticCatalog
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCache
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCatalog
@@ -139,7 +139,7 @@ fun PacMazeCharacterPreview(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(modifier = Modifier.fillMaxSize(if (PacMazeIkunCatalog.contains(skinId)) 0.96f else 0.85f)) {
+            Canvas(modifier = Modifier.fillMaxSize(if (PacMazeBitmapWalkCatalog.contains(skinId)) 0.96f else 0.85f)) {
                 val config = PacMazeThemeRegistry.configFor(PacMazeMapThemeId.CLASSIC)
                 val pose = PacMazeCharacterPose(
                     facing = drawFacing,

@@ -19,6 +19,7 @@ enum class SkinStyleFamily(val label: String) {
     STEAM("蒸汽"),
     OCEAN("海底"),
     IKUN("ikun"),
+    YISHI("一十"),
 }
 
 enum class PacMazeSkinId(
@@ -91,13 +92,26 @@ enum class PacMazeSkinId(
     FOOD_DONUT("food_donut", "甜甜圈精", "糖霜彩针 · 中空蹦跳", "🍩"),
     FOOD_CHICK_DAZE("food_chick_daze", "呆脸小鸡", "中分巨眼 · 经典呆脸", "🐤"),
     FOOD_CHICK_BALLER("food_chick_baller", "篮球小鸡", "中分运球 · 球衣加身", "🏀"),
-    FOOD_CHICK_WALKER("food_chick_walker", "行走小鸡", "四帧步态 · 运球向左", "🚶"),
-    FOOD_CHICK_WALKER_PRO_MAX("food_chick_walker_pro_max", "行走小鸡 Pro Max", "云端多段动画 · 专属攻击技", "🐔"),
-    FOOD_XIA_WALK("xia_walk", "小侠", "云端行走 · 61帧步态", "🦸"),
-    FOOD_MOUSE_WALK("laoshu_walk", "行走老鼠", "云端行走 · 61帧步态", "🐭"),
-    FOOD_QINGTING_WALK("qinting_walk", "倾听侠", "云端行走 · 61帧步态", "🎧"),
-    FOOD_MOSQUITO_WALK("wenzi_walk", "蚊子精", "云端行走 · 61帧步态", "🦟"),
-    FOOD_TOUSHI_WALK("toushi_walk", "投食侠", "云端行走 · 61帧步态", "🍱"),
+    FOOD_CHICK_WALKER("food_chick_walker", "行走小鸡", "运球向左 · 经典步态", "🚶"),
+    FOOD_CHICK_WALKER_PRO_MAX("food_chick_walker_pro_max", "行走小鸡 Pro Max", "多段动作 · 专属攻击技", "🐔"),
+    FOOD_XIA_WALK("xia_walk", "小侠", "梗图行走角色", "🦸"),
+    FOOD_MOUSE_WALK("laoshu_walk", "行走老鼠", "梗图行走角色", "🐭"),
+    FOOD_QINGTING_WALK("qinting_walk", "倾听侠", "梗图行走角色", "🎧"),
+    FOOD_MOSQUITO_WALK("wenzi_walk", "蚊子精", "梗图行走角色", "🦟"),
+    FOOD_TOUSHI_WALK("toushi_walk", "投食侠", "梗图行走角色", "🍱"),
+    FOOD_ZOMBIE_WALK("zombie_walk", "僵尸", "牛仔骑龙 · 梗图行走", "🧟"),
+
+    // —— 一十类 ——
+    YISHI_FIRE_LONG("fire_long_walk", "火焰龙", "一十品牌角色", "🔥"),
+    YISHI_GREEN_LONG("green_long_walk", "绿龙", "一十品牌角色", "🐲"),
+    YISHI_HAIMIAN("haimian_walk", "海绵", "一十品牌角色", "🧽"),
+    YISHI_ICE_LONG("ice_long_walk", "冰霜龙", "一十品牌角色", "❄️"),
+    YISHI_LONG("long_walk", "小龙", "一十品牌角色", "🐉"),
+    YISHI_MAGIC_DOG("magic_dog_walk", "魔法狗", "一十品牌角色", "🐕‍🦺"),
+    YISHI_PAIDAXIN("paidaxin_walk", "派大星", "一十品牌角色", "⭐"),
+    YISHI_QISHI_DOG("qishi_dog_walk", "骑士狗", "一十品牌角色", "🛡️"),
+    YISHI_BL_LONG("bl_long_walk", "蓝龙", "一十品牌角色", "🐲"),
+
     CANDY_SPIRIT("candy_spirit", "糖纸精灵", "彩虹糖纸 · 弹跳闯关", "🍬"),
     BUBBLE_SLIME("bubble_slime", "气泡史莱姆", "咕嘟冒泡 · 弹性过关", "🫧"),
     NOODLE_PHANTOM("noodle_phantom", "拉面精", "面条成精 · 晃晃悠悠", "🍜"),

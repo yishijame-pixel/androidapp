@@ -1,0 +1,78 @@
+{
+  "id": 105,
+  "name": "无尽块·光束",
+  "width": 15,
+  "height": 15,
+  "grid": [
+    "###############",
+    "#oo.........oo#",
+    "#.*.o.o.o.o.*.#",
+    "#oo.ooo.ooo.oo#",
+    "#...>&.G..&...#",
+    "#oo.ooo.ooo.oo#",
+    "#.o.o.o.o.o.o.#",
+    "#oo.ooo-ooo.oo#",
+    "#....&....&...#",
+    "#oo.ooo.ooo.oo#",
+    "#.o.o.o.o.o.o.#",
+    "#oo.ooo.ooo.oo#",
+    "#.*..&....&.*.#",
+    "#oo.ooo.ooo.oo#",
+    "###############"
+  ],
+  "spawn": {
+    "pac": [
+      7,
+      13
+    ],
+    "ghosts": [
+      [
+        4,
+        4
+      ],
+      [
+        10,
+        4
+      ],
+      [
+        7,
+        7
+      ]
+    ]
+  },
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 1,
+      "x1": 2,
+      "x2": 12
+    }
+  ],
+  "itemSpawners": [
+    {
+      "id": "eps_a",
+      "x": 3,
+      "y": 11,
+      "intervalTicks": 680,
+      "pool": [
+        "frost",
+        "shield",
+        "speed"
+      ]
+    },
+    {
+      "id": "eps_b",
+      "x": 11,
+      "y": 11,
+      "intervalTicks": 680,
+      "pool": [
+        "magnet",
+        "charge"
+      ]
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 1.0,
+    "ai_aggression": 0.58
+  }
+}

@@ -16,6 +16,26 @@ internal object PacMazeBitmapContentTrim {
     private const val ALPHA_FLOOR = 14
     private const val DEFAULT_FEET_Y = 0.94f
 
+    data class OpaqueContentSpan(
+        val topFrac: Float,
+        val bottomFrac: Float,
+        val leftFrac: Float,
+        val rightFrac: Float,
+    ) {
+        val heightFrac: Float get() = (bottomFrac - topFrac).coerceAtLeast(0.08f)
+        val widthFrac: Float get() = (rightFrac - leftFrac).coerceAtLeast(0.08f)
+    }
+
+    private val opaqueSpanCache = java.util.concurrent.ConcurrentHashMap<Long, OpaqueContentSpan>()
+
+    fun cachedOpaqueContentSpan(source: ImageBitmap): OpaqueContentSpan =
+        opaqueSpanCache.getOrPut(bitmapKey(source)) {
+            detectOpaqueContentSpan(source.asAndroidBitmap())
+        }
+
+    private fun bitmapKey(image: ImageBitmap): Long =
+        (image.width.toLong() shl 32) or image.height.toLong()
+
     fun trimToOpaqueContent(source: ImageBitmap): ImageBitmap =
         trimAndroidBitmap(source.asAndroidBitmap()).asImageBitmap()
 
@@ -51,6 +71,107 @@ internal object PacMazeBitmapContentTrim {
             else -> wheelFeet
         }
         return min(contact, bboxFeet * 0.995f).coerceIn(0.72f, 0.998f)
+    }
+
+    /**
+     * 横版冒险：脚点 = 全图 bbox 最底不透明行（与地砖顶对齐）。
+     * 走廊用的 [detectFeetYFraction] 会取 min(contact, bbox)，梗图宽体时 contact 偏上导致穿地。
+     */
+    fun detectPlatformerFeetYFraction(source: ImageBitmap): Float =
+        detectPlatformerFeetYFraction(source.asAndroidBitmap())
+
+    fun detectPlatformerFeetYFraction(source: Bitmap): Float {
+        val w = source.width
+        val h = source.height
+        if (w <= 1 || h <= 1) return DEFAULT_FEET_Y
+
+        var maxY = -1
+        val step = if (w * h > 480_000) 2 else 1
+        for (y in 0 until h step step) {
+            for (x in 0 until w step step) {
+                if (Color.alpha(source.getPixel(x, y)) > ALPHA_FLOOR) {
+                    maxY = max(maxY, y)
+                }
+            }
+        }
+        if (maxY < 0) return DEFAULT_FEET_Y
+        return ((maxY + 0.5f) / h).coerceIn(0.85f, 0.999f)
+    }
+
+    fun detectOpaqueContentSpan(source: Bitmap): OpaqueContentSpan =
+        detectOpaqueContentSpanInRect(source, 0, 0, source.width, source.height)
+
+    /** Sprite sheet 单格内不透明内容占比（相对格宽高 0~1）。 */
+    fun detectOpaqueContentSpanInRect(
+        source: Bitmap,
+        left: Int,
+        top: Int,
+        width: Int,
+        height: Int,
+    ): OpaqueContentSpan {
+        val w = width.coerceAtLeast(1)
+        val h = height.coerceAtLeast(1)
+        val x0 = left.coerceIn(0, source.width - 1)
+        val y0 = top.coerceIn(0, source.height - 1)
+        val x1 = (left + w).coerceAtMost(source.width)
+        val y1 = (top + h).coerceAtMost(source.height)
+        if (x1 <= x0 || y1 <= y0) {
+            return OpaqueContentSpan(0f, 1f, 0f, 1f)
+        }
+
+        var minX = x1
+        var minY = y1
+        var maxX = x0 - 1
+        var maxY = y0 - 1
+        val step = if (w * h > 120_000) 2 else 1
+        for (y in y0 until y1 step step) {
+            for (x in x0 until x1 step step) {
+                if (Color.alpha(source.getPixel(x, y)) > ALPHA_FLOOR) {
+                    minX = min(minX, x)
+                    minY = min(minY, y)
+                    maxX = max(maxX, x)
+                    maxY = max(maxY, y)
+                }
+            }
+        }
+        if (maxX < minX || maxY < minY) {
+            return OpaqueContentSpan(0f, 1f, 0f, 1f)
+        }
+        return OpaqueContentSpan(
+            topFrac = ((minY - y0) / h.toFloat()).coerceIn(0f, 0.95f),
+            bottomFrac = ((maxY + 1 - y0) / h.toFloat()).coerceIn(0.05f, 1f),
+            leftFrac = ((minX - x0) / w.toFloat()).coerceIn(0f, 0.95f),
+            rightFrac = ((maxX + 1 - x0) / w.toFloat()).coerceIn(0.05f, 1f),
+        )
+    }
+
+    /** Sprite sheet 单格区域脚底（相对格高 0~1）；局内按帧对齐用。 */
+    fun detectPlatformerFeetYFractionInRect(
+        source: Bitmap,
+        left: Int,
+        top: Int,
+        width: Int,
+        height: Int,
+    ): Float {
+        val w = width.coerceAtLeast(1)
+        val h = height.coerceAtLeast(1)
+        val x0 = left.coerceIn(0, source.width - 1)
+        val y0 = top.coerceIn(0, source.height - 1)
+        val x1 = (left + w).coerceAtMost(source.width)
+        val y1 = (top + h).coerceAtMost(source.height)
+        if (x1 <= x0 || y1 <= y0) return DEFAULT_FEET_Y
+
+        var maxY = -1
+        val step = if (w * h > 120_000) 2 else 1
+        for (y in y0 until y1 step step) {
+            for (x in x0 until x1 step step) {
+                if (Color.alpha(source.getPixel(x, y)) > ALPHA_FLOOR) {
+                    maxY = max(maxY, y - y0)
+                }
+            }
+        }
+        if (maxY < 0) return DEFAULT_FEET_Y
+        return ((maxY + 0.5f) / h).coerceIn(0.85f, 0.999f)
     }
 
     /**
@@ -170,6 +291,28 @@ internal object PacMazeBitmapContentTrim {
     /** 脚点横坐标（相对图宽 0~1），取车轮带中心，竖向移动时对齐走廊中心。 */
     fun detectFeetXFraction(source: ImageBitmap): Float =
         detectFeetXFraction(source.asAndroidBitmap())
+
+    /** 不透明内容顶边（相对图高 0~1），用于跳跃帧发型留白。 */
+    fun detectContentTopFraction(source: ImageBitmap): Float =
+        detectContentTopFraction(source.asAndroidBitmap())
+
+    fun detectContentTopFraction(source: Bitmap): Float {
+        val w = source.width
+        val h = source.height
+        if (w <= 1 || h <= 1) return 0f
+        var minY = h
+        val step = if (w * h > 480_000) 2 else 1
+        for (y in 0 until h step step) {
+            for (x in 0 until w step step) {
+                if (Color.alpha(source.getPixel(x, y)) > ALPHA_FLOOR) {
+                    minY = min(minY, y)
+                    break
+                }
+            }
+        }
+        if (minY >= h) return 0f
+        return (minY / h.toFloat()).coerceIn(0f, 0.5f)
+    }
 
     fun detectFeetXFraction(source: Bitmap): Float {
         val w = source.width

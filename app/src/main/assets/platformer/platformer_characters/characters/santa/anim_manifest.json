@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 3,
+  "skinId": "santa",
+  "normalized": true,
+  "canvas": {
+    "w": 718,
+    "h": 662
+  },
+  "anchorFrac": {
+    "x": 0.493036,
+    "y": 0.791541
+  },
+  "clips": {
+    "die": {
+      "count": 17,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 5,
+        "rows": 4,
+        "cellW": 718,
+        "cellH": 662
+      }
+    },
+    "idle": {
+      "count": 16,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 4,
+        "cellW": 718,
+        "cellH": 662
+      }
+    },
+    "jump": {
+      "count": 16,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 4,
+        "cellW": 718,
+        "cellH": 662
+      }
+    },
+    "run": {
+      "count": 11,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 718,
+        "cellH": 662
+      }
+    },
+    "slide": {
+      "count": 11,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 718,
+        "cellH": 662
+      }
+    },
+    "walk": {
+      "count": 13,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 4,
+        "rows": 4,
+        "cellW": 718,
+        "cellH": 662
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "event",
+    "title": "圣诞老人",
+    "subtitle": "节日限定",
+    "unlock": {
+      "type": "event",
+      "value": 1
+    },
+    "abilities": [
+      "slide"
+    ],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

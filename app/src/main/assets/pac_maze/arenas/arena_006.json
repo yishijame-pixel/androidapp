@@ -1,0 +1,46 @@
+{
+  "id": "arena_006",
+  "name": "熔核对称",
+  "width": 15,
+  "height": 17,
+  "grid": [
+    "###############",
+    "#*.oo.o|.oo.o*#",
+    "#.oo.oo|oo.oo.#",
+    "#oo.oo.|o.oo.o#",
+    "#o.oo.o|.oo.oo#",
+    "#.oo.oo|oo.oo.#",
+    "#oo.oo.|o.oo.o#",
+    "#o.oo.o|.oo.oo#",
+    "#.=o.&o|o>.oo.#",
+    "#oo.oo.|o.oo.o#",
+    "#o.oo.o|.oo.oo#",
+    "#.oo.oo|oo.oo.#",
+    "#oo.oo.|o.oo.o#",
+    "#o.oo.o|.oo.oo#",
+    "#.oo.oo|oo.oo.#",
+    "#*o.oo.|o.oo.*#",
+    "###############"
+  ],
+  "spawn": {
+    "pac_a": [
+      1,
+      8
+    ],
+    "pac_b": [
+      13,
+      8
+    ],
+    "ghosts": [
+      [
+        7,
+        3
+      ],
+      [
+        7,
+        13
+      ]
+    ]
+  },
+  "themeId": "magma"
+}

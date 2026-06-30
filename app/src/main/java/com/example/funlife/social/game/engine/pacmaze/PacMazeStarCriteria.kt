@@ -12,7 +12,15 @@ data class PacMazeStarCriteria(
         fun defaults() = PacMazeStarCriteria()
 
         fun fromLevelJson(root: com.google.gson.JsonObject): PacMazeStarCriteria {
-            val obj = root.getAsJsonObject("starCriteria") ?: return defaults()
+            val levelId = root.get("id")?.asInt ?: 0
+            val obj = root.getAsJsonObject("starCriteria")
+            if (obj == null) {
+                return if (levelId in 1..PacMazeLevelProgression.TOTAL_LEVELS) {
+                    PacMazeLevelProgression.starCriteria(levelId)
+                } else {
+                    defaults()
+                }
+            }
             val requiredTags = obj.getAsJsonArray("threeStarRequiredTags")
                 ?.mapNotNull { it.asString }
                 ?.filter { it.isNotBlank() }

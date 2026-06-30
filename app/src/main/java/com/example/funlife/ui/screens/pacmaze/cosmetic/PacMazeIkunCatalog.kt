@@ -1,6 +1,6 @@
 package com.example.funlife.ui.screens.pacmaze.cosmetic
 
-/** ikun 类（梗图 / 云端行走）角色集合。 */
+/** ikun 类（梗图 / 行走角色）角色集合。 */
 object PacMazeIkunCatalog {
 
     val skinIds: List<PacMazeSkinId> = listOf(
@@ -13,6 +13,7 @@ object PacMazeIkunCatalog {
         PacMazeSkinId.FOOD_QINGTING_WALK,
         PacMazeSkinId.FOOD_MOSQUITO_WALK,
         PacMazeSkinId.FOOD_TOUSHI_WALK,
+        PacMazeSkinId.FOOD_ZOMBIE_WALK,
     )
 
     private val skinSet = skinIds.toSet()

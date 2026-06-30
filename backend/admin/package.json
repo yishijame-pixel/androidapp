@@ -10,6 +10,7 @@
     "@cloudbase/node-sdk": "^3.18.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "pg": "^8.13.1"
   }
 }

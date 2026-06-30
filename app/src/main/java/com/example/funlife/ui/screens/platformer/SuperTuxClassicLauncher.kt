@@ -1,5 +1,6 @@
 package com.example.funlife.ui.screens.platformer
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -74,5 +75,13 @@ object SuperTuxClassicLauncher {
             }
         }
         context.startActivity(intent)
+        if (context is Activity) {
+            context.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        }
     }
+
+    /** True when zip is staged and fully extracted — no prep overlay needed. */
+    fun isGameDataReady(context: Context): Boolean =
+        SuperTuxClassicDataPreparer.isStaged(context) &&
+            SuperTuxClassicDataPreparer.isExtracted(context)
 }

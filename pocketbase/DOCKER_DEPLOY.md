@@ -44,7 +44,10 @@
 | **draw_ws** | `funlife-draw-ws` | 8790 | 是 | 你画我猜笔画 WebSocket 热路径 |
 | **pac-maze-ws** | `funlife-pac-maze-ws` | 8791 | 是 | Pac-Maze 权威对战 WebSocket |
 | **fcm_relay** | `funlife-fcm-relay` | 8787 | **否** | PocketBase Hook → Firebase 推送 |
+| **assets-static** | `funlife-assets-static` | 8098 | 是（本机调试） | 游戏资源 manifest + zip（`assets.yishi.site`） |
 | **cloudflared** | `funlife-cloudflared` | — | 出站隧道 | HTTPS/WSS 公网入口 |
+
+> 游戏资源托管完整设计（威胁模型、DDoS、SHA-256、发布流程）：[`docs/game-assets-static-hosting.md`](../docs/game-assets-static-hosting.md)
 
 ### Compose Profiles
 

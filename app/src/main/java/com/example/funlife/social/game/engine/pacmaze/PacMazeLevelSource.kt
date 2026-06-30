@@ -45,7 +45,10 @@ class EndlessLevelSource(
     private val context: Context,
 ) : PacMazeLevelSource {
 
-    private val chunkIds = listOf("chunk_alpha", "chunk_beta", "chunk_gamma")
+    private val warmChunks = listOf("chunk_alpha", "chunk_beta", "chunk_gamma")
+    private val hotChunks = listOf("chunk_delta", "chunk_zeta", "chunk_eta")
+    private val infernoChunks = listOf("chunk_epsilon", "chunk_theta")
+    private val allChunks = warmChunks + hotChunks + infernoChunks
     private val moltenLevelStart = 14
     private val moltenLevelCount = 10
 
@@ -58,6 +61,13 @@ class EndlessLevelSource(
             val chunkWave = if (wave >= 8) ((wave - 1) % 7) + 1 else wave
             loadChunkWave(chunkWave, params.seed, displayWave = wave)
         }
+    }
+
+    private fun chunkPoolForWave(wave: Int): List<String> = when {
+        wave <= 2 -> warmChunks
+        wave <= 4 -> warmChunks + hotChunks
+        wave <= 7 -> allChunks
+        else -> hotChunks + infernoChunks
     }
 
     private fun loadMoltenWave(wave: Int, seed: Long): PacMazeRunPayload {
@@ -82,14 +92,18 @@ class EndlessLevelSource(
 
     private fun loadChunkWave(wave: Int, seed: Long, displayWave: Int = wave): PacMazeRunPayload {
         val rng = PacMazeDeterministicRng(seed + displayWave)
-        val chunk = chunkIds[rng.nextInt(chunkIds.size)]
+        val pool = chunkPoolForWave(displayWave)
+        val chunk = pool[rng.nextInt(pool.size)]
         val json = readAsset(context, "pac_maze/chunks/$chunk.json")
         val parsed = PacMazeMapLoader.parseLevelJson(json)
         val speedMul = parsed.ghostSpeedMul * (1f + (displayWave - 1) * 0.06f)
+        val aggression = (parsed.aiAggression + (displayWave - 1) * 0.018f).coerceAtMost(0.95f)
         val level = parsed.copy(
             id = displayWave,
-            name = if (displayWave >= 8) "无尽 · 第 $displayWave 波（预热）" else "无尽 · 第 $displayWave 波",
+            name = if (displayWave >= 8) "无尽 · 第 $displayWave 波（${parsed.name.substringAfter("·")}）"
+            else "无尽 · 第 $displayWave 波 · ${parsed.name.substringAfter("·")}",
             ghostSpeedMul = speedMul.coerceAtMost(2.2f),
+            aiAggression = aggression,
         )
         return PacMazeRunPayload(
             level = level,
@@ -106,11 +120,18 @@ class MazeLevelSource : PacMazeLevelSource {
         val options = PacMazeMazeRunOptions.fromParams(params)
         val json = PacMazeMazeGenerator.buildLevelJson(options)
         val level = PacMazeMapLoader.parseLevelJson(json)
+        val themeLevelId = when (options.difficulty) {
+            PacMazeMazeDifficulty.SCOUT -> 3
+            PacMazeMazeDifficulty.STANDARD -> 7
+            PacMazeMazeDifficulty.ABYSS -> 14
+        }.let { base ->
+            ((params.seed % 6).toInt() + base).coerceIn(1, PacMazeLevelProgression.TOTAL_LEVELS)
+        }
         return PacMazeRunPayload(
             level = level,
             json = json,
             runMode = PacMazeRunMode.MAZE,
-            themeLevelId = 3,
+            themeLevelId = themeLevelId,
         )
     }
 }

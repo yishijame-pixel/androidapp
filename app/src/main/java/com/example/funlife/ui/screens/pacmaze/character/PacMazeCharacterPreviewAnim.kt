@@ -1,7 +1,7 @@
 package com.example.funlife.ui.screens.pacmaze.character
 
 import com.example.funlife.social.game.engine.pacmaze.Direction
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinRenderProfileCatalog
@@ -65,31 +65,31 @@ internal object PacMazeCharacterPreviewAnim {
 
     /** ikun / 位图梗图在预览区略放大（局内尺寸由 [PacMazeIkunGameplayScale] 单独控制） */
     fun previewDrawRadiusMul(skinId: PacMazeSkinId, gridLite: Boolean = false): Float = when {
-        gridLite && PacMazeIkunCatalog.contains(skinId) -> 0.92f
+        gridLite && PacMazeBitmapWalkCatalog.contains(skinId) -> 0.92f
         gridLite && usesRemoteAnim(skinId) -> 0.88f
-        PacMazeIkunCatalog.contains(skinId) -> 1.38f
+        PacMazeBitmapWalkCatalog.contains(skinId) -> 1.38f
         skinId in bitmapLeftFacing -> 1.35f
         usesRemoteAnim(skinId) -> 1.28f
         else -> 1f
     }
 
     fun previewBaseRadiusMul(skinId: PacMazeSkinId, gridLite: Boolean): Float = when {
-        gridLite && PacMazeIkunCatalog.contains(skinId) -> 0.36f
+        gridLite && PacMazeBitmapWalkCatalog.contains(skinId) -> 0.36f
         gridLite && usesRemoteAnim(skinId) -> 0.34f
-        PacMazeIkunCatalog.contains(skinId) -> 0.54f
+        PacMazeBitmapWalkCatalog.contains(skinId) -> 0.54f
         else -> 0.4f
     }
 
     fun previewCanvasFill(skinId: PacMazeSkinId, gridLite: Boolean): Float = when {
-        gridLite && PacMazeIkunCatalog.contains(skinId) -> 0.78f
+        gridLite && PacMazeBitmapWalkCatalog.contains(skinId) -> 0.78f
         gridLite -> 0.82f
-        PacMazeIkunCatalog.contains(skinId) -> 0.98f
+        PacMazeBitmapWalkCatalog.contains(skinId) -> 0.98f
         else -> 0.9f
     }
 
     fun previewCenterYFrac(skinId: PacMazeSkinId, gridLite: Boolean): Float = when {
-        gridLite && PacMazeIkunCatalog.contains(skinId) -> 0.62f
-        PacMazeIkunCatalog.contains(skinId) -> 0.54f
+        gridLite && PacMazeBitmapWalkCatalog.contains(skinId) -> 0.62f
+        PacMazeBitmapWalkCatalog.contains(skinId) -> 0.54f
         else -> 0.5f
     }
 }

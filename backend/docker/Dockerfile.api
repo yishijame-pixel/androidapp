@@ -1,0 +1,32 @@
+# FunLife API 网关（VIP / AI 云函数自托管）
+# 构建上下文：backend/
+
+FROM node:20-alpine
+
+RUN apk add --no-cache wget
+
+WORKDIR /app
+
+COPY shared ./shared
+COPY functions ./functions
+COPY admin/_loadEnv.js ./admin/_loadEnv.js
+COPY tools/install_function_deps.js ./tools/install_function_deps.js
+COPY api/package.json api/package-lock.json* ./api/
+
+WORKDIR /app/api
+RUN npm install --omit=dev \
+ && node ../tools/install_function_deps.js
+
+COPY api/server.js ./
+
+ENV NODE_ENV=production
+ENV PORT=3400
+ENV HOST=0.0.0.0
+ENV NODE_PATH=/app/api/node_modules
+
+EXPOSE 3400
+
+HEALTHCHECK --interval=20s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3400/health >/dev/null || exit 1
+
+CMD ["node", "server.js"]

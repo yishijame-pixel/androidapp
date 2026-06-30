@@ -484,6 +484,17 @@ object PacMazeMotion {
     ): PacMazeEntity {
         val correction = kotlin.math.hypot(newX - entity.x, newY - entity.y)
         val keepVelocity = correction <= pacSpeedPerTick() * 1.5f
+        if (correction > EPS && entity.isPlayerPac()) {
+            com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.noteLogicClamp(
+                entityId = entity.id,
+                dir = entity.direction,
+                beforeX = entity.x,
+                beforeY = entity.y,
+                afterX = newX,
+                afterY = newY,
+                velocityKept = keepVelocity,
+            )
+        }
         return entity.copy(
             x = newX,
             y = newY,
@@ -644,7 +655,25 @@ object PacMazeMotion {
         }
         if (low <= EPS) return x to y
         val safe = (low - COLLISION_SKIN).coerceAtLeast(0f)
-        return x + dx * safe to y + dy * safe
+        val outX = x + dx * safe
+        val outY = y + dy * safe
+        val requested = hypot(dx, dy)
+        val actual = hypot(outX - x, outY - y)
+        if (!forGhost && requested > EPS) {
+            val dir = when {
+                abs(dy) >= abs(dx) && dy < 0f -> Direction.UP
+                abs(dy) >= abs(dx) && dy > 0f -> Direction.DOWN
+                dx < 0f -> Direction.LEFT
+                dx > 0f -> Direction.RIGHT
+                else -> null
+            }
+            com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.noteCollisionShortfall(
+                requestedStep = requested,
+                actualStep = actual,
+                dir = dir,
+            )
+        }
+        return outX to outY
     }
 
     /** @deprecated 使用 [integrateWithBodyCollision] */
@@ -659,12 +688,13 @@ object PacMazeMotion {
 
     fun lerpAnchor(start: Float, end: Float, blend: Float): Float = start + (end - start) * blend
 
-    /** 实体渲染锚点：smoothstep 插值 + 速度外推（blend 应为已 smooth 的 0~1）。 */
+    /** 实体渲染锚点：线性插值；方向切换时也插值，避免转弯瞬移。 */
     fun renderEntityAnchor(prev: PacMazeEntity?, curr: PacMazeEntity, blend: Float): Pair<Float, Float> {
-        if (prev == null || blend >= 1f) return curr.x to curr.y
-        val extrap = DT * PacMazeConstants.RENDER_VEL_EXTRAP * blend
-        val x = lerpAnchor(prev.x, curr.x, blend) + curr.velX * extrap
-        val y = lerpAnchor(prev.y, curr.y, blend) + curr.velY * extrap
+        if (prev == null) return curr.x to curr.y
+        val alpha = blend.coerceIn(0f, 1f)
+        val extrap = DT * PacMazeConstants.RENDER_VEL_EXTRAP * alpha
+        val x = lerpAnchor(prev.x, curr.x, alpha) + curr.velX * extrap
+        val y = lerpAnchor(prev.y, curr.y, alpha) + curr.velY * extrap
         return x to y
     }
 
@@ -680,9 +710,69 @@ object PacMazeMotion {
     ): Pair<Float, Float> {
         val ghost = if (forGhost) entity else null
         if (isPositionLegal(state, renderX, renderY, forGhost, ghost)) return renderX to renderY
-        if (isPositionLegal(state, entity.x, entity.y, forGhost, ghost)) return entity.x to entity.y
+        if (isPositionLegal(state, entity.x, entity.y, forGhost, ghost)) {
+            val clamped = clampAlongLegalSegment(
+                state = state,
+                fromX = entity.x,
+                fromY = entity.y,
+                toX = renderX,
+                toY = renderY,
+                forGhost = forGhost,
+                ghost = ghost,
+            )
+            if (entity.isPlayerPac()) {
+                com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.noteRenderClamp(
+                    entityId = entity.id,
+                    reason = "along_segment",
+                    fromX = renderX,
+                    fromY = renderY,
+                    toX = clamped.first,
+                    toY = clamped.second,
+                )
+            }
+            return clamped
+        }
         val snapped = snapToGrid(state, entity, forGhost)
+        if (entity.isPlayerPac()) {
+            com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.noteRenderClamp(
+                entityId = entity.id,
+                reason = "snap_grid",
+                fromX = renderX,
+                fromY = renderY,
+                toX = snapped.x,
+                toY = snapped.y,
+            )
+        }
         return snapped.x to snapped.y
+    }
+
+    /** 沿逻辑→渲染线段软钳制，避免插值非法时硬回弹至逻辑坐标造成顿挫。 */
+    private fun clampAlongLegalSegment(
+        state: PacMazeWorldState,
+        fromX: Float,
+        fromY: Float,
+        toX: Float,
+        toY: Float,
+        forGhost: Boolean,
+        ghost: PacMazeEntity?,
+        bodyRadius: Float = BODY_RADIUS,
+    ): Pair<Float, Float> {
+        val dx = toX - fromX
+        val dy = toY - fromY
+        if (abs(dx) <= EPS && abs(dy) <= EPS) return fromX to fromY
+        val radius = resolveBodyRadius(forGhost, bodyRadius)
+        var low = 0f
+        var high = 1f
+        repeat(10) {
+            val mid = (low + high) * 0.5f
+            if (isPositionLegal(state, fromX + dx * mid, fromY + dy * mid, forGhost, ghost, radius)) {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+        val t = (low - COLLISION_SKIN).coerceAtLeast(0f)
+        return fromX + dx * t to fromY + dy * t
     }
 
     /** 弹体/子弹渲染锚点（blend 应为已 smooth 的 0~1）。 */

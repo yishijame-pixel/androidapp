@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 3,
+  "skinId": "dino",
+  "normalized": true,
+  "canvas": {
+    "w": 586,
+    "h": 503
+  },
+  "anchorFrac": {
+    "x": 0.491468,
+    "y": 0.7833
+  },
+  "clips": {
+    "die": {
+      "count": 8,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 586,
+        "cellH": 503
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 586,
+        "cellH": 503
+      }
+    },
+    "jump": {
+      "count": 12,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 586,
+        "cellH": 503
+      }
+    },
+    "run": {
+      "count": 8,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 586,
+        "cellH": 503
+      }
+    },
+    "walk": {
+      "count": 10,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 586,
+        "cellH": 503
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "heavy",
+    "title": "小恐龙",
+    "subtitle": "重型跳跃",
+    "unlock": {
+      "type": "endless_tiles",
+      "value": 300
+    },
+    "abilities": [],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

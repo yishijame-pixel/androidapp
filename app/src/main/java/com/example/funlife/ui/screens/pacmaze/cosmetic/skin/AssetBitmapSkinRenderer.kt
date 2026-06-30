@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterPose
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeMapThemeId
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeThemePalette
@@ -31,6 +31,10 @@ internal class AssetBitmapSkinRenderer(
 
         val sprite = PacMazeSkinAssetCache.spriteSheet(skinId)
         val image = sprite?.pickFrame(pose) ?: PacMazeSkinAssetCache.bitmap(skinId) ?: return
+        if (sprite != null && pose.isMoving) {
+            PacMazeSkinRegistry.drawDiagFrameIndex =
+                PacMazeBitmapCorridorDrawPolicy.stableHorizontalWalkFrameIndex(pose, sprite.frames.size)
+        }
 
         if (pose.powerActive) {
             FamilySkinHelpers.drawSoftPowerAura(
@@ -43,15 +47,13 @@ internal class AssetBitmapSkinRenderer(
         }
 
         val walkBob = (sprite?.walkBob(radius, pose) ?: staticBob(radius, pose)).let { bob ->
-            val scaled = if (PacMazeIkunCatalog.contains(skinId)) bob * 0.35f else bob
-            val horizontalFeet = PacMazeSkinRegistry.drawFeetAnchorPx != null &&
-                (PacMazeSkinRegistry.drawTravelFacing == com.example.funlife.social.game.engine.pacmaze.Direction.LEFT ||
-                    PacMazeSkinRegistry.drawTravelFacing == com.example.funlife.social.game.engine.pacmaze.Direction.RIGHT)
-            if (horizontalFeet) 0f else scaled
+            val scaled = if (PacMazeBitmapWalkCatalog.contains(skinId)) bob * 0.35f else bob
+            PacMazeBitmapCorridorDrawPolicy.effectiveWalkBob(scaled)
         }
 
         val drawFacing = PacMazeSkinRegistry.drawVisualFacing
             ?: PacMazeSkinRenderProfileCatalog.resolveDrawFacing(skinId, pose.facing)
+        val walkBitmap = PacMazeBitmapWalkCatalog.contains(skinId)
         PacMazeSkinBitmapDraw.draw(
             scope = scope,
             center = center,
@@ -61,14 +63,22 @@ internal class AssetBitmapSkinRenderer(
             facing = drawFacing,
             walkBob = walkBob,
             diameterMul = spriteDiameterMul(),
-            cellHeightFrac = PacMazeSkinBitmapDraw.defaultCellHeightFrac,
-            cellWidthFrac = PacMazeSkinBitmapDraw.defaultCellWidthFrac,
-            tallGameplay = false,
+            cellHeightFrac = if (walkBitmap) {
+                PacMazeSkinBitmapDraw.IKUN_CELL_HEIGHT_FRAC
+            } else {
+                PacMazeSkinBitmapDraw.defaultCellHeightFrac
+            },
+            cellWidthFrac = if (walkBitmap) {
+                PacMazeSkinBitmapDraw.IKUN_CELL_WIDTH_FRAC
+            } else {
+                PacMazeSkinBitmapDraw.defaultCellWidthFrac
+            },
+            tallGameplay = walkBitmap,
             verticalCellPx = verticalCellPx,
             tileCellPx = tileCellPx,
-            tileBottomY = null,
+            tileBottomY = PacMazeSkinRegistry.drawTileBottomYPx,
             skinId = skinId,
-            centerAnchored = true,
+            centerAnchored = !walkBitmap,
         )
 
         if (pose.powerActive) {
@@ -84,7 +94,7 @@ internal class AssetBitmapSkinRenderer(
 
     private fun PacMazeSkinSpriteSheet.pickFrame(pose: PacMazeCharacterPose): ImageBitmap {
         if (!pose.isMoving || frames.isEmpty()) return frames.first()
-        val index = PacMazeSpriteWalkAnim.frameIndex(pose, frames.size)
+        val index = PacMazeBitmapCorridorDrawPolicy.stableHorizontalWalkFrameIndex(pose, frames.size)
         return frames[index]
     }
 
@@ -95,9 +105,9 @@ internal class AssetBitmapSkinRenderer(
         sin(pose.animPhase * (if (pose.isMoving) 3.5f else 1.6f)) * radius * 0.03f
 
     private fun spriteDiameterMul(): Float = when (skinId) {
-        PacMazeSkinId.FOOD_CHICK_WALKER -> 2.05f
-        PacMazeSkinId.FOOD_CHICK_BALLER -> 2.02f
-        PacMazeSkinId.FOOD_CHICK_DAZE -> 2.16f
-        else -> if (PacMazeIkunCatalog.contains(skinId)) 2.25f else 1.84f
+        PacMazeSkinId.FOOD_CHICK_WALKER -> 2.68f
+        PacMazeSkinId.FOOD_CHICK_BALLER -> 2.65f
+        PacMazeSkinId.FOOD_CHICK_DAZE -> 2.82f
+        else -> if (PacMazeBitmapWalkCatalog.contains(skinId)) 2.88f else 2.35f
     }
 }

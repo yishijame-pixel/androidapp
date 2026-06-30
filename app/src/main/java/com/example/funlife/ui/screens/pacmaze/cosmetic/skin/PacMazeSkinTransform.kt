@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.example.funlife.social.game.engine.pacmaze.Direction
+import kotlin.math.roundToInt
 
 /** 横版位图四向变换：横走绕脚点；竖走绕精灵中心（走廊中心对齐）。 */
 internal object PacMazeSkinTransform {
@@ -27,13 +28,16 @@ internal object PacMazeSkinTransform {
         facing: Direction,
         profile: PacMazeSkinRenderProfile?,
         skinId: com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId?,
+        visualMul: Float = 1f,
+        soleAlignOffsetY: Float = 0f,
+        scaleY: Float = 1f,
     ) {
-        val w = layout.width
-        val h = layout.height
+        val w = layout.width * visualMul
+        val h = layout.height * visualMul
         val feetFrac = layout.feetFrac
         val feetFracX = layout.feetFracX
         val pivot = layout.feetCenter
-        val dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1))
+        val dstSize = IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1))
         val resolvedProfile = profile ?: skinId?.let { PacMazeSkinRenderProfileCatalog.profile(it) }
         val facesRight = resolvedProfile?.defaultFacesRight
             ?: PacMazeSkinRenderProfileCatalog.defaultFacesRight(skinId)
@@ -51,9 +55,66 @@ internal object PacMazeSkinTransform {
                 else -> if (mirror) scale(scaleX = -1f, scaleY = 1f, pivot = Offset.Zero)
             }
             translate(-w * feetFracX, -h * feetFrac)
+            if (scaleY != 1f) {
+                scale(scaleX = 1f, scaleY = scaleY, pivot = Offset.Zero)
+            }
+            if (soleAlignOffsetY != 0f) {
+                translate(0f, soleAlignOffsetY)
+            }
         }) {
             drawImage(
                 image = image,
+                dstOffset = IntOffset.Zero,
+                dstSize = dstSize,
+            )
+        }
+    }
+
+    fun DrawScope.drawOrientedSheet(
+        sheet: PacMazeSkinSheetPlayback,
+        frameIndex: Int,
+        layout: PacMazeSkinLayoutEngine.Layout,
+        facing: Direction,
+        profile: PacMazeSkinRenderProfile?,
+        skinId: com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId?,
+        visualMul: Float = 1f,
+        soleAlignOffsetY: Float = 0f,
+        scaleY: Float = 1f,
+    ) {
+        val src = sheet.srcRect(frameIndex)
+        val w = layout.width * visualMul
+        val h = layout.height * visualMul
+        val feetFrac = layout.feetFrac
+        val feetFracX = layout.feetFracX
+        val pivot = layout.feetCenter
+        val dstSize = IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1))
+        val resolvedProfile = profile ?: skinId?.let { PacMazeSkinRenderProfileCatalog.profile(it) }
+        val facesRight = resolvedProfile?.defaultFacesRight
+            ?: PacMazeSkinRenderProfileCatalog.defaultFacesRight(skinId)
+        val upDeg = resolvedProfile?.upRotationDeg ?: if (facesRight) -90f else 90f
+        val downDeg = resolvedProfile?.downRotationDeg ?: if (facesRight) 90f else -90f
+        val mirror = (facing == Direction.LEFT || facing == Direction.RIGHT) &&
+            horizontalMirror(facing, facesRight)
+
+        withTransform({
+            translate(pivot.x, pivot.y)
+            when (facing) {
+                Direction.UP -> rotate(degrees = upDeg, pivot = Offset.Zero)
+                Direction.DOWN -> rotate(degrees = downDeg, pivot = Offset.Zero)
+                else -> if (mirror) scale(scaleX = -1f, scaleY = 1f, pivot = Offset.Zero)
+            }
+            translate(-w * feetFracX, -h * feetFrac)
+            if (scaleY != 1f) {
+                scale(scaleX = 1f, scaleY = scaleY, pivot = Offset.Zero)
+            }
+            if (soleAlignOffsetY != 0f) {
+                translate(0f, soleAlignOffsetY)
+            }
+        }) {
+            drawImage(
+                image = sheet.bitmap,
+                srcOffset = IntOffset(src.left, src.top),
+                srcSize = IntSize(src.width, src.height),
                 dstOffset = IntOffset.Zero,
                 dstSize = dstSize,
             )

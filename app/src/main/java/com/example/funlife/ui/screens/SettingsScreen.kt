@@ -238,7 +238,7 @@ fun SettingsScreen(
                             val text = com.example.funlife.utils.CrashHandler.exportRecent(ctx)
                             val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_SUBJECT, "FunLife 崩溃反馈")
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "${ctx.getString(com.example.funlife.R.string.app_name)} 崩溃反馈")
                                 putExtra(android.content.Intent.EXTRA_TEXT, text)
                             }
                             ctx.startActivity(android.content.Intent.createChooser(send, "分享崩溃日志"))
@@ -301,7 +301,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "FunLife · Made with 💗",
+                    text = "${ctx.getString(com.example.funlife.R.string.app_name)} · 用心制作",
                     fontSize = 11.sp,
                     color = Color(0xFFBDBDBD),
                     modifier = Modifier.fillMaxWidth(),

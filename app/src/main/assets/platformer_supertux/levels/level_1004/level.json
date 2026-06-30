@@ -1,7 +1,7 @@
 {
   "id": 1004,
-  "title": "Semi Frozen",
-  "subtitle": "SuperTux · Semi-Frozen",
+  "title": "半冻结",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/semi_frozen.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

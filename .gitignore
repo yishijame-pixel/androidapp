@@ -153,3 +153,4 @@ engine/supertux-fork/*
 app/src/main/jniLibs/**/*.so
 app/src/main/assets/data.zip
 .tmp_supertux_classic/
+backend/.tmp_*.zip

@@ -13,6 +13,15 @@ tunnel: <TUNNEL_UUID>
 credentials-file: /etc/cloudflared/<TUNNEL_UUID>.json
 
 ingress:
+  # 游戏静态资源 manifest + zip（独立子域，见 docs/game-assets-static-hosting.md）
+  - hostname: assets.yishi.site
+    service: http://assets-static:80
+    originRequest:
+      connectTimeout: 30s
+      tcpKeepAlive: 30s
+      keepAliveTimeout: 90s
+      keepAliveConnections: 100
+      httpHostHeader: assets.yishi.site
   # 同域热路径：wss://pb.yishi.site/draw-ws/ws
   - hostname: pb.yishi.site
     path: ^/draw-ws

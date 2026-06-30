@@ -24,6 +24,8 @@ internal data class PacMazeRemoteSkinAnimConfig(
     val invertBitmapFacing: Boolean = false,
     /** 61 帧 walk：整圈时长对齐 4 帧梗图（~0.67s），避免局内爬行过慢 */
     val syncWalkCycleToSprite: Boolean = false,
+    /** 吃豆人局内不播放的 clip（横版等平台仍可用 manifest 全量 clips） */
+    val pacMazeExcludedClips: Set<PacMazeSkinAnimClip> = emptySet(),
 ) {
     fun primaryClip(): PacMazeSkinAnimClip = when {
         PacMazeSkinAnimClip.WALK in clips -> PacMazeSkinAnimClip.WALK
@@ -44,7 +46,7 @@ internal object PacMazeRemoteSkinAnimCatalog {
             "${config.assetRoot}/walk/walk_1.png",
             "${config.assetRoot}/idle/idle_1.png",
         )
-        return candidates.firstOrNull { ResourceStore.resolveFile(it) != null }
+        return candidates.firstOrNull { ResourceStore.resourceExists(it) }
             ?: "${config.assetRoot}/walk/walk_1.png"
     }
 
@@ -54,6 +56,8 @@ internal object PacMazeRemoteSkinAnimCatalog {
             assetRoot = "pac_maze_skins/food_chick_walker_pro_max",
             clips = PacMazeSkinAnimClip.entries.toSet(),
             syncWalkCycleToSprite = true,
+            // idle 未归一化（993×928 格）→ 局内定标极小；静止用 walk 首帧
+            pacMazeExcludedClips = setOf(PacMazeSkinAnimClip.IDLE),
         ),
         PacMazeSkinId.FOOD_XIA_WALK to PacMazeRemoteSkinAnimConfig(
             skinId = PacMazeSkinId.FOOD_XIA_WALK,
@@ -65,7 +69,6 @@ internal object PacMazeRemoteSkinAnimCatalog {
             skinId = PacMazeSkinId.FOOD_MOUSE_WALK,
             assetRoot = "pac_maze_skins/laoshu_walk",
             clips = setOf(PacMazeSkinAnimClip.WALK),
-            invertBitmapFacing = true,
             syncWalkCycleToSprite = true,
         ),
         PacMazeSkinId.FOOD_QINGTING_WALK to PacMazeRemoteSkinAnimConfig(
@@ -77,16 +80,65 @@ internal object PacMazeRemoteSkinAnimCatalog {
             skinId = PacMazeSkinId.FOOD_MOSQUITO_WALK,
             assetRoot = "pac_maze_skins/wenzi_walk",
             clips = setOf(PacMazeSkinAnimClip.WALK),
-            invertBitmapFacing = true,
+            syncWalkCycleToSprite = true,
         ),
         PacMazeSkinId.FOOD_TOUSHI_WALK to PacMazeRemoteSkinAnimConfig(
             skinId = PacMazeSkinId.FOOD_TOUSHI_WALK,
             assetRoot = "pac_maze_skins/toushi_walk",
             clips = setOf(PacMazeSkinAnimClip.WALK),
+            syncWalkCycleToSprite = true,
         ),
+        PacMazeSkinId.FOOD_ZOMBIE_WALK to PacMazeRemoteSkinAnimConfig(
+            skinId = PacMazeSkinId.FOOD_ZOMBIE_WALK,
+            assetRoot = "pac_maze_skins/zombie_walk",
+            clips = setOf(PacMazeSkinAnimClip.WALK),
+            syncWalkCycleToSprite = true,
+        ),
+        PacMazeSkinId.YISHI_FIRE_LONG to walkOnly(PacMazeSkinId.YISHI_FIRE_LONG, "fire_long_walk"),
+        PacMazeSkinId.YISHI_GREEN_LONG to walkOnly(PacMazeSkinId.YISHI_GREEN_LONG, "green_long_walk"),
+        PacMazeSkinId.YISHI_HAIMIAN to walkOnly(PacMazeSkinId.YISHI_HAIMIAN, "haimian_walk"),
+        PacMazeSkinId.YISHI_ICE_LONG to walkOnly(PacMazeSkinId.YISHI_ICE_LONG, "ice_long_walk"),
+        PacMazeSkinId.YISHI_LONG to walkOnly(PacMazeSkinId.YISHI_LONG, "long_walk"),
+        PacMazeSkinId.YISHI_MAGIC_DOG to walkOnly(PacMazeSkinId.YISHI_MAGIC_DOG, "magic_dog_walk"),
+        PacMazeSkinId.YISHI_PAIDAXIN to walkOnly(PacMazeSkinId.YISHI_PAIDAXIN, "paidaxin_walk"),
+        PacMazeSkinId.YISHI_QISHI_DOG to walkOnly(PacMazeSkinId.YISHI_QISHI_DOG, "qishi_dog_walk"),
+        PacMazeSkinId.YISHI_BL_LONG to walkOnly(PacMazeSkinId.YISHI_BL_LONG, "bl_long_walk"),
     )
 
-    fun config(skinId: PacMazeSkinId): PacMazeRemoteSkinAnimConfig? = configs[skinId]
+    private fun walkOnly(
+        skinId: PacMazeSkinId,
+        folder: String,
+        invertFacing: Boolean = false,
+    ) = PacMazeRemoteSkinAnimConfig(
+        skinId = skinId,
+        assetRoot = "pac_maze_skins/$folder",
+        clips = setOf(PacMazeSkinAnimClip.WALK),
+        invertBitmapFacing = invertFacing,
+        syncWalkCycleToSprite = true,
+    )
+
+    fun config(skinId: PacMazeSkinId): PacMazeRemoteSkinAnimConfig? {
+        val base = configs[skinId] ?: return null
+        val manifest = runCatching { PacMazeSkinAnimManifest.load(base.assetRoot) }.getOrNull() ?: return base
+        val clipSet = manifest.clipSet().ifEmpty { base.clips }
+        val render = manifest.render
+        return base.copy(
+            clips = clipSet,
+            sampleSize = render?.sampleSize ?: base.sampleSize,
+            invertBitmapFacing = render?.invertBitmapFacing ?: base.invertBitmapFacing,
+            syncWalkCycleToSprite = render?.syncWalkCycleToSprite ?: base.syncWalkCycleToSprite,
+        )
+    }
+
+    /** 吃豆人局内实际可用的 clip 集合（排除 [PacMazeRemoteSkinAnimConfig.pacMazeExcludedClips]）。 */
+    fun pacMazeClips(skinId: PacMazeSkinId): Set<PacMazeSkinAnimClip> {
+        val cfg = config(skinId) ?: return emptySet()
+        return cfg.clips - cfg.pacMazeExcludedClips
+    }
+
+    internal fun baseConfig(skinId: PacMazeSkinId): PacMazeRemoteSkinAnimConfig? = configs[skinId]
+
+    fun assetRoot(skinId: PacMazeSkinId): String? = configs[skinId]?.assetRoot
 
     fun drawFacing(skinId: PacMazeSkinId, facing: Direction): Direction =
         PacMazeSkinRenderProfileCatalog.resolveDrawFacing(skinId, facing)
@@ -96,12 +148,14 @@ internal object PacMazeRemoteSkinAnimCatalog {
     val remoteSkinIds: Set<PacMazeSkinId> get() = configs.keys
 
     fun pickClip(skinId: PacMazeSkinId, pose: PacMazeCharacterPose): PacMazeSkinAnimClip {
-        val clips = config(skinId)?.clips ?: return PacMazeSkinAnimClip.WALK
+        val clips = pacMazeClips(skinId).ifEmpty { return PacMazeSkinAnimClip.WALK }
         return when {
             PacMazeSkinAnimClip.ATTACK in clips && pose.attackCooldownTicksLeft > 0 ->
                 PacMazeSkinAnimClip.ATTACK
             PacMazeSkinAnimClip.DIE in clips && pose.isDead ->
                 PacMazeSkinAnimClip.DIE
+            pose.airborne && PacMazeSkinAnimClip.JUMP in clips ->
+                PacMazeSkinAnimClip.JUMP
             pose.speedBoostActive && pose.isMoving && PacMazeSkinAnimClip.RUN in clips ->
                 PacMazeSkinAnimClip.RUN
             pose.isMoving && PacMazeSkinAnimClip.WALK in clips ->
@@ -145,7 +199,11 @@ internal object PacMazeRemoteSkinAnimCatalog {
                 if (!pose.isMoving) return 0
                 ((pose.animPhase / perFrame).toInt()).mod(frameCount)
             }
-            PacMazeSkinAnimClip.JUMP -> 0
+            PacMazeSkinAnimClip.JUMP -> {
+                pose.spriteFrameOverride?.let { return it.mod(frameCount) }
+                val perFrame = if (pose.walkPreview) 0.85f else 0.75f
+                ((pose.animPhase / perFrame).toInt()).mod(frameCount)
+            }
         }
     }
 }

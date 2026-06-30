@@ -1,7 +1,7 @@
 {
   "id": 901,
   "title": "欢迎来到南极",
-  "subtitle": "SuperTux · Welcome to Antarctica",
+  "subtitle": "南极探险 · SuperTux",
   "sourceStl": "world1/welcome_antarctica.stl",
   "chapterId": "supertux_antarctic",
   "seriesId": "supertux_antarctic",

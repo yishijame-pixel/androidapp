@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.example.funlife.social.game.engine.pacmaze.Direction
@@ -26,6 +27,12 @@ import kotlin.math.sin
 internal object CyberEntityDraw {
 
     fun drawEntities(scope: DrawScope, ctx: PacMazeMapRenderContext) {
+        PacMazeEntityDraw.withEntityMapClip(scope, ctx) {
+            drawEntitiesUnclipped(this, ctx)
+        }
+    }
+
+    private fun drawEntitiesUnclipped(scope: DrawScope, ctx: PacMazeMapRenderContext) {
         val cell = ctx.entityCell
         val ghostColors = ctx.config.palette.ghostColors
         ctx.world.entities.filter { it.role == "ghost" }.forEachIndexed { index, entity ->

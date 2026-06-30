@@ -1,7 +1,7 @@
 {
   "id": 1000,
-  "title": "Penguins Cant Fly",
-  "subtitle": "SuperTux · Glacier Danger",
+  "title": "企鹅不会飞",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/penguins_cant_fly.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

@@ -13,8 +13,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.example.funlife.BuildConfig
 import com.example.funlife.social.game.engine.pacmaze.PacMazeMazeRunOptions
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -30,12 +32,14 @@ import com.example.funlife.social.game.engine.pacmaze.PacMazePortals
 import com.example.funlife.social.game.engine.pacmaze.PacMazeMovementMode
 import com.example.funlife.social.game.engine.pacmaze.PacMazeRunMode
 import com.example.funlife.social.game.engine.pacmaze.PacMazeWorldState
+import com.example.funlife.social.game.engine.pacmaze.renderInterpolationSnapshot
 import com.example.funlife.ui.screens.pacmaze.PacMazeGhostReleaseBanner
 import com.example.funlife.ui.screens.pacmaze.PacMazeGhostProximityOverlay
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeMapThemeId
 import com.example.funlife.ui.screens.pacmaze.components.LockLandscape
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeAttackButton
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeCanvas
+import com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeEndlessWaveBanner
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeJoystickState
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeJoystickVisual
@@ -58,6 +62,7 @@ import com.example.funlife.viewmodel.PacMazeRenderFrame
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 @Composable
 @Suppress("UNUSED_PARAMETER")
@@ -445,27 +450,24 @@ private fun PacMazePlayRenderLayer(
     layoutInsets: PacMazeMapLayoutInsets,
 ) {
     val renderFrame by viewModel.renderFrame.collectAsStateWithLifecycle(null)
-    var renderBlend by remember(screenPhase, levelId) { mutableFloatStateOf(1f) }
     var frameDeltaSec by remember { mutableFloatStateOf(1f / PacMazeConstants.TICKS_PER_SECOND) }
+    var displayClockNs by remember { mutableLongStateOf(0L) }
 
+    // 逻辑 sim（固定 60Hz）与显示（vsync）解耦：120Hz 屏可在两次 tick 间连续插值。
     LaunchedEffect(screenPhase, levelId) {
         if (screenPhase != PacMazePhase.PLAYING) return@LaunchedEffect
         val stepNs = 1_000_000_000L / PacMazeConstants.TICKS_PER_SECOND
-        val maxTicks = PacMazeConstants.MAX_SIM_TICKS_PER_FRAME
-        var lastTickNs = 0L
+        var spanStartNs = 0L
         var lastFrameNs = 0L
-        while (isActive && viewModel.uiState.value.screenPhase == PacMazePhase.PLAYING) {
-            withFrameNanos { frameNs ->
-                if (lastFrameNs > 0L) {
-                    frameDeltaSec = ((frameNs - lastFrameNs) / 1_000_000_000f)
-                        .coerceIn(1f / 240f, 1f / 20f)
-                }
-                lastFrameNs = frameNs
+        var auditTick = 0
 
-                if (lastTickNs == 0L) {
-                    lastTickNs = frameNs
-                    renderBlend = 1f
-                    return@withFrameNanos
+        val simJob = launch {
+            var nextTickNs = System.nanoTime() + stepNs
+            while (isActive && viewModel.uiState.value.screenPhase == PacMazePhase.PLAYING) {
+                val now = System.nanoTime()
+                if (now < nextTickNs) {
+                    kotlinx.coroutines.delay((nextTickNs - now) / 1_000_000L)
+                    continue
                 }
                 viewModel.syncJoystickSample(
                     offsetX = joystickState.knobOffset.x,
@@ -473,16 +475,60 @@ private fun PacMazePlayRenderLayer(
                     maxRadius = joystickState.maxRadiusPx,
                     fingerDown = joystickState.isActive,
                 )
-                var ticksThisFrame = 0
-                while (frameNs - lastTickNs >= stepNs && ticksThisFrame < maxTicks) {
-                    viewModel.tickFrame()
-                    lastTickNs += stepNs
-                    ticksThisFrame++
+                if (viewModel.tickFrameSilent() != null) {
+                    spanStartNs = System.nanoTime()
                 }
-                if (ticksThisFrame >= maxTicks && frameNs - lastTickNs >= stepNs) {
-                    lastTickNs = frameNs - ((frameNs - lastTickNs) % stepNs)
+                nextTickNs += stepNs
+                val lagNs = now - nextTickNs
+                if (lagNs > stepNs * 4) {
+                    nextTickNs = now + stepNs
                 }
-                renderBlend = ((frameNs - lastTickNs).toFloat() / stepNs.toFloat()).coerceIn(0f, 1f)
+            }
+        }
+
+        try {
+            while (isActive && viewModel.uiState.value.screenPhase == PacMazePhase.PLAYING) {
+                withFrameNanos { frameNs ->
+                    displayClockNs = frameNs
+                    if (lastFrameNs > 0L) {
+                        frameDeltaSec = ((frameNs - lastFrameNs) / 1_000_000_000f)
+                            .coerceIn(1f / 240f, 1f / 20f)
+                    }
+                    lastFrameNs = frameNs
+
+                    viewModel.publishDisplayFrame(
+                        spanStartNs = spanStartNs,
+                        spanDurationNs = if (spanStartNs > 0L) stepNs else 0L,
+                        displayClockNs = frameNs,
+                    )
+                    val published = viewModel.renderFrame.value
+                    published?.let { frame ->
+                        val spanElapsed = if (spanStartNs > 0L) {
+                            (frameNs - spanStartNs).coerceAtLeast(0L)
+                        } else {
+                            0L
+                        }
+                        PacMazeMotionDiag.notePublishFrame(
+                            accumNs = spanElapsed % stepNs,
+                            stepNs = stepNs,
+                            simDebtNs = 0L,
+                            ticksThisFrame = 0,
+                            hasPrevious = frame.previous != null,
+                            blend = frame.blend,
+                        )
+                    }
+                    if (BuildConfig.DEBUG) {
+                        auditTick++
+                        if (auditTick % 420 == 0) {
+                            PacMazeMotionDiag.finishBitmapAudit(avatarLoadout.skinId.name)
+                        }
+                    }
+                }
+            }
+        } finally {
+            simJob.cancel()
+            if (BuildConfig.DEBUG) {
+                PacMazeMotionDiag.finishBitmapAudit(avatarLoadout.skinId.name)
             }
         }
     }
@@ -490,7 +536,7 @@ private fun PacMazePlayRenderLayer(
     PacMazeCanvas(
         modifier = Modifier.fillMaxSize(),
         renderFrame = renderFrame ?: PacMazeRenderFrame(current = fallbackWorld, previous = null, blend = 1f),
-        renderBlend = renderBlend,
+        displayClockNs = displayClockNs,
         frameDeltaSec = frameDeltaSec,
         themeId = themeId,
         avatarLoadout = avatarLoadout,

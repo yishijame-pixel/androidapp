@@ -1,0 +1,106 @@
+{
+  "id": 108,
+  "name": "无尽块·熔炉",
+  "width": 17,
+  "height": 17,
+  "grid": [
+    "#################",
+    "#o.o..t.....to.o#",
+    "#.*.o.t.o.o.t.*.#",
+    "#o.o.oto.o.oto.o#",
+    "#.o.o.t.o.o.t.o.#",
+    "#ttttttttttttttt#",
+    "#.o.o.t.o.o.t.o.#",
+    "#o.o.oto.o.oto.o#",
+    "#.o.o.t.-.o.t.o.#",
+    "#o.o.oto.o.oto.o#",
+    "#ttttttttttttttt#",
+    "#o.o.oto.o.oto.o#",
+    "#.o.o.t.o.o.t.o.#",
+    "#o.o.oto.o.oto.o#",
+    "#.*.o.t.o.o.t.*.#",
+    "#ttttttttttttttt#",
+    "#################"
+  ],
+  "spawn": {
+    "pac": [
+      8,
+      15
+    ],
+    "ghosts": [
+      [
+        4,
+        4
+      ],
+      [
+        12,
+        4
+      ],
+      [
+        8,
+        7
+      ],
+      [
+        5,
+        10
+      ],
+      [
+        11,
+        10
+      ]
+    ]
+  },
+  "hazards": [
+    {
+      "type": "laser_h",
+      "y": 1,
+      "x1": 3,
+      "x2": 13
+    },
+    {
+      "type": "laser_v",
+      "x": 8,
+      "y1": 5,
+      "y2": 11
+    }
+  ],
+  "itemSpawners": [
+    {
+      "id": "theta_a",
+      "x": 3,
+      "y": 13,
+      "intervalTicks": 640,
+      "pool": [
+        "frost",
+        "shield",
+        "charge"
+      ]
+    },
+    {
+      "id": "theta_b",
+      "x": 13,
+      "y": 13,
+      "intervalTicks": 640,
+      "pool": [
+        "speed",
+        "magnet",
+        "double"
+      ]
+    },
+    {
+      "id": "theta_c",
+      "x": 8,
+      "y": 11,
+      "intervalTicks": 680,
+      "pool": [
+        "frost",
+        "speed",
+        "shield"
+      ]
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 1.12,
+    "ai_aggression": 0.68
+  }
+}

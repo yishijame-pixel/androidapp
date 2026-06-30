@@ -1,7 +1,7 @@
 {
   "id": 1006,
-  "title": "Castle In Sky",
-  "subtitle": "SuperTux · Castle in the Sky",
+  "title": "天空城堡",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/castle_in_sky.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

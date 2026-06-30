@@ -31,6 +31,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.funlife.FunLifeApplication
 import com.example.funlife.social.game.engine.pacmaze.PacMazeConstants
+import com.example.funlife.social.game.engine.pacmaze.playerPacMovedFrom
+import com.example.funlife.social.game.engine.pacmaze.renderInterpolationSnapshot
 import com.example.funlife.BuildConfig
 import com.example.funlife.social.game.engine.pacmaze.PacMazeOnlineMatchMode
 import com.example.funlife.ui.screens.pacmaze.LocalPacMazePlayLayout
@@ -91,6 +93,7 @@ fun PacMazeOnlinePlayScreen(
     val world = ui.world ?: renderFrame?.current ?: return
     val level = ui.levelConfig ?: return
     var renderBlend by remember(ui.loading, ui.countdown) { mutableFloatStateOf(1f) }
+    var frameDeltaSec by remember { mutableFloatStateOf(1f / PacMazeConstants.TICKS_PER_SECOND) }
 
     LaunchedEffect(ui.avatarLoadout.skinId, ui.levelConfig?.id) {
         PacMazeRemoteSkinAnimCache.requestGameplayWarmupAsync(ui.avatarLoadout.skinId)
@@ -101,7 +104,8 @@ fun PacMazeOnlinePlayScreen(
         joystickState.resetVisual()
         viewModel.resetJoystickInput()
         val stepNs = 1_000_000_000L / PacMazeConstants.TICKS_PER_SECOND
-        var lastTickNs = 0L
+        var simAccumulatorNs = 0L
+        var lastFrameNs = 0L
         while (isActive) {
             withFrameNanos { frameNs ->
                 viewModel.syncJoystickSample(
@@ -110,29 +114,47 @@ fun PacMazeOnlinePlayScreen(
                     maxRadius = joystickState.maxRadiusPx,
                     fingerDown = joystickState.isActive,
                 )
+                if (lastFrameNs > 0L) {
+                    frameDeltaSec = ((frameNs - lastFrameNs) / 1_000_000_000f)
+                        .coerceIn(1f / 240f, 1f / 20f)
+                }
                 if (viewModel.useServerInterpolation()) {
                     viewModel.advanceOnlineFrame(frameNs)
                     renderBlend = 1f
                     return@withFrameNanos
                 }
-                if (lastTickNs == 0L) {
-                    lastTickNs = frameNs
+                val frameDeltaNs = if (lastFrameNs > 0L) frameNs - lastFrameNs else 0L
+                lastFrameNs = frameNs
+                if (frameDeltaNs <= 0L) {
                     renderBlend = 1f
                     viewModel.advanceOnlineFrame(frameNs)
                     return@withFrameNanos
                 }
-                var ticksThisFrame = 0
-                while (frameNs - lastTickNs >= stepNs && ticksThisFrame < PacMazeConstants.MAX_SIM_TICKS_PER_FRAME) {
-                    viewModel.advanceOnlineFrame(frameNs)
-                    lastTickNs += stepNs
-                    ticksThisFrame++
-                }
-                if (ticksThisFrame >= PacMazeConstants.MAX_SIM_TICKS_PER_FRAME &&
-                    frameNs - lastTickNs >= stepNs
+                val worldBeforeFrame = viewModel.renderFrame.value?.current?.renderInterpolationSnapshot()
+                val tickStep = com.example.funlife.ui.screens.pacmaze.components.PacMazeRenderTickLoop.step(
+                    frameDeltaNs = frameDeltaNs,
+                    accumulatorNs = simAccumulatorNs,
+                    stepNs = stepNs,
                 ) {
-                    lastTickNs = frameNs - ((frameNs - lastTickNs) % stepNs)
+                    viewModel.advanceOnlineFrame(frameNs)
+                    true
                 }
-                renderBlend = ((frameNs - lastTickNs).toFloat() / stepNs.toFloat()).coerceIn(0f, 1f)
+                simAccumulatorNs = tickStep.accumulatorNs
+                val playerMoved = worldBeforeFrame?.playerPacMovedFrom(
+                    viewModel.renderFrame.value?.current,
+                ) ?: true
+                renderBlend = if (playerMoved && tickStep.ticksThisFrame > 0) {
+                    com.example.funlife.ui.screens.pacmaze.components.PacMazeRenderTickLoop.renderBlend(
+                        simAccumulatorNs,
+                        stepNs,
+                    )
+                } else {
+                    1f
+                }
+                com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.noteMultiTick(
+                    tickStep.ticksThisFrame,
+                    playerMoved,
+                )
             }
         }
     }
@@ -156,6 +178,8 @@ fun PacMazeOnlinePlayScreen(
                 PacMazeCanvas(
                     modifier = Modifier.fillMaxSize(),
                     renderFrame = frame.copy(blend = renderBlend),
+                    renderBlend = renderBlend,
+                    frameDeltaSec = frameDeltaSec,
                     themeId = ui.mapThemeId,
                     avatarLoadout = ui.avatarLoadout,
                     levelConfig = level,

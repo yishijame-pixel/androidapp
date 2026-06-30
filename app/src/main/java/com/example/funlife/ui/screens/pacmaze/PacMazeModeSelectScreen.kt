@@ -30,12 +30,12 @@ import com.example.funlife.social.game.engine.pacmaze.PacMazePhase
 import com.example.funlife.social.game.engine.pacmaze.PacMazeRunMode
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import com.example.funlife.resource.PacMazeResourceUpdateNotifier
 import com.example.funlife.ui.screens.pacmaze.PacMazeSfx
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeResultOverlay
 import com.example.funlife.ui.screens.pacmaze.components.PacMazeMapSelectorRow
 import com.example.funlife.data.model.UserSession
 import com.example.funlife.social.game.model.GameRoomStatus
+import com.example.funlife.ui.screens.platformer.PlatformerPrewarmBanner
 import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlineHubPanel
 import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlineInHubLobby
 import com.example.funlife.ui.screens.pacmaze.online.PacMazeOnlinePlayScreen
@@ -206,10 +206,6 @@ fun PacMazeModeSelectScreen(
             }
             BackHandler(onBack = hubBack)
 
-            LaunchedEffect(Unit) {
-                PacMazeResourceUpdateNotifier.refresh()
-            }
-
             val continueLevelId = ui.maxLevelReached.coerceIn(1, PacMazeLevelCatalog.TOTAL_LEVELS)
             val totalLevels = PacMazeLevelCatalog.levels.size
             val totalStars = (1..ui.maxLevelReached).sumOf { decodePacMazeStars(ui.starsBitmask, it) }
@@ -239,6 +235,12 @@ fun PacMazeModeSelectScreen(
             }
 
             Box(Modifier.fillMaxSize()) {
+            PlatformerPrewarmBanner(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp)
+                    .zIndex(2f),
+            )
             PacMazeHubScaffold(
                 title = hubTitle,
                 subtitle = hubSubtitle,
@@ -526,6 +528,13 @@ fun PacMazeModeSelectScreen(
         else -> {
             BackHandler(onBack = onNavigateBack)
             val continueLevelId = ui.maxLevelReached.coerceIn(1, PacMazeLevelCatalog.TOTAL_LEVELS)
+            Box(Modifier.fillMaxSize()) {
+                PlatformerPrewarmBanner(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(12.dp)
+                        .zIndex(2f),
+                )
             PacMazeHubScaffold(
                 title = "豆人迷宫",
                 subtitle = "模式选择",
@@ -560,6 +569,7 @@ fun PacMazeModeSelectScreen(
                     )
                 },
             )
+            }
         }
     }
 

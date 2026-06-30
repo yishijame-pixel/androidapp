@@ -17,6 +17,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class FunLifeApplication : Application(), ImageLoaderFactory {
+
+    private val isSupertuxEngineProcess: Boolean
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            getProcessName()?.endsWith(":supertux") == true
+        } else {
+            false
+        }
     
     // 数据库实例
     val database: com.example.funlife.data.database.AppDatabase by lazy {
@@ -26,12 +33,17 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
+        // SuperTux 独立进程只需最小初始化，避免 5～6 秒黑屏等待主 App 逻辑
+        if (isSupertuxEngineProcess) {
+            com.example.funlife.utils.CrashHandler.install(this)
+            android.util.Log.i("FunLifeApplication", "Lite init for :supertux engine process")
+            return
+        }
+
         com.example.funlife.utils.UserAvatarBitmapCache.install(this)
         com.example.funlife.resource.ResourceStore.init(this)
+        com.example.funlife.game.platformer.catalog.PlatformerUnlockProgress.init(this)
         com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinAssetCache.ensureLoaded(this)
-        if (com.example.funlife.resource.ResourceStore.isPacMazeBundleReady("pac_maze_skins")) {
-            com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCache.warmCoverCacheAsync()
-        }
 
         // 🛡️ 全局崩溃兜底：必须最早安装，才能捕获后续初始化中的异常
         com.example.funlife.utils.CrashHandler.install(this)
@@ -87,6 +99,11 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { com.example.funlife.resource.ResourceStore.syncAndPrefetchOnLaunch() }
                 .onFailure { android.util.Log.w("FunLifeApplication", "ResourceStore prefetch failed", it) }
+            runCatching {
+                if (com.example.funlife.resource.ResourceStore.isBundleReadyAsync("pac_maze_skins")) {
+                    com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCache.warmCoverCacheAsync()
+                }
+            }.onFailure { android.util.Log.w("FunLifeApplication", "Cover cache warm failed", it) }
         }
 
         // 🔄 进程级前台监听：App 从后台回到前台时刷新 VIP 配置
@@ -102,6 +119,8 @@ class FunLifeApplication : Application(), ImageLoaderFactory {
                         com.example.funlife.social.SocialPresenceManager.onAppForeground(applicationContext)
                         com.example.funlife.social.SocialForegroundPoller.onAppForeground(applicationContext)
                         com.example.funlife.social.game.GameRoomForegroundSync.onAppForeground(applicationContext)
+                        com.example.funlife.resource.PacMazeResourceUpdateNotifier
+                            .onAppForeground(applicationContext)
                         warmCurrentUserAvatarAsync()
                     }
 

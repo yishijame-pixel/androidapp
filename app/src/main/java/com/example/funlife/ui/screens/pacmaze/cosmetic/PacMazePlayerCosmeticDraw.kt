@@ -43,7 +43,7 @@ object PacMazePlayerCosmeticDraw {
     fun drawSkinSafe(scope: DrawScope, ctx: PacMazeMapRenderContext, pac: PacMazeEntity, center: Offset) {
         val skinId = ctx.avatarLoadout.skinId
         val isAssetBitmap = PacMazeSkinRenderProfileCatalog.isAssetBitmap(skinId)
-        val ikun = PacMazeIkunCatalog.contains(skinId) && !isAssetBitmap
+        val ikun = PacMazeBitmapWalkCatalog.contains(skinId) && !isAssetBitmap
         val isBitmap = PacMazeSkinRenderProfileCatalog.isBitmapResource(skinId)
         val visualCell = min(ctx.cellX, ctx.cellY)
         // ikun 身高跟纵向格高走，避免地图拉宽时相对地板错位/缩小
@@ -79,16 +79,22 @@ object PacMazePlayerCosmeticDraw {
         } else {
             visualCell
         }
-        val feetAnchor = when {
-            !isBitmap -> null
-            ikun -> ctx.ikunDrawAnchor(pac)
-            else -> ctx.bitmapDrawAnchor(pac)
+        val horizontal = travelAxis == Direction.LEFT || travelAxis == Direction.RIGHT
+        val feetAnchor = if (isBitmap && horizontal) {
+            ctx.ikunDrawAnchor(pac)
+        } else {
+            null
         }
+        val corridorCenter = if (isBitmap || ikun) ctx.entityBitmapCorridorCenter(pac) else null
+        val wallBox = if (isBitmap || ikun) ctx.entityBitmapWallBox(pac, travelAxis) else null
+        val mapClip = if (isBitmap || ikun) ctx.entityMapClipRect() else null
         val tileBottomY = if (isBitmap && !ikun) {
             val horizontal = travelAxis == Direction.LEFT || travelAxis == Direction.RIGHT
             ctx.entityCorridorFloorY(pac, snapToTileRow = horizontal)
         } else null
         try {
+            PacMazeSkinRegistry.drawDiagEntityId = pac.id
+            PacMazeSkinRegistry.drawDiagLogicY = pac.y
             PacMazeSkinRegistry.draw(
                 scope = scope,
                 skinId = skinId,
@@ -98,10 +104,15 @@ object PacMazePlayerCosmeticDraw {
                 themeId = ctx.config.id,
                 palette = ctx.config.palette,
                 corridorCellPx = corridorCell,
+                cellXPx = ctx.cellX,
+                cellYPx = ctx.cellY,
                 verticalCellPx = verticalCell,
                 tileCellPx = ctx.cellY,
                 tileBottomYPx = tileBottomY,
                 feetAnchorPx = feetAnchor,
+                corridorCenterPx = corridorCenter,
+                wallBoxRect = wallBox,
+                mapClipRect = mapClip,
                 visualFacing = drawFacing,
                 travelFacing = travelAxis,
                 userDrawScale = ctx.playerDrawScale,

@@ -1,0 +1,85 @@
+{
+  "id": 107,
+  "name": "无尽块·回廊",
+  "width": 15,
+  "height": 15,
+  "grid": [
+    "###############",
+    "#o.ooboo.ob.oo#",
+    "#.*o.bo.oobo*.#",
+    "#oo.ob.oo.bo.o#",
+    "#bbbbbbbbbbbbb#",
+    "#.oo.bo.ooboo.#",
+    "#oo.ob.oo.bo.o#",
+    "#o.oobo-.ob.oo#",
+    "#bbbbbbbbbbbbb#",
+    "#oo.ob.&o.bo.o#",
+    "#o.ooboo.ob.oo#",
+    "#.oo.bo.ooboo.#",
+    "#b*bbbbbbbbb*b#",
+    "#o.ooboo.ob.oo#",
+    "###############"
+  ],
+  "spawn": {
+    "pac": [
+      7,
+      13
+    ],
+    "ghosts": [
+      [
+        3,
+        3
+      ],
+      [
+        11,
+        3
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        4,
+        9
+      ]
+    ]
+  },
+  "itemSpawners": [
+    {
+      "id": "eta_a",
+      "x": 2,
+      "y": 11,
+      "intervalTicks": 660,
+      "pool": [
+        "frost",
+        "shield",
+        "magnet"
+      ]
+    },
+    {
+      "id": "eta_b",
+      "x": 12,
+      "y": 11,
+      "intervalTicks": 660,
+      "pool": [
+        "speed",
+        "charge",
+        "double"
+      ]
+    },
+    {
+      "id": "eta_c",
+      "x": 7,
+      "y": 9,
+      "intervalTicks": 720,
+      "pool": [
+        "magnet",
+        "frost"
+      ]
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 1.05,
+    "ai_aggression": 0.62
+  }
+}

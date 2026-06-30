@@ -1,0 +1,9 @@
+{
+  "id": "desert",
+  "schemaVersion": 1,
+  "tileSize": 128,
+  "tileCount": 16,
+  "mapping": "craftpix_v1",
+  "theme": "PACK_DESERT",
+  "sourceZip": "deserttileset (1).zip"
+}

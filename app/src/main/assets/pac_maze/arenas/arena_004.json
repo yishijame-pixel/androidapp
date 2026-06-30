@@ -1,0 +1,46 @@
+{
+  "id": "arena_004",
+  "name": "闸道对决",
+  "width": 15,
+  "height": 17,
+  "grid": [
+    "###############",
+    "#*ooooo|ooooo*#",
+    "#oo.oo.|o.oo.o#",
+    "#oooooo|oooooo#",
+    "#oo.oG.|o>oo.o#",
+    "#oooooo|oooooo#",
+    "#oo.Ho.|o.oo.o#",
+    "#oooooo|oooooo#",
+    "#o=.oo.|o.oo.o#",
+    "#oooooo|oooooo#",
+    "#oo.oo.|o.oo.o#",
+    "#oooooo|oooooo#",
+    "#oo.oo.|o.oo.o#",
+    "#oooooo|oooooo#",
+    "#oo.oo.|o.oo.o#",
+    "#*ooooo|ooooo*#",
+    "###############"
+  ],
+  "spawn": {
+    "pac_a": [
+      1,
+      8
+    ],
+    "pac_b": [
+      13,
+      8
+    ],
+    "ghosts": [
+      [
+        7,
+        3
+      ],
+      [
+        7,
+        13
+      ]
+    ]
+  },
+  "themeId": "steampunk"
+}

@@ -56,8 +56,8 @@ FAST_PATH_BLOCK = """
   {
     std::string datadir = m_forced_userdir.value();
     datadir.append("/supertux_data");
-    std::string images_probe = datadir + "/images";
-    if (FileSystem::is_directory(datadir) && FileSystem::exists(images_probe)) {
+    std::string data_probe = datadir + "/images/engine/icons/supertux-nightly-256x256.png";
+    if (FileSystem::is_directory(datadir) && FileSystem::exists(data_probe)) {
       if (PHYSFS_mount(datadir.c_str(), nullptr, 1)) {
         log_info << "Mounted pre-extracted Android data directory: " << datadir << std::endl;
         return true;
@@ -90,6 +90,14 @@ FAST_PATH_BLOCK = """
 
 def apply_android_datadir_fast_path(main_cpp: Path) -> None:
     text = main_cpp.read_text(encoding="utf-8")
+    old_probe = 'std::string images_probe = datadir + "/images";'
+    new_probe = 'std::string data_probe = datadir + "/images/engine/icons/supertux-nightly-256x256.png";'
+    if old_probe in text:
+        text = text.replace(old_probe, new_probe, 1)
+        text = text.replace("FileSystem::exists(images_probe)", "FileSystem::exists(data_probe)", 1)
+        main_cpp.write_text(text, encoding="utf-8", newline="\n")
+        print(f"upgraded datadir probe (icon sanity check) -> {main_cpp}")
+        return
     if DIR_MOUNT_MARKER in text and FAST_PATH_MARKER in text:
         print(f"skip (already applied): datadir fast-path in {main_cpp.name}")
         return

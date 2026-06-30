@@ -47,4 +47,29 @@ class PacMazeMazeGeneratorTest {
         val rush = base.copy(contract = PacMazeMazeContract.RUSH)
         assertTrue(rush.effectiveTimeLimitSeconds < base.effectiveTimeLimitSeconds)
     }
+
+    @Test
+    fun generatedLevel_includesPelletsAndMechanisms() {
+        val options = PacMazeMazeRunOptions(
+            seed = 77L,
+            difficulty = PacMazeMazeDifficulty.STANDARD,
+        )
+        val json = PacMazeMazeGenerator.buildLevelJson(options)
+        val level = PacMazeMapLoader.parseLevelJson(json)
+        assertTrue(level.hazards.isNotEmpty() || json.contains("\"G\"") || json.contains("\"H\""))
+        assertTrue(json.contains("\".\"") || json.contains("*"))
+        assertTrue(level.itemSpawners.isNotEmpty())
+    }
+
+    @Test
+    fun campaignLevel_usesProgressionStarCriteriaWhenMissing() {
+        val json = """
+            {"id":5,"name":"test","width":11,"height":11,"grid":["###########"],"spawn":{"pac":[1,1],"ghosts":[]}}
+        """.trimIndent()
+        val root = com.google.gson.JsonParser.parseString(json).asJsonObject
+        val criteria = PacMazeStarCriteria.fromLevelJson(root)
+        val expected = PacMazeLevelProgression.starCriteria(5)
+        assertEquals(expected.twoStarMinScore, criteria.twoStarMinScore)
+        assertEquals(expected.threeStarMaxSeconds, criteria.threeStarMaxSeconds)
+    }
 }

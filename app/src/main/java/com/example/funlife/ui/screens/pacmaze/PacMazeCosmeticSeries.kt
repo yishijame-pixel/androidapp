@@ -17,9 +17,12 @@ enum class PacMazeSkinSeries(
     INK("国风系列", "水墨庭院 · 剪纸瓷韵", "🏯", setOf(SkinStyleFamily.INK), 0xFFFFCA28),
     CYBER("赛博系列", "霓虹全息 · 数据流光", "💠", setOf(SkinStyleFamily.CYBER), 0xFF22D3EE),
     FOOD("怪趣零食", "软糯火辣 · 零食成精", "🍡", setOf(SkinStyleFamily.FOOD, SkinStyleFamily.CHIBI), 0xFFFF7043),
-    IKUN("ikun类", "梗图行走 · 云端动画", "🐔", setOf(SkinStyleFamily.IKUN), 0xFFFFD54F),
+    IKUN("ikun类", "梗图行走 · 梗图角色", "🐔", setOf(SkinStyleFamily.IKUN), 0xFFFFD54F),
+    YISHI("一十类", "品牌行走 · 品牌角色", "✨", setOf(SkinStyleFamily.YISHI), 0xFF81C784),
     COLLECT("主题典藏", "街机蒸汽 · 经典回味", "🎭", setOf(SkinStyleFamily.RETRO, SkinStyleFamily.STEAM), 0xFF9575FF),
     ;
+
+    fun isBitmapWalkSeries(): Boolean = this == IKUN || this == YISHI
 
     fun skins(): List<PacMazeSkinId> = when (this) {
         LINE_ART, OCEAN, INK, CYBER, FOOD -> PacMazeSkinId.selectable.filter {
@@ -27,6 +30,9 @@ enum class PacMazeSkinSeries(
         }
         IKUN -> PacMazeSkinId.selectable.filter {
             PacMazeCosmeticCatalog.definition(it).styleFamily == SkinStyleFamily.IKUN
+        }
+        YISHI -> PacMazeSkinId.selectable.filter {
+            PacMazeCosmeticCatalog.definition(it).styleFamily == SkinStyleFamily.YISHI
         }
         COLLECT -> PacMazeSkinId.selectable.filter {
             val f = PacMazeCosmeticCatalog.definition(it).styleFamily
@@ -45,6 +51,7 @@ object PacMazeCosmeticSeriesNav {
             SkinStyleFamily.CYBER -> PacMazeSkinSeries.CYBER
             SkinStyleFamily.FOOD, SkinStyleFamily.CHIBI -> PacMazeSkinSeries.FOOD
             SkinStyleFamily.IKUN -> PacMazeSkinSeries.IKUN
+            SkinStyleFamily.YISHI -> PacMazeSkinSeries.YISHI
             SkinStyleFamily.RETRO, SkinStyleFamily.STEAM -> PacMazeSkinSeries.COLLECT
             else -> PacMazeSkinSeries.COLLECT
         }
@@ -58,6 +65,7 @@ object PacMazeCosmeticSeriesNav {
             PacMazeSkinSeries.CYBER -> SkinStyleFamily.CYBER
             PacMazeSkinSeries.FOOD -> null
             PacMazeSkinSeries.IKUN -> SkinStyleFamily.IKUN
+            PacMazeSkinSeries.YISHI -> SkinStyleFamily.YISHI
             PacMazeSkinSeries.COLLECT -> null
         }
 }

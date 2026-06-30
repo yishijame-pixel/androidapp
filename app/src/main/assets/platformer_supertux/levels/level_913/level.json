@@ -1,7 +1,7 @@
 {
   "id": 913,
-  "title": "Entrance Cave",
-  "subtitle": "SuperTux · Entrance to the Cave",
+  "title": "入口洞穴",
+  "subtitle": "南极探险 · SuperTux",
   "sourceStl": "world1/entrance_cave.stl",
   "chapterId": "supertux_antarctic",
   "seriesId": "supertux_antarctic",

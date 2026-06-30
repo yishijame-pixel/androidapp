@@ -1,0 +1,67 @@
+{
+  "id": 104,
+  "name": "无尽块·园林",
+  "width": 13,
+  "height": 13,
+  "grid": [
+    "#############",
+    "#.ooboo.b..o#",
+    "#o*.oooooo*o#",
+    "#oo>oo.ooHoo#",
+    "#.oobo..bo.o#",
+    "#ooooooooooo#",
+    "#oo.@oGo=.oo#",
+    "#.o.boo.bo.o#",
+    "#ooooooooooo#",
+    "#oo.oo.oo.oo#",
+    "#.*oboo.bo*o#",
+    "#oooooooo.oo#",
+    "#############"
+  ],
+  "spawn": {
+    "pac": [
+      6,
+      11
+    ],
+    "ghosts": [
+      [
+        3,
+        3
+      ],
+      [
+        9,
+        3
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "itemSpawners": [
+    {
+      "id": "delta_a",
+      "x": 2,
+      "y": 9,
+      "intervalTicks": 720,
+      "pool": [
+        "magnet",
+        "shield"
+      ]
+    },
+    {
+      "id": "delta_b",
+      "x": 10,
+      "y": 9,
+      "intervalTicks": 720,
+      "pool": [
+        "frost",
+        "speed"
+      ]
+    }
+  ],
+  "difficulty": {
+    "ghost_speed_mul": 0.92,
+    "ai_aggression": 0.52
+  }
+}

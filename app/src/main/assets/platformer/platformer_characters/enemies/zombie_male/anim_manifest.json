@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 3,
+  "skinId": "zombie_male",
+  "normalized": true,
+  "canvas": {
+    "w": 531,
+    "h": 574
+  },
+  "anchorFrac": {
+    "x": 0.423729,
+    "y": 0.803136
+  },
+  "clips": {
+    "attack": {
+      "count": 8,
+      "folder": "attack",
+      "prefix": "attack",
+      "sheet": {
+        "file": "attack_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 531,
+        "cellH": 574
+      }
+    },
+    "die": {
+      "count": 12,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 531,
+        "cellH": 574
+      }
+    },
+    "idle": {
+      "count": 15,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 4,
+        "cellW": 531,
+        "cellH": 574
+      }
+    },
+    "walk": {
+      "count": 10,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 531,
+        "cellH": 574
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "enemy",
+    "group": "undead",
+    "title": "僵尸(男)",
+    "subtitle": "",
+    "unlock": {
+      "type": "default",
+      "value": 0
+    },
+    "abilities": [],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

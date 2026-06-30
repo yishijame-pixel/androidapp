@@ -345,10 +345,14 @@ object PacMazeConstants {
     const val TURN_ALIGN_EPS = 0.18f
     /** 提前转向窗口：略宽于 [TURN_ALIGN_EPS]，在接近中心时允许缓冲转向。 */
     const val TURN_PREEMPT_EPS = 0.20f
-    /** 单帧最多追赶的逻辑 tick 数（略提高以减少掉帧时「一顿一顿」）。 */
+    /** 单帧最多追赶的逻辑 tick 数（accumulator 债务上限，防死亡螺旋）。 */
     const val MAX_SIM_TICKS_PER_FRAME = 5
-    /** 渲染插值速度外推系数（0~1，越大越“超前”）。 */
-    const val RENDER_VEL_EXTRAP = 0.22f
+    /** 渲染环每显示帧最多推进的逻辑 tick（30fps≈2 tick/帧，blend 更稳定）。 */
+    const val RENDER_MAX_TICKS_PER_FRAME = 2
+    /** 本地局内显示环：每 vsync 最多 1 tick，避免 120Hz 下 2-tick 批次不断重置 span。 */
+    const val DISPLAY_MAX_TICKS_PER_FRAME = 1
+    /** 渲染插值速度外推系数（0~1）；0 = 纯 lerp，避免贴墙/多 tick 段插值时 RENDER_CLAMP。 */
+    const val RENDER_VEL_EXTRAP = 0f
     /** 角色/幽灵装饰动画相位增速（每逻辑 tick）；越小摆动越慢。 */
     const val ANIM_PHASE_PER_TICK = 0.08f
     /** 摇杆死区（strength 0~1）。 */

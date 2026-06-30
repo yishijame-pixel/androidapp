@@ -1,7 +1,7 @@
 {
   "id": 1007,
-  "title": "Flanders Ice Field",
-  "subtitle": "SuperTux · In Flanders Ice Field",
+  "title": "弗兰德冰原",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/flanders_ice_field.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

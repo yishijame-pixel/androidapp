@@ -3,7 +3,7 @@ package com.example.funlife.ui.screens.pacmaze.cosmetic.skin
 import com.example.funlife.social.game.engine.pacmaze.Direction
 import com.example.funlife.social.game.engine.pacmaze.PacMazeEntity
 import com.example.funlife.social.game.engine.pacmaze.PacMazeEntityVisuals
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 
 /**
@@ -24,7 +24,7 @@ internal data class PacMazeSkinRenderProfile(
 internal object PacMazeSkinRenderProfileCatalog {
 
     private val ikunProfiles: Map<PacMazeSkinId, PacMazeSkinRenderProfile> =
-        PacMazeIkunCatalog.skinIds.associateWith { skinId ->
+        PacMazeBitmapWalkCatalog.skinIds.associateWith { skinId ->
             val remoteCfg = PacMazeRemoteSkinAnimCatalog.config(skinId)
             val syncWalk = remoteCfg?.syncWalkCycleToSprite == true
             // 原图默认朝向：walk_1 朝左；老鼠/蚊子等云端包朝右（invertBitmapFacing）

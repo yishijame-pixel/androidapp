@@ -34,22 +34,23 @@ object SecureHttp {
     fun client(): OkHttpClient = newBuilder().build()
 
     private fun applyPinning(builder: OkHttpClient.Builder) {
-        val pinSpec = BuildConfig.VIP_BACKEND_PIN
-        val baseUrl = BuildConfig.VIP_BACKEND_URL
-        if (pinSpec.isBlank() || baseUrl.isBlank()) return
+        val pinnerBuilder = CertificatePinner.Builder()
+        var pinned = false
+        pinned = addHostPins(pinnerBuilder, BuildConfig.VIP_BACKEND_URL, BuildConfig.VIP_BACKEND_PIN) || pinned
+        pinned = addHostPins(pinnerBuilder, BuildConfig.ASSET_MANIFEST_URL, BuildConfig.ASSET_MANIFEST_PIN) || pinned
+        if (pinned) builder.certificatePinner(pinnerBuilder.build())
+    }
 
+    private fun addHostPins(pinnerBuilder: CertificatePinner.Builder, baseUrl: String, pinSpec: String): Boolean {
+        if (pinSpec.isBlank() || baseUrl.isBlank()) return false
         val host = try {
-            Uri.parse(baseUrl).host ?: return
+            Uri.parse(baseUrl).host ?: return false
         } catch (e: Exception) {
-            return
+            return false
         }
-
-        val pinner = CertificatePinner.Builder().apply {
-            // 支持逗号分隔多 pin（主证书 + 备用证书，避免轮换时失联）
-            pinSpec.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { p ->
-                add(host, p)
-            }
-        }.build()
-        builder.certificatePinner(pinner)
+        pinSpec.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { p ->
+            pinnerBuilder.add(host, p)
+        }
+        return true
     }
 }

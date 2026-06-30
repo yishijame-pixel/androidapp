@@ -83,7 +83,7 @@ enum class PacMazePlayMode(
     val emoji: String,
     val playable: Boolean = false,
 ) {
-    SOLO("solo", "单人闯关", "四主题 13 关递进", "🏃", playable = true),
+    SOLO("solo", "单人闯关", "23关 · 14主题递进", "🏃", playable = true),
     ENDLESS("endless", "无尽模式", "波次递进 · 冲高分", "♾️", playable = true),
     MAZE("maze", "迷雾迷宫", "战争迷雾 · 钥印出口 · 每日挑战", "🌫️", playable = true),
     ONLINE_VERSUS("online_versus", "豆人对决", "邀请好友实时竞技", "⚔️", playable = true),

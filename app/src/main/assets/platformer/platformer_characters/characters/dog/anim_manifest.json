@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 3,
+  "skinId": "dog",
+  "normalized": true,
+  "canvas": {
+    "w": 474,
+    "h": 540
+  },
+  "anchorFrac": {
+    "x": 0.459916,
+    "y": 0.790741
+  },
+  "clips": {
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "fall": {
+      "count": 8,
+      "folder": "fall",
+      "prefix": "fall",
+      "sheet": {
+        "file": "fall_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "hurt": {
+      "count": 10,
+      "folder": "hurt",
+      "prefix": "hurt",
+      "sheet": {
+        "file": "hurt_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "jump": {
+      "count": 8,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "run": {
+      "count": 8,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 3,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "slide": {
+      "count": 10,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    },
+    "walk": {
+      "count": 10,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 474,
+        "cellH": 540
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "pet",
+    "title": "狗狗",
+    "subtitle": "宠物系",
+    "unlock": {
+      "type": "level_clear",
+      "value": 10
+    },
+    "abilities": [],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

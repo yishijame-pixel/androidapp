@@ -24,6 +24,8 @@ import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeMapThemeId
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeParticleField
 import com.example.funlife.ui.screens.pacmaze.maptheme.PacMazeThemeRegistry
 import com.example.funlife.viewmodel.PacMazeRenderFrame
+import kotlin.math.exp
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -39,19 +41,20 @@ data class PacMazeMapLayoutInsets(
     val horizontal: Dp = 0.dp,
 )
 
-/** 横/竖走时锁定垂直/水平轨道，避免插值导致脚点漂移。 */
+/** 横/竖走时锁定垂直/水平轨道；插值中（blend<1）保持 fractional 坐标以便转弯平滑。 */
 private fun pacMazeRailTravelAnchor(
     world: PacMazeWorldState,
     entity: PacMazeEntity,
     renderX: Float,
     renderY: Float,
+    blend: Float,
 ): Pair<Float, Float> {
     var rx = renderX
     var ry = renderY
     if (entity.isPlayerPac()) {
         when (entity.direction ?: PacMazeEntityVisuals.travelFacing(entity)) {
-            Direction.LEFT, Direction.RIGHT -> ry = PacMazeMotion.tileY(ry).toFloat()
-            Direction.UP, Direction.DOWN -> rx = PacMazeMotion.tileX(rx).toFloat()
+            Direction.LEFT, Direction.RIGHT -> ry = entity.y
+            Direction.UP, Direction.DOWN -> rx = entity.x
             else -> Unit
         }
     }
@@ -69,6 +72,7 @@ fun PacMazeCanvas(
     modifier: Modifier,
     renderFrame: PacMazeRenderFrame,
     renderBlend: Float = renderFrame.blend,
+    displayClockNs: Long = 0L,
     frameDeltaSec: Float = 1f / PacMazeConstants.TICKS_PER_SECOND,
     themeId: PacMazeMapThemeId = PacMazeMapThemeId.CYBERPUNK,
     avatarLoadout: PacMazeAvatarLoadout = PacMazeAvatarLoadout(),
@@ -84,21 +88,41 @@ fun PacMazeCanvas(
     val config = remember(themeId) { PacMazeThemeRegistry.configFor(themeId) }
     val particles = remember(themeId) { PacMazeParticleField(config.particles, seed = themeId.ordinal.toLong()) }
     val trailBuffer = remember { PacMazeTrailBuffer(capacity = 32) }
+    val displayAnimPhase = remember { DisplayAnimPhase() }
+    val displaySmoother = remember { DisplayAnchorSmoother() }
 
     val world = renderFrame.current
-    val blend = PacMazeMotion.smoothBlend(renderBlend)
     val previous = renderFrame.previous
-
-    fun renderAnchor(entity: PacMazeEntity): Pair<Float, Float> {
-        if (onlineLocalEntityId.isNotBlank() && entity.id == onlineLocalEntityId) {
-            return pacMazeRailTravelAnchor(world, entity, entity.x, entity.y)
-        }
-        val prev = previous?.entities?.firstOrNull { it.id == entity.id }
-        val (rx, ry) = PacMazeMotion.renderEntityAnchor(prev, entity, blend)
-        return pacMazeRailTravelAnchor(world, entity, rx, ry)
-    }
+    val blend = if (renderFrame.spanDurationNs > 0L) {
+        PacMazeRenderTickLoop.displaySpanBlend(
+            spanStartNs = renderFrame.spanStartNs,
+            spanDurationNs = renderFrame.spanDurationNs,
+            displayClockNs = displayClockNs,
+            fallbackBlend = renderBlend,
+        )
+    } else {
+        renderBlend
+    }.coerceIn(0f, 1f)
+    val useAccumInterpolation = previous != null && renderFrame.spanDurationNs <= 0L
 
     Canvas(modifier = modifier) {
+        val clampedFrameDelta = frameDeltaSec.coerceIn(1f / 240f, 1f / 20f)
+
+        fun renderAnchor(entity: PacMazeEntity): Pair<Float, Float> {
+            if (onlineLocalEntityId.isNotBlank() && entity.id == onlineLocalEntityId) {
+                return pacMazeRailTravelAnchor(world, entity, entity.x, entity.y, blend = 1f)
+            }
+            val prev = previous?.entities?.firstOrNull { it.id == entity.id }
+            val (rx, ry) = PacMazeMotion.renderEntityAnchor(prev, entity, blend)
+            val (railX, railY) = pacMazeRailTravelAnchor(world, entity, rx, ry, blend)
+            if (entity.isPlayerPac()) {
+                val moving = hypot(entity.velX, entity.velY) > 0.01f
+                if (useAccumInterpolation || renderFrame.spanDurationNs > 0L) return railX to railY
+                return displaySmoother.follow(railX, railY, clampedFrameDelta, moving)
+            }
+            return railX to railY
+        }
+
         val contentH = (size.height - layoutInsets.top.toPx() - layoutInsets.bottom.toPx())
             .coerceAtLeast(1f)
         val viewport = when (scalePolicy) {
@@ -130,9 +154,8 @@ fun PacMazeCanvas(
                 )
             }
         }
-        val animPhase = world.tick * PacMazeConstants.ANIM_PHASE_PER_TICK
-
-        particles.advance(frameDeltaSec.coerceIn(1f / 240f, 1f / 20f))
+        val animPhase = displayAnimPhase.advance(world.tick, clampedFrameDelta)
+        particles.advance(clampedFrameDelta)
 
         val clampedScale = playerDrawScale.coerceIn(PAC_MAZE_PLAYER_SCALE_MIN, PAC_MAZE_PLAYER_SCALE_MAX)
         val tierScale = PacMazeCosmeticCatalog.bodyTier(avatarLoadout.skinId).scaleMul
@@ -191,6 +214,49 @@ fun PacMazeCanvas(
         }
 
         PacMazeThemeRegistry.renderSafe(this, renderCtx, particles, themeId)
+    }
+}
+
+/** 显示层指数平滑：消化 30fps 下每帧 2 tick 的离散步长。 */
+private class DisplayAnchorSmoother {
+    private var x = Float.NaN
+    private var y = Float.NaN
+
+    fun follow(
+        targetX: Float,
+        targetY: Float,
+        frameDeltaSec: Float,
+        moving: Boolean,
+    ): Pair<Float, Float> {
+        if (!moving) {
+            x = targetX
+            y = targetY
+            return targetX to targetY
+        }
+        if (x.isNaN()) {
+            x = targetX
+            y = targetY
+            return targetX to targetY
+        }
+        val t = (1f - exp(-32f * frameDeltaSec)).coerceIn(0.28f, 0.82f)
+        x += (targetX - x) * t
+        y += (targetY - y) * t
+        return x to y
+    }
+}
+
+/** 行走动画按显示帧推进，避免 30fps 下每帧 2 tick 导致序列帧连跳。 */
+private class DisplayAnimPhase {
+    private var phase = 0f
+    private var lastWorldTick = -1L
+
+    fun advance(worldTick: Long, frameDeltaSec: Float): Float {
+        if (worldTick < lastWorldTick) {
+            phase = worldTick * PacMazeConstants.ANIM_PHASE_PER_TICK
+        }
+        lastWorldTick = worldTick
+        phase += frameDeltaSec * PacMazeConstants.TICKS_PER_SECOND * PacMazeConstants.ANIM_PHASE_PER_TICK
+        return phase
     }
 }
 

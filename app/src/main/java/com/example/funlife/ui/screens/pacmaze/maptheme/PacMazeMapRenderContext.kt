@@ -12,12 +12,13 @@ import com.example.funlife.social.game.engine.pacmaze.PacMazeLevelConfig
 import com.example.funlife.social.game.engine.pacmaze.PacMazeProjectile
 import com.example.funlife.social.game.engine.pacmaze.PacMazeWorldState
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeAvatarLoadout
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunGameplayScale
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 import com.example.funlife.social.game.engine.pacmaze.PacMazeEntityVisuals
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinRenderProfileCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.trail.PacMazeTrailSample
+import kotlin.math.max
 import kotlin.math.min
 
 data class PacMazeMapRenderContext(
@@ -76,14 +77,11 @@ data class PacMazeMapRenderContext(
      * 不改逻辑坐标与碰撞，仅影响渲染。
      */
     fun playerDrawCenter(entity: PacMazeEntity, skinId: PacMazeSkinId): Offset {
-        if (PacMazeSkinRenderProfileCatalog.isAssetBitmap(skinId)) {
-            return bitmapDrawCenter(entity)
+        if (PacMazeSkinRenderProfileCatalog.isBitmapResource(skinId)) {
+            return entityBitmapCorridorCenter(entity)
         }
         val laneX = entityLaneCenterX(entity)
         val center = entityCenter(entity)
-        if (PacMazeIkunCatalog.contains(skinId)) {
-            return Offset(laneX, center.y)
-        }
         val cell = min(cellX, cellY)
         val bodyRadius = cell * 0.44f
         return Offset(laneX, center.y + bodyRadius * 0.08f)
@@ -160,6 +158,59 @@ data class PacMazeMapRenderContext(
         return offsetY + gridY * cellY
     }
 
+    /** 图片资源角色：可走道几何中心（轨道平滑，避免竖走按整数格墙盒 Y 跳动）。 */
+    fun entityBitmapCorridorCenter(entity: PacMazeEntity): Offset {
+        val (ax, ay) = renderAnchor(entity)
+        return Offset(
+            entityLaneCenterX(entity),
+            smoothCorridorCenterY(ay),
+        )
+    }
+
+    /**
+     * 由 fractional 格心推导的通道 Y 中线（含墙 inset / 地板 sink），与 [entityLaneCenterY] 同步插值。
+     */
+    private fun smoothCorridorCenterY(anchorY: Float): Float {
+        val inset = PacMazeIkunGameplayScale.CORRIDOR_WALL_INSET_FRAC
+        val sink = PacMazeIkunGameplayScale.CORRIDOR_FLOOR_SINK_FRAC
+        val rowOrigin = PacMazeMotion.centerY(anchorY) - 0.5f
+        val innerTop = offsetY + (rowOrigin + inset) * cellY
+        val innerBottom = offsetY + (rowOrigin + 1f - inset + sink) * cellY
+        return (innerTop + innerBottom) * 0.5f
+    }
+
+    /** fractional 格原点（与 [smoothCorridorCenterY] 同源，避免墙盒跨格跳变）。 */
+    private fun smoothTileOrigin(centerGrid: Float): Float = centerGrid - 0.5f
+
+    /**
+     * 当前格可走道内缘（霓虹墙内侧）∩ 地图裁剪区。
+     * 始终按**单格**通道定界：横/竖走共用同一 wallBox，避免撞墙后 travel 轴切换把
+     * 约束扩到整行/整列导致角色「还能变大」。
+     */
+    fun entityBitmapWallBox(entity: PacMazeEntity, @Suppress("UNUSED_PARAMETER") travel: Direction? = null): Rect {
+        val (ax, ay) = renderAnchor(entity)
+        val inset = PacMazeIkunGameplayScale.CORRIDOR_WALL_INSET_FRAC
+        val sink = PacMazeIkunGameplayScale.CORRIDOR_FLOOR_SINK_FRAC
+
+        val colOrigin = smoothTileOrigin(PacMazeMotion.centerX(ax))
+        val rowOrigin = smoothTileOrigin(PacMazeMotion.centerY(ay))
+
+        val tileLeft = offsetX + colOrigin * cellX
+        val tileTop = offsetY + rowOrigin * cellY
+        val innerLeft = tileLeft + cellX * inset
+        val innerRight = tileLeft + cellX - cellX * inset
+        val innerTop = tileTop + cellY * inset
+        val innerBottom = tileTop + cellY - cellY * inset + cellY * sink
+
+        val mapClip = entityMapClipRect()
+        return Rect(
+            left = max(innerLeft, mapClip.left),
+            top = max(innerTop, mapClip.top),
+            right = min(innerRight, mapClip.right),
+            bottom = min(innerBottom, mapClip.bottom),
+        )
+    }
+
     /** @deprecated 使用 [bitmapDrawAnchor] */
     fun bitmapFeetAnchor(entity: PacMazeEntity): Offset =
         bitmapDrawAnchor(entity, Direction.RIGHT)
@@ -191,13 +242,19 @@ data class PacMazeMapRenderContext(
     fun entityTileBottomY(entity: PacMazeEntity, snapToTileRow: Boolean = false): Float =
         entityCorridorFloorY(entity, snapToTileRow)
 
-    /** ikun 绘制裁剪区：地图内缘，防止脚/头穿出边框。 */
-    fun ikunMapClipRect(): Rect = Rect(
-        left = offsetX,
-        top = offsetY,
-        right = offsetX + mapW,
-        bottom = offsetY + mapH,
-    )
+    /** 局内实体绘制裁剪：不超出可视地图内缘（与霓虹边框对齐）。 */
+    fun entityMapClipRect(): Rect {
+        val pad = min(cellX, cellY) * PacMazeIkunGameplayScale.MAP_ENTITY_CLIP_INSET_CELL_FRAC
+        return Rect(
+            left = offsetX + pad,
+            top = offsetY + pad,
+            right = offsetX + mapW - pad,
+            bottom = offsetY + mapH - pad,
+        )
+    }
+
+    /** @deprecated 使用 [entityMapClipRect] */
+    fun ikunMapClipRect(): Rect = entityMapClipRect()
 
     fun projectileCenter(projectile: PacMazeProjectile): Offset {
         val prev = previous?.projectiles?.firstOrNull { it.id == projectile.id }

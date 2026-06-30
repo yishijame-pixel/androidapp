@@ -1,7 +1,7 @@
 {
   "id": 984,
-  "title": "Maze In Sky",
-  "subtitle": "SuperTux · A Maze in the Sky",
+  "title": "空中迷宫",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/maze_in_sky.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

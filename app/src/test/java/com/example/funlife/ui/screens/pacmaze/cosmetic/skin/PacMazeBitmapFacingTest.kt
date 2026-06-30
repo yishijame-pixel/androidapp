@@ -86,6 +86,36 @@ class PacMazeBitmapFacingTest {
         )
     }
 
+    @Test
+    fun yishiLong_naturalFacesRight_forWebmPipelineArt() {
+        assertEquals(
+            Direction.RIGHT,
+            PacMazeSkinRenderProfileCatalog.naturalIdleFacing(PacMazeSkinId.YISHI_LONG),
+        )
+        assertEquals(
+            true,
+            PacMazeRemoteSkinAnimCatalog.config(PacMazeSkinId.YISHI_LONG)?.invertBitmapFacing,
+        )
+    }
+
+    @Test
+    fun yishiLong_movingRight_doesNotMirrorNativeRightArt() {
+        val mirror = PacMazeSkinTransform.horizontalMirror(
+            facing = Direction.RIGHT,
+            facesRight = true,
+        )
+        assertEquals(false, mirror)
+    }
+
+    @Test
+    fun yishiLong_movingLeft_mirrorsNativeRightArt() {
+        val mirror = PacMazeSkinTransform.horizontalMirror(
+            facing = Direction.LEFT,
+            facesRight = true,
+        )
+        assertEquals(true, mirror)
+    }
+
     private fun idlePac(facing: Direction) = PacMazeEntity(
         id = "pac",
         role = "pac",

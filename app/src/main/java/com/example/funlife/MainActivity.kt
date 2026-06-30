@@ -473,6 +473,7 @@ fun MainScreen(soundManager: SoundEffectManager) {
         Screen.Help.route,
         Screen.Notifications.route,
         Screen.Inbox.route,
+        Screen.OpenSourceCredits.route,
         // 🆕 v51 时光信箱 4 个路由全部隐藏底栏（沉浸式信纸阅读体验）
         Screen.LetterMailbox.route,
         Screen.LetterCompose.route,
@@ -494,6 +495,8 @@ fun MainScreen(soundManager: SoundEffectManager) {
         "riddle_game",
         "pac_maze",
         "dice_game",
+        "platformer_game",
+        "treasure_hunter_game",
         // 好友页沉浸式（Phase 1 Beta）
         Screen.Friends.route,
         // Phase 2 私聊详情：全屏沉浸，隐藏主 Tab 底栏
@@ -510,6 +513,8 @@ fun MainScreen(soundManager: SoundEffectManager) {
         immersiveRoute?.startsWith("social_game_lobby/") != true &&
         immersiveRoute?.startsWith("social_game_play/") != true &&
         immersiveRoute?.startsWith("pac_maze") != true &&
+        immersiveRoute?.startsWith("platformer_game") != true &&
+        immersiveRoute?.startsWith("treasure_hunter_game") != true &&
         immersiveRoute?.startsWith("social_game_center") != true
 
     com.example.funlife.ui.components.topdrawer.TopDrawerHost(

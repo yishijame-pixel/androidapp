@@ -116,6 +116,13 @@ enum class FunChannel(
         systemImportance = NotificationManager.IMPORTANCE_HIGH,
         respectQuietHours = false,
         emoji = "👥",
+    ),
+    GAME_RESOURCE(
+        id = "fun_game_resource",
+        displayName = "游戏资源",
+        description = "游戏资源下载完成或失败提醒",
+        systemImportance = NotificationManager.IMPORTANCE_DEFAULT,
+        emoji = "🎮",
     );
 
     companion object {

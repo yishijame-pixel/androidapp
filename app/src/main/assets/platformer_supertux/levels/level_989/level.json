@@ -1,7 +1,7 @@
 {
   "id": 989,
-  "title": "Train Leaves In One Minute",
-  "subtitle": "SuperTux · Train Leaves in One Minute",
+  "title": "一分钟发车",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/train_leaves_in_one_minute.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

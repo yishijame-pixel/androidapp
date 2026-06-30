@@ -56,11 +56,13 @@ import com.example.funlife.viewmodel.GameCenterViewModel
 fun SocialGameCenterScreen(
     viewModel: GameCenterViewModel,
     initialTab: GameCenterTab = GameCenterTab.ONLINE,
+    leaderboardPlayers: List<com.example.funlife.data.model.Player> = emptyList(),
     onNavigateBack: () -> Unit,
     onNavigateToDetail: (gameId: String) -> Unit,
     onNavigateToLocalGame: (route: String) -> Unit,
     onNavigateToLobby: (roomId: String) -> Unit,
     onNavigateToPlay: (roomId: String) -> Unit,
+    onOpenScoreLeaderboard: () -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsState()
     val joinCode by viewModel.joinCode.collectAsState()
@@ -91,6 +93,13 @@ fun SocialGameCenterScreen(
         },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            com.example.funlife.ui.components.GameResourceBanner(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                style = com.example.funlife.ui.components.GameResourceBannerStyle.PacMaze,
+            )
+
             HubSegmentTabs(
                 selected = selectedTab,
                 onSelect = viewModel::selectTab,
@@ -124,6 +133,8 @@ fun SocialGameCenterScreen(
                     )
                     GameCenterTab.LOCAL -> LocalTabContent(
                         games = com.example.funlife.social.game.catalog.SocialGameCatalog.localPartyGames(),
+                        leaderboardPlayers = leaderboardPlayers,
+                        onOpenScoreLeaderboard = onOpenScoreLeaderboard,
                         onGameClick = { entry ->
                             entry.localRoute?.let(onNavigateToLocalGame)
                         },
@@ -282,6 +293,8 @@ private fun OnlineTabContent(
 @Composable
 private fun LocalTabContent(
     games: List<SocialGameEntry>,
+    leaderboardPlayers: List<com.example.funlife.data.model.Player> = emptyList(),
+    onOpenScoreLeaderboard: () -> Unit = {},
     onGameClick: (SocialGameEntry) -> Unit,
 ) {
     LazyColumn(
@@ -291,11 +304,81 @@ private fun LocalTabContent(
         item {
             HubNoticeCard("同屏乐玩适合聚会传手机，无需联网即可畅玩。")
         }
+        if (leaderboardPlayers.isNotEmpty()) {
+            item {
+                HubSectionTitle("计分排行榜", "聚会计分战绩一览")
+            }
+            item {
+                GameCenterLeaderboardCard(
+                    players = leaderboardPlayers.take(3),
+                    onViewAll = onOpenScoreLeaderboard,
+                )
+            }
+        }
         item {
             HubSectionTitle("聚会游戏", "一部手机，多人轮流挑战")
         }
         items(games, key = { it.gameId }) { game ->
             HubGameListCard(entry = game, onClick = { onGameClick(game) })
+        }
+    }
+}
+
+@Composable
+private fun GameCenterLeaderboardCard(
+    players: List<com.example.funlife.data.model.Player>,
+    onViewAll: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(SocialGamePalette.glassFill)
+            .border(1.dp, SocialGamePalette.glassBorder, RoundedCornerShape(18.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🏆 前三名", color = SocialGamePalette.inkPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                "查看全部",
+                color = SocialGamePalette.accentGold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(onClick = onViewAll),
+            )
+        }
+        players.forEachIndexed { index, player ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "#${index + 1}",
+                    color = SocialGamePalette.accentGold,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    modifier = Modifier.width(28.dp),
+                )
+                Text(
+                    player.name,
+                    color = SocialGamePalette.inkPrimary,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${player.score} 分",
+                    color = SocialGamePalette.inkMuted,
+                    fontSize = 13.sp,
+                )
+            }
         }
     }
 }

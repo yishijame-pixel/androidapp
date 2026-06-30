@@ -5,9 +5,9 @@
 
 const crypto = require("crypto");
 const https = require("https");
+const { loadBaseUrl } = require("./_loadBaseUrl");
 
-const BASE_URL =
-  "https://funlife-prod-d8gxf7og0518b8253-1333176506.ap-shanghai.app.tcloudbase.com";
+const BASE_URL = loadBaseUrl();
 
 const ts = Date.now();
 function uniq(prefix) {

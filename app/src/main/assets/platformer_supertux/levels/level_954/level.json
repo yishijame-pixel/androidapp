@@ -1,7 +1,7 @@
 {
   "id": 954,
-  "title": "Drop Ball",
-  "subtitle": "SuperTux · Drop The Ball",
+  "title": "落球机关",
+  "subtitle": "森林秘境 · SuperTux",
   "sourceStl": "world2/drop_ball.stl",
   "chapterId": "supertux_forest",
   "seriesId": "supertux_forest",

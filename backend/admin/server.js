@@ -8,12 +8,17 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const cookieParser = require("cookie-parser");
-const { initTcb, loadEnv } = require("./_loadEnv");
+const { initDatabase, installDbShimIfNeeded } = require("./_loadEnv");
 const SKU = require("../shared/sku");
 const { sendError, audit } = require("./_helpers");
+const { dashboardStatsCache, chatAiProductStatsCache } = require("./statsCache");
 
-// 先加载 .env，再 require auth（auth 需要读取环境变量）
-loadEnv();
+function invalidateStatsCaches() {
+  dashboardStatsCache.invalidateAll();
+  chatAiProductStatsCache.invalidateAll();
+}
+
+installDbShimIfNeeded();
 const auth = require("./auth");
 
 const app = express();
@@ -38,7 +43,7 @@ app.post("/api/login", auth.rateLimitLogin, (req, res) => {
 app.post("/api/logout", (req, res) => { auth.clearCookie(res); res.json({ ok: true }); });
 app.get("/api/me", auth.requireAuth, (req, res) => { res.json({ ok: true, admin: req.admin }); });
 
-const tcb = initTcb();
+const tcb = initDatabase();
 const db = tcb.database();
 
 // ── 豆人迷宫 · ikun 须知（客户端公开拉取，须在 requireAuth 之前注册）──
@@ -114,31 +119,33 @@ function displayCode(rawCode) {
 /** 仪表盘汇总 */
 app.get("/api/stats", async (req, res) => {
   try {
-    const out = {
-      total: 0, unused: 0, used: 0, disabled: 0, revenue: 0,
-      bySku: {},
-      recentRedeem: 0,
-    };
-    for (const [sku, cfg] of Object.entries(SKU)) {
-      const all = (await CODES.where({ skuCode: sku }).count()).total;
-      const used = (await CODES.where({ skuCode: sku, status: "used" }).count()).total;
-      const disabled = (await CODES.where({ skuCode: sku, disabled: true }).count()).total;
-      const unused = all - used - disabled;
-      out.bySku[sku] = {
-        name: cfg.name, price: cfg.price,
-        total: all, used, unused, disabled,
-        revenue: used * cfg.price,
+    const data = await dashboardStatsCache.get("dashboard", async () => {
+      const out = {
+        total: 0, unused: 0, used: 0, disabled: 0, revenue: 0,
+        bySku: {},
+        recentRedeem: 0,
       };
-      out.total += all; out.used += used; out.unused += unused; out.disabled += disabled;
-      out.revenue += used * cfg.price;
-    }
-    // 最近 7 天的兑换次数
-    const since = new Date(Date.now() - 7 * 86400 * 1000);
-    try {
-      const r = await LOG.where({ at: _.gte(since) }).count();
-      out.recentRedeem = r.total;
-    } catch (e) { out.recentRedeem = 0; }
-    res.json({ ok: true, data: out });
+      for (const [sku, cfg] of Object.entries(SKU)) {
+        const all = (await CODES.where({ skuCode: sku }).count()).total;
+        const used = (await CODES.where({ skuCode: sku, status: "used" }).count()).total;
+        const disabled = (await CODES.where({ skuCode: sku, disabled: true }).count()).total;
+        const unused = all - used - disabled;
+        out.bySku[sku] = {
+          name: cfg.name, price: cfg.price,
+          total: all, used, unused, disabled,
+          revenue: used * cfg.price,
+        };
+        out.total += all; out.used += used; out.unused += unused; out.disabled += disabled;
+        out.revenue += used * cfg.price;
+      }
+      const since = new Date(Date.now() - 7 * 86400 * 1000);
+      try {
+        const r = await LOG.where({ at: _.gte(since) }).count();
+        out.recentRedeem = r.total;
+      } catch (e) { out.recentRedeem = 0; }
+      return out;
+    });
+    res.json({ ok: true, data });
   } catch (e) {
     sendError(res, 500, "INTERNAL", "取仪表盘数据失败", e);
   }
@@ -150,37 +157,40 @@ const VIP_SKU_CODES = Object.keys(SKU).filter((k) => SKU[k].type === "vip");
 /** 聊天 AI 卡密运营统计（P3） */
 app.get("/api/stats/chat_ai_products", async (req, res) => {
   try {
-    const rows = [];
-    for (const skuCode of CHAT_AI_SKU_CODES) {
-      const def = SKU[skuCode];
-      const total = (await CODES.where({ skuCode }).count()).total;
-      const unused = (await CODES.where({ skuCode, status: "unused", disabled: _.neq(true) }).count()).total;
-      const used = (await CODES.where({ skuCode, status: "used" }).count()).total;
-      const disabled = (await CODES.where({ skuCode, disabled: true }).count()).total;
-      rows.push({
-        skuCode,
-        name: def.name,
-        price: def.price,
-        chatAiTier: def.chatAiTier,
-        durationDays: def.durationDays,
-        total,
-        unused,
-        used,
-        disabled,
-        revenue: used * (def.price || 0),
-      });
-    }
-    const sum = rows.reduce(
-      (a, x) => ({
-        total: a.total + x.total,
-        unused: a.unused + x.unused,
-        used: a.used + x.used,
-        disabled: a.disabled + x.disabled,
-        revenue: a.revenue + x.revenue,
-      }),
-      { total: 0, unused: 0, used: 0, disabled: 0, revenue: 0 }
-    );
-    res.json({ ok: true, data: { rows, sum } });
+    const data = await chatAiProductStatsCache.get("chat_ai_products", async () => {
+      const rows = [];
+      for (const skuCode of CHAT_AI_SKU_CODES) {
+        const def = SKU[skuCode];
+        const total = (await CODES.where({ skuCode }).count()).total;
+        const unused = (await CODES.where({ skuCode, status: "unused", disabled: _.neq(true) }).count()).total;
+        const used = (await CODES.where({ skuCode, status: "used" }).count()).total;
+        const disabled = (await CODES.where({ skuCode, disabled: true }).count()).total;
+        rows.push({
+          skuCode,
+          name: def.name,
+          price: def.price,
+          chatAiTier: def.chatAiTier,
+          durationDays: def.durationDays,
+          total,
+          unused,
+          used,
+          disabled,
+          revenue: used * (def.price || 0),
+        });
+      }
+      const sum = rows.reduce(
+        (a, x) => ({
+          total: a.total + x.total,
+          unused: a.unused + x.unused,
+          used: a.used + x.used,
+          disabled: a.disabled + x.disabled,
+          revenue: a.revenue + x.revenue,
+        }),
+        { total: 0, unused: 0, used: 0, disabled: 0, revenue: 0 }
+      );
+      return { rows, sum };
+    });
+    res.json({ ok: true, data });
   } catch (e) {
     sendError(res, 500, "INTERNAL", "AI 卡统计失败", e);
   }
@@ -270,6 +280,7 @@ app.post("/api/codes/generate", async (req, res) => {
     }
     // 审计
     await audit(db, req, "codes_generate", { skuCode, count: success, batch: batchId });
+    invalidateStatsCaches();
     res.json({
       ok: true,
       data: {
@@ -310,6 +321,7 @@ app.post("/api/codes/:code/toggle", async (req, res) => {
       disabledAt: next ? db.serverDate() : null,
     });
     await audit(db, req, next ? "code_disable" : "code_enable", { code });
+    invalidateStatsCaches();
     res.json({ ok: true, data: { disabled: next } });
   } catch (e) {
     sendError(res, 500, "INTERNAL", "切换卡密状态失败", e);
@@ -340,6 +352,7 @@ app.post("/api/codes/:code/force_migrate", async (req, res) => {
       }});
     } catch (e) {}
     await audit(db, req, "code_force_migrate", { code, oldDeviceId: x.usedByDevice, newDeviceId });
+    invalidateStatsCaches();
     res.json({ ok: true });
   } catch (e) {
     sendError(res, 500, "INTERNAL", "强制迁移失败", e);
@@ -1113,6 +1126,7 @@ app.post("/api/codes/:code/delete", async (req, res) => {
     }
     await CODES.where({ code }).remove();
     await audit(db, req, "code_delete", { code, wasStatus: x.status, force: !!force });
+    invalidateStatsCaches();
     res.json({ ok: true });
   } catch (e) { sendError(res, 500, "INTERNAL", "删除卡密失败", e); }
 });
@@ -1137,6 +1151,7 @@ app.post("/api/codes/:code/reset", async (req, res) => {
       adminResetReason: reason.slice(0, 200),
     });
     await audit(db, req, "code_reset", { code, oldDevice: x.usedByDevice, reason });
+    invalidateStatsCaches();
     res.json({ ok: true });
   } catch (e) { sendError(res, 500, "INTERNAL", "重置卡密失败", e); }
 });
@@ -1164,6 +1179,7 @@ app.post("/api/codes/:code/update", async (req, res) => {
     }
     await CODES.where({ code }).update(update);
     await audit(db, req, "code_update", { code, ...update });
+    invalidateStatsCaches();
     res.json({ ok: true });
   } catch (e) { sendError(res, 500, "INTERNAL", "更新卡密失败", e); }
 });

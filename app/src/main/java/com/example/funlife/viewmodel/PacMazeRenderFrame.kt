@@ -7,4 +7,7 @@ data class PacMazeRenderFrame(
     val current: PacMazeWorldState,
     val previous: PacMazeWorldState?,
     val blend: Float,
+    /** [spanDurationNs] > 0 时，Canvas 用显示时钟在 previous→current 间连续插值。 */
+    val spanStartNs: Long = 0L,
+    val spanDurationNs: Long = 0L,
 )

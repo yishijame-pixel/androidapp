@@ -1,7 +1,7 @@
 {
   "id": 1002,
-  "title": "Area 42",
-  "subtitle": "SuperTux · Area 42",
+  "title": "42 区",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/area_42.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",

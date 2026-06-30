@@ -1,11 +1,214 @@
-﻿{
-    "skinId":  "food_chick_walker_pro_max",
-    "clips":  {
-                  "die":  61,
-                  "walk":  61,
-                  "idle":  61,
-                  "run":  61,
-                  "attack":  61,
-                  "jump":  61
-              }
+{
+  "schemaVersion": 3,
+  "skinId": "food_chick_walker_pro_max",
+  "normalized": true,
+  "canvas": {
+    "w": 267,
+    "h": 360
+  },
+  "anchorFrac": {
+    "x": 0.524345,
+    "y": 0.794444
+  },
+  "clips": {
+    "idle": {
+      "count": 61,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 8,
+        "rows": 8,
+        "cellW": 993,
+        "cellH": 928
+      }
+    },
+    "walk": {
+      "count": 17,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 5,
+        "rows": 4,
+        "cellW": 267,
+        "cellH": 360
+      }
+    },
+    "run": {
+      "count": 61,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 8,
+        "rows": 8,
+        "cellW": 993,
+        "cellH": 928
+      }
+    },
+    "attack": {
+      "count": 61,
+      "folder": "attack",
+      "prefix": "attack",
+      "sheet": {
+        "file": "attack_sheet.webp",
+        "columns": 8,
+        "rows": 8,
+        "cellW": 993,
+        "cellH": 928
+      }
+    },
+    "die": {
+      "count": 61,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 8,
+        "rows": 8,
+        "cellW": 993,
+        "cellH": 928
+      }
+    },
+    "jump": {
+      "count": 51,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 8,
+        "rows": 7,
+        "cellW": 993,
+        "cellH": 928
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformerMetrics": {
+    "walk": [
+      {
+        "fy": 0.976389,
+        "fx": 0.526217,
+        "ty": 0.211111,
+        "ow": 0.861423,
+        "oh": 0.766667
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.529963,
+        "ty": 0.213889,
+        "ow": 0.883895,
+        "oh": 0.772222
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.541199,
+        "ty": 0.227778,
+        "ow": 0.902622,
+        "oh": 0.758333
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.526217,
+        "ty": 0.219444,
+        "ow": 0.891386,
+        "oh": 0.766667
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.526217,
+        "ty": 0.227778,
+        "ow": 0.872659,
+        "oh": 0.758333
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.537453,
+        "ty": 0.213889,
+        "ow": 0.88015,
+        "oh": 0.772222
+      },
+      {
+        "fy": 0.981944,
+        "fx": 0.548689,
+        "ty": 0.222222,
+        "ow": 0.891386,
+        "oh": 0.761111
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.529963,
+        "ty": 0.216667,
+        "ow": 0.883895,
+        "oh": 0.769444
+      },
+      {
+        "fy": 0.981944,
+        "fx": 0.533708,
+        "ty": 0.225,
+        "ow": 0.865169,
+        "oh": 0.758333
+      },
+      {
+        "fy": 0.981944,
+        "fx": 0.522472,
+        "ty": 0.213889,
+        "ow": 0.865169,
+        "oh": 0.769444
+      },
+      {
+        "fy": 0.979167,
+        "fx": 0.548689,
+        "ty": 0.216667,
+        "ow": 0.88764,
+        "oh": 0.763889
+      },
+      {
+        "fy": 0.973611,
+        "fx": 0.537453,
+        "ty": 0.205556,
+        "ow": 0.876404,
+        "oh": 0.769444
+      },
+      {
+        "fy": 0.945833,
+        "fx": 0.526217,
+        "ty": 0.180556,
+        "ow": 0.865169,
+        "oh": 0.766667
+      },
+      {
+        "fy": 0.981944,
+        "fx": 0.522472,
+        "ty": 0.213889,
+        "ow": 0.865169,
+        "oh": 0.769444
+      },
+      {
+        "fy": 0.984722,
+        "fx": 0.533708,
+        "ty": 0.216667,
+        "ow": 0.861423,
+        "oh": 0.769444
+      },
+      {
+        "fy": 0.931944,
+        "fx": 0.522472,
+        "ty": 0.172222,
+        "ow": 0.872659,
+        "oh": 0.761111
+      },
+      {
+        "fy": 0.9875,
+        "fx": 0.492509,
+        "ty": 0.230556,
+        "ow": 0.883895,
+        "oh": 0.758333
+      }
+    ]
+  }
 }

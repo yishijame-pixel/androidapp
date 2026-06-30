@@ -1,0 +1,9 @@
+{
+  "id": "winter",
+  "schemaVersion": 1,
+  "tileSize": 128,
+  "tileCount": 18,
+  "mapping": "craftpix_v1",
+  "theme": "PACK_WINTER",
+  "sourceZip": "wintertileset (1).zip"
+}

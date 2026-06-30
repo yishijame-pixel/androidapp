@@ -1,0 +1,9 @@
+{
+  "id": "graveyard",
+  "schemaVersion": 1,
+  "tileSize": 128,
+  "tileCount": 20,
+  "mapping": "craftpix_v1",
+  "theme": "PACK_GRAVEYARD",
+  "sourceZip": "graveyardtilesetnew.zip"
+}

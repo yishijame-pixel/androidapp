@@ -1,4 +1,4 @@
-// 复用 tools/.env 的加载逻辑；Docker 可直接注入环境变量
+// 复用 tools/.env；支持 DATABASE_URL（PostgreSQL）或 TCB_*（CloudBase）
 const fs = require("fs");
 const path = require("path");
 
@@ -10,13 +10,21 @@ function hasTcbEnv() {
   );
 }
 
+function hasPostgres() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 function loadEnv() {
-  if (hasTcbEnv()) return;
+  if (hasTcbEnv() || hasPostgres()) return;
 
   const file = path.join(__dirname, "..", "tools", ".env");
   if (!fs.existsSync(file)) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn("[loadEnv] 无 backend/tools/.env，依赖容器环境变量");
+      return;
+    }
     console.error(
-      "未找到 backend/tools/.env，且容器/进程未设置 TCB_ENV_ID、TCB_SECRET_ID、TCB_SECRET_KEY",
+      "未找到 backend/tools/.env，且未设置 DATABASE_URL 或 TCB_*",
     );
     process.exit(1);
   }
@@ -33,10 +41,20 @@ function loadEnv() {
   });
 }
 
-function initTcb() {
+function installDbShimIfNeeded() {
+  if (!hasPostgres()) return false;
+  return require(path.join(__dirname, "..", "shared", "db", "install-shim"))();
+}
+
+function initDatabase() {
   loadEnv();
+  if (hasPostgres()) {
+    installDbShimIfNeeded();
+    const tcb = require("@cloudbase/node-sdk");
+    return tcb.init({ env: process.env.TCB_ENV_ID || "funlife-local" });
+  }
   if (!hasTcbEnv()) {
-    throw new Error("TCB_ENV_ID / TCB_SECRET_ID / TCB_SECRET_KEY 未配置");
+    throw new Error("需要 DATABASE_URL 或 TCB_ENV_ID/TCB_SECRET_ID/TCB_SECRET_KEY");
   }
   const tcb = require("@cloudbase/node-sdk");
   return tcb.init({
@@ -46,4 +64,9 @@ function initTcb() {
   });
 }
 
-module.exports = { loadEnv, initTcb };
+/** @deprecated 使用 initDatabase */
+function initTcb() {
+  return initDatabase();
+}
+
+module.exports = { loadEnv, initTcb, initDatabase, installDbShimIfNeeded, hasPostgres };

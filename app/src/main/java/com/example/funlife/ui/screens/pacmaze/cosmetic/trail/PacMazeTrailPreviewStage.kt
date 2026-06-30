@@ -24,7 +24,7 @@ import com.example.funlife.ui.screens.pacmaze.character.rememberSpriteWalkFrame
 import com.example.funlife.ui.screens.pacmaze.character.PacMazeCharacterStageDecor
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeAvatarLoadout
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeCosmeticCatalog
-import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeTrailId
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeSkinRegistry
@@ -61,7 +61,7 @@ fun PacMazeTrailPreviewStage(
 
     val trailTimeStep = PacMazeCharacterPreviewAnim.trailTimeStep(skinId)
     val orbitScale = when {
-        PacMazeIkunCatalog.contains(skinId) -> 0.82f
+        PacMazeBitmapWalkCatalog.contains(skinId) -> 0.82f
         PacMazeCharacterPreviewAnim.usesSpriteWalk(skinId) -> 0.72f
         else -> 1f
     }
@@ -171,9 +171,9 @@ fun PacMazeTrailPreviewStage(
             )
 
             val tier = PacMazeCosmeticCatalog.bodyTier(skinId).scaleMul
-            val baseRadiusFrac = if (PacMazeIkunCatalog.contains(skinId)) 0.19f else 0.11f
+            val baseRadiusFrac = if (PacMazeBitmapWalkCatalog.contains(skinId)) 0.19f else 0.11f
             val r = size.minDimension * baseRadiusFrac * tier * PacMazeCharacterPreviewAnim.previewDrawRadiusMul(skinId)
-            val corridorPx = size.minDimension * if (PacMazeIkunCatalog.contains(skinId)) 1.35f else 1f
+            val corridorPx = size.minDimension * if (PacMazeBitmapWalkCatalog.contains(skinId)) 1.35f else 1f
             PacMazeSkinRegistry.draw(
                 scope = this,
                 skinId = skinId,

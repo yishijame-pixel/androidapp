@@ -56,6 +56,7 @@ import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAni
 import com.example.funlife.ui.screens.pacmaze.cosmetic.skin.PacMazeRemoteSkinAnimCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeAvatarLoadout
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeCosmeticCatalog
+import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeBitmapWalkCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeIkunCatalog
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeSkinId
 import com.example.funlife.ui.screens.pacmaze.cosmetic.PacMazeTrailId
@@ -131,8 +132,8 @@ private fun PacMazeSkinSeriesCard(
     val layout = currentPacMazeHubLayout()
     val accent = Color(series.accentArgb)
     val shape = RoundedCornerShape(layout.cardRadius)
-    val previewSkins = series.skins().take(if (series == PacMazeSkinSeries.IKUN) 4 else 3)
-    val previewSize = if (series == PacMazeSkinSeries.IKUN) layout.dp(58.dp) else layout.dp(30.dp)
+    val previewSkins = series.skins().take(if (series.isBitmapWalkSeries()) 4 else 3)
+    val previewSize = if (series.isBitmapWalkSeries()) layout.dp(58.dp) else layout.dp(30.dp)
     val cardGradient = Brush.linearGradient(
         0f to accent.copy(alpha = if (selected) 0.28f else 0.16f),
         0.55f to Color(0xFF151D30),
@@ -252,14 +253,14 @@ fun PacMazeCharacterGridPanel(
     val layout = currentPacMazeHubLayout()
     val skins = series.skins()
     val columns = when (series) {
-        PacMazeSkinSeries.IKUN -> 3
+        PacMazeSkinSeries.IKUN, PacMazeSkinSeries.YISHI -> 3
         else -> if (layout.isCompactHeight) 3 else 3
     }
-    val cellAspect = if (series == PacMazeSkinSeries.IKUN) 1.08f else 0.78f
+    val cellAspect = if (series.isBitmapWalkSeries()) 1.08f else 0.78f
 
     LaunchedEffect(series) {
         when (series) {
-            PacMazeSkinSeries.FOOD, PacMazeSkinSeries.IKUN -> {
+            PacMazeSkinSeries.FOOD, PacMazeSkinSeries.IKUN, PacMazeSkinSeries.YISHI -> {
                 PacMazeRemoteSkinAnimCache.warmCoverCacheAsync()
                 PacMazeRemoteSkinAnimCache.requestPreloadAllCoversAsync()
             }
@@ -268,7 +269,7 @@ fun PacMazeCharacterGridPanel(
     }
 
     LaunchedEffect(series, loadout.skinId) {
-        if (series != PacMazeSkinSeries.IKUN) return@LaunchedEffect
+        if (!series.isBitmapWalkSeries()) return@LaunchedEffect
         // 网格仅封面；完整 walk 序列在详情页/进局时再加载
         PacMazeRemoteSkinAnimCache.requestPreloadCoverAsync(loadout.skinId)
     }
@@ -423,8 +424,8 @@ fun PacMazeCharacterDetailPanel(
                 .height(
                     layout.dp(
                         when {
-                            PacMazeIkunCatalog.contains(skinId) && layout.isCompactHeight -> 168.dp
-                            PacMazeIkunCatalog.contains(skinId) -> 210.dp
+                            PacMazeBitmapWalkCatalog.contains(skinId) && layout.isCompactHeight -> 168.dp
+                            PacMazeBitmapWalkCatalog.contains(skinId) -> 210.dp
                             layout.isCompactHeight -> 120.dp
                             else -> 150.dp
                         },
@@ -686,8 +687,8 @@ fun PacMazeCollectionBookPanel(
                 .width(
                     layout.dp(
                         when {
-                            PacMazeIkunCatalog.contains(loadout.skinId) && layout.isCompactHeight -> 118.dp
-                            PacMazeIkunCatalog.contains(loadout.skinId) -> 136.dp
+                            PacMazeBitmapWalkCatalog.contains(loadout.skinId) && layout.isCompactHeight -> 118.dp
+                            PacMazeBitmapWalkCatalog.contains(loadout.skinId) -> 136.dp
                             layout.isCompactHeight -> 96.dp
                             else -> 112.dp
                         },
@@ -913,7 +914,7 @@ private fun PacMazeCollectionSkinCell(
 ) {
     val selected = skin == loadout.skinId
     val accent = pacMazeSkinAccent(skin)
-    val ikun = PacMazeIkunCatalog.contains(skin)
+    val ikun = PacMazeBitmapWalkCatalog.contains(skin)
     val shape = RoundedCornerShape(layout.dp(6.dp))
 
     Box(

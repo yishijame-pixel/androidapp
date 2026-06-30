@@ -15,6 +15,15 @@ tunnel: <TUNNEL_UUID>
 credentials-file: C:\Users\<你的用户名>\.cloudflared\<TUNNEL_UUID>.json
 
 ingress:
+  # 游戏静态资源（manifest + zip）
+  - hostname: assets.yishi.site
+    service: http://127.0.0.1:8098
+    originRequest:
+      connectTimeout: 30s
+      tcpKeepAlive: 30s
+      keepAliveTimeout: 90s
+      keepAliveConnections: 100
+      httpHostHeader: assets.yishi.site
   # 同域热路径（推荐）：wss://pb.yishi.site/draw-ws/ws
   - hostname: pb.yishi.site
     path: ^/draw-ws

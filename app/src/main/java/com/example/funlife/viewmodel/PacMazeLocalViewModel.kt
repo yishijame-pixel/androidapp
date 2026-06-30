@@ -22,6 +22,8 @@ import com.example.funlife.social.game.engine.pacmaze.PacMazeMapLoader
 import com.example.funlife.social.game.engine.pacmaze.GhostKind
 import com.example.funlife.social.game.engine.pacmaze.GhostMode
 import com.example.funlife.social.game.engine.pacmaze.PacMazeMotion
+import com.example.funlife.social.game.engine.pacmaze.renderInterpolationSnapshot
+import com.example.funlife.social.game.engine.pacmaze.playerPacMovedFrom
 import com.example.funlife.social.game.engine.pacmaze.PacMazePhase
 import com.example.funlife.social.game.engine.pacmaze.PacMazeRunMode
 import com.example.funlife.social.game.engine.pacmaze.PacMazeRunPayload
@@ -127,6 +129,13 @@ class PacMazeLocalViewModel(
 
     private val _renderFrame = MutableStateFlow<PacMazeRenderFrame?>(null)
     val renderFrame: StateFlow<PacMazeRenderFrame?> = _renderFrame.asStateFlow()
+
+    /** 最近一次 tick 前的 sim 态，供多 tick 帧内插值（= 末 tick 的前一 sim 步）。 */
+    private var penultimateSimSnapshot: PacMazeWorldState? = null
+    /** tick 用关卡配置缓存，避免 uiState 同步间隙导致 tick 失败、accum 堆债。 */
+    private var cachedLevelConfig: PacMazeLevelConfig? = null
+
+    fun peekPenultimateSimSnapshot(): PacMazeWorldState? = penultimateSimSnapshot
 
     private var rngSeed: Long = currentUserId xor 0x5A17_4D41L
     private var pendingAttack = false
@@ -443,22 +452,40 @@ class PacMazeLocalViewModel(
         }
         resetJoystickInput()
         pendingAttack = false
+        com.example.funlife.ui.screens.pacmaze.debug.PacMazeMotionDiag.resetSession()
+        cachedLevelConfig = payload.level
         simulationWorld = world
         _renderFrame.value = PacMazeRenderFrame(current = world, previous = null, blend = 1f)
+        penultimateSimSnapshot = null
     }
 
     fun requestAttack() {
         pendingAttack = true
     }
 
-    fun tickFrame(): PacMazeWorldState? {
+    fun tickFrameSilent(): PacMazeWorldState? {
+        val result = tickFrame(updateRenderFrame = false)
+        if (result == null && com.example.funlife.BuildConfig.DEBUG) {
+            val state = _uiState.value
+            android.util.Log.w(
+                TAG,
+                "tickFrameSilent=null sim=${simulationWorld != null} uiWorld=${state.world != null} " +
+                    "cfg=${state.levelConfig != null} screen=${state.screenPhase} " +
+                    "worldPhase=${simulationWorld?.phase ?: state.world?.phase}",
+            )
+        }
+        return result
+    }
+
+    fun tickFrame(updateRenderFrame: Boolean = true): PacMazeWorldState? {
         try {
             val state = _uiState.value
             val world = simulationWorld ?: state.world ?: return null
-            val config = state.levelConfig ?: return null
+            val config = state.levelConfig ?: cachedLevelConfig ?: return null
             if (world.phase != PacMazePhase.PLAYING && world.phase != PacMazePhase.LEVEL_CLEAR) return world
 
-            val previousWorld = world
+            penultimateSimSnapshot = world.renderInterpolationSnapshot()
+            val previousWorld = penultimateSimSnapshot!!
             val prevLives = world.lives
             val pacInput = inputController.advanceTick(world.tick)
             val fireAttack = pendingAttack
@@ -491,7 +518,9 @@ class PacMazeLocalViewModel(
                 PacMazePhase.LEVEL_CLEAR -> handleLevelClear(timed, previousWorld, elapsed, deaths)
                 PacMazePhase.GAME_OVER -> handleGameOver(timed, previousWorld, elapsed, deaths)
                 else -> {
-                    _renderFrame.value = PacMazeRenderFrame(current = timed, previous = previousWorld, blend = 0f)
+                    if (updateRenderFrame) {
+                        _renderFrame.value = PacMazeRenderFrame(current = timed, previous = previousWorld, blend = 0f)
+                    }
                     if (shouldSyncPlayUi(previousWorld, timed, elapsed, state.elapsedSeconds)) {
                         _uiState.update {
                             it.copy(
@@ -717,6 +746,47 @@ class PacMazeLocalViewModel(
     fun updateRenderBlend(blend: Float) {
         val frame = _renderFrame.value ?: return
         _renderFrame.value = frame.copy(blend = blend.coerceIn(0f, 1f))
+    }
+
+    /** 同帧内多 tick 追帧：用帧初世界态快照作插值起点。 */
+    fun restoreRenderPrevious(world: PacMazeWorldState) {
+        val frame = _renderFrame.value ?: return
+        _renderFrame.value = frame.copy(previous = world, blend = 0f)
+    }
+
+    fun captureRenderSnapshot(): PacMazeWorldState? =
+        _renderFrame.value?.current?.renderInterpolationSnapshot()
+
+    /**
+     * 显示帧末一次性发布 render 态，避免 tick 循环内多次更新 renderFrame 导致
+     * Canvas 在 renderBlend 写入前重组（log 里 blend 恒为 1 的根因）。
+     */
+    /** 每 vsync 发布：penultimate→current；[spanDurationNs]>0 时 Canvas 用 displayClock 连续插值。 */
+    fun publishDisplayFrame(
+        spanStartNs: Long,
+        spanDurationNs: Long,
+        displayClockNs: Long = 0L,
+    ) {
+        val current = simulationWorld ?: return
+        val previous = penultimateSimSnapshot
+        val fallbackBlend = if (previous != null && spanDurationNs <= 0L) 1f else 0f
+        val blend = if (previous != null && spanDurationNs > 0L && displayClockNs > 0L) {
+            com.example.funlife.ui.screens.pacmaze.components.PacMazeRenderTickLoop.displaySpanBlend(
+                spanStartNs = spanStartNs,
+                spanDurationNs = spanDurationNs,
+                displayClockNs = displayClockNs,
+                fallbackBlend = fallbackBlend,
+            )
+        } else {
+            fallbackBlend
+        }
+        _renderFrame.value = PacMazeRenderFrame(
+            current = current,
+            previous = previous,
+            blend = blend,
+            spanStartNs = spanStartNs,
+            spanDurationNs = spanDurationNs,
+        )
     }
 
     fun pauseGame() {
@@ -1016,6 +1086,7 @@ class PacMazeLocalViewModel(
     fun backToMenu() {
         inputController.reset()
         simulationWorld = null
+        cachedLevelConfig = null
         _uiState.update {
             it.copy(
                 screenPhase = PacMazePhase.MENU,
@@ -1036,6 +1107,7 @@ class PacMazeLocalViewModel(
     fun backToHubRoot() {
         inputController.reset()
         simulationWorld = null
+        cachedLevelConfig = null
         _uiState.update {
             it.copy(
                 screenPhase = PacMazePhase.MENU,
@@ -1084,6 +1156,7 @@ class PacMazeLocalViewModel(
             )
         }
         _renderFrame.value = PacMazeRenderFrame(current = world, previous = null, blend = 1f)
+        penultimateSimSnapshot = null
     }
 
     fun evaluateStars(score: Int, elapsedSeconds: Int, deaths: Int): Int {

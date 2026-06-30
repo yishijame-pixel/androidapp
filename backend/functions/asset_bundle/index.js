@@ -4,13 +4,14 @@
 //   { "action": "manifest" }
 //   { "action": "sign", "bundleId": "pet" }
 // ============================================================
+// 与 backend/tools/asset_manifest.json 保持同步
 
 const cloudbase = require("@cloudbase/node-sdk");
 
 const ASSET_ROOT = "yishi-assetss/v1";
 const MANIFEST = {
-  version: 5,
-  updatedAt: "2026-06-15T12:00:00Z",
+  version: 10,
+  updatedAt: "2026-06-22T12:00:00Z",
   bundles: [
     { id: "xiangkuang", file: "xiangkuang.zip", targetDir: "xiangkuang" },
     { id: "pet", file: "pet.zip", targetDir: "pet" },
@@ -20,6 +21,11 @@ const MANIFEST = {
     { id: "wheel", file: "wheel.zip", targetDir: "wheel" },
     { id: "pac_maze_sfx", file: "pac_maze_sfx.zip", targetDir: "pac_maze_sfx" },
     { id: "pac_maze_skins", file: "pac_maze_skins.zip", targetDir: "pac_maze_skins" },
+    {
+      id: "platformer_characters",
+      file: "platformer_characters.zip",
+      targetDir: "platformer_characters",
+    },
   ],
 };
 

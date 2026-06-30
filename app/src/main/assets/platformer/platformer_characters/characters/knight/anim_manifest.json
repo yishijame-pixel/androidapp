@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 3,
+  "skinId": "knight",
+  "normalized": true,
+  "canvas": {
+    "w": 774,
+    "h": 782
+  },
+  "anchorFrac": {
+    "x": 0.514212,
+    "y": 0.790281
+  },
+  "clips": {
+    "attack": {
+      "count": 10,
+      "folder": "attack",
+      "prefix": "attack",
+      "sheet": {
+        "file": "attack_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    },
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    },
+    "jump": {
+      "count": 10,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    },
+    "jump_attack": {
+      "count": 10,
+      "folder": "jump_attack",
+      "prefix": "jump_attack",
+      "sheet": {
+        "file": "jump_attack_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    },
+    "run": {
+      "count": 10,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    },
+    "walk": {
+      "count": 10,
+      "folder": "walk",
+      "prefix": "walk",
+      "sheet": {
+        "file": "walk_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 774,
+        "cellH": 782
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "heavy",
+    "title": "圣骑士",
+    "subtitle": "攻击 · 跳攻",
+    "unlock": {
+      "type": "level_clear",
+      "value": 25
+    },
+    "abilities": [
+      "attack",
+      "jump_attack"
+    ],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

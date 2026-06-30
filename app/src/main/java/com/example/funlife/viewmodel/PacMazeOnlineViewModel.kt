@@ -608,6 +608,11 @@ class PacMazeOnlineViewModel(
         publishRenderFrame(blend = 1f)
     }
 
+    fun restoreRenderPrevious(world: PacMazeWorldState) {
+        val frame = _renderFrame.value ?: return
+        _renderFrame.value = frame.copy(previous = world, blend = 0f)
+    }
+
     /** Play 屏每帧调用；[frameNs] 为 withFrameNanos 时间戳（可选）。 */
     fun advanceOnlineFrame(frameNs: Long = 0L): PacMazeRenderFrame? {
         val nowMs = if (frameNs > 0L) frameNs / 1_000_000L else System.currentTimeMillis()

@@ -93,7 +93,7 @@ object ResourceStore {
 
     private const val PLATFORMER_CHARACTERS_BUNDLE_VERSION = 2
     private const val PLATFORMER_SFX_BUNDLE_VERSION = 1
-    private const val PLATFORMER_SUPERTUX_BUNDLE_VERSION = 4
+    private const val PLATFORMER_SUPERTUX_BUNDLE_VERSION = 5
 
     private val PLATFORMER_SFX_MARKERS: List<List<String>> = listOf(
         listOf("platformer_sfx/bundle_version.txt"),
@@ -106,6 +106,8 @@ object ResourceStore {
         listOf("platformer_supertux/content_catalog.json"),
         listOf("platformer_supertux/tilesets/antarctic/tileset_manifest.json"),
         listOf("platformer_supertux/levels/level_901/level.json"),
+        listOf("platformer_supertux/levels/level_931/level.json"),
+        listOf("platformer_supertux/levels/level_1018/level.json"),
     )
 
     private val PLATFORMER_CHARACTERS_MARKERS: List<List<String>> = listOf(
@@ -186,6 +188,7 @@ object ResourceStore {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        purgeIncompletePlatformerSuperTuxCache()
     }
 
     private fun prefs() =
@@ -389,9 +392,17 @@ object ResourceStore {
 
     fun resolveFile(relativePath: String): File? {
         val normalized = normalizePath(relativePath) ?: return null
+        if (normalized.startsWith("platformer_supertux/") && !isPlatformerSuperTuxCacheAuthoritative()) {
+            return null
+        }
+        return resolveCacheFile(normalized)
+    }
+
+    /** Cache-only lookup (never falls back to assets). */
+    private fun resolveCacheFile(relativePath: String): File? {
+        val normalized = normalizePath(relativePath) ?: return null
         val cached = File(cacheRoot(), normalized)
         if (cached.isFile) return cached
-        // 兼容 zip 多包一层目录：resource_cache/pac_maze_sfx/pac_maze_sfx/...
         val root = normalized.substringBefore('/')
         val rest = normalized.substringAfter('/', "")
         if (root.isNotBlank() && rest.isNotBlank()) {
@@ -399,6 +410,33 @@ object ResourceStore {
             if (nested.isFile) return nested
         }
         return null
+    }
+
+    /**
+     * Old cloud bundles (v3) only shipped 10 demo levels (901–910). Ignore that cache so APK / full
+     * bundle assets are used until a complete v4+ cache is present.
+     */
+    private fun isPlatformerSuperTuxCacheAuthoritative(): Boolean {
+        if (bundleCacheDir("platformer_supertux") == null) return false
+        val version = resolveCacheFile("platformer_supertux/bundle_version.txt")
+            ?.readText()?.trim()?.toIntOrNull() ?: return false
+        if (version < PLATFORMER_SUPERTUX_BUNDLE_VERSION) return false
+        return resolveCacheFile("platformer_supertux/levels/level_931/level.json") != null &&
+            resolveCacheFile("platformer_supertux/levels/level_1018/level.json") != null
+    }
+
+    private fun purgeIncompletePlatformerSuperTuxCache() {
+        val cacheDir = File(cacheRoot(), "platformer_supertux")
+        if (!cacheDir.isDirectory) return
+        if (isPlatformerSuperTuxCacheAuthoritative()) return
+        val version = resolveCacheFile("platformer_supertux/bundle_version.txt")
+            ?.readText()?.trim()?.toIntOrNull()
+        Log.w(
+            TAG,
+            "Purging incomplete platformer_supertux cache " +
+                "(v=${version ?: "?"}, need v$PLATFORMER_SUPERTUX_BUNDLE_VERSION + 107 levels)",
+        )
+        clearBundleCache("platformer_supertux")
     }
 
     /** 本地 cache 或 APK assets 中是否存在该资源（带内存 memo）。 */
@@ -932,6 +970,9 @@ object ResourceStore {
     }
 
     private fun isBundleReadyUncached(targetDir: String): Boolean {
+        if (targetDir == "platformer_supertux") {
+            return platformerSuperTuxBundleReady()
+        }
         if (bundleCacheDir(targetDir) == null) return false
         if (targetDir == "pac_maze_sfx") {
             return resolveFile("pac_maze_sfx/curated/ui/back.ogg") != null
@@ -957,14 +998,29 @@ object ResourceStore {
             val version = versionText?.toIntOrNull() ?: return false
             return version >= required
         }
-        if (targetDir == "platformer_supertux") {
-            if (!platformerSuperTuxMarkersReady { resolveFile(it) }) return false
-            val versionText = resolveFile("platformer_supertux/bundle_version.txt")?.readText()?.trim()
-            val required = requiredBundleVersion("platformer_supertux") ?: PLATFORMER_SUPERTUX_BUNDLE_VERSION
-            val version = versionText?.toIntOrNull() ?: return false
-            return version >= required
-        }
         return true
+    }
+
+    private fun platformerSuperTuxBundleReady(): Boolean {
+        if (isPlatformerSuperTuxCacheAuthoritative() &&
+            platformerSuperTuxMarkersReady { resolveCacheFile(it) }
+        ) {
+            val versionText = resolveCacheFile("platformer_supertux/bundle_version.txt")
+                ?.readText()?.trim()?.toIntOrNull() ?: return false
+            val required = requiredBundleVersion("platformer_supertux") ?: PLATFORMER_SUPERTUX_BUNDLE_VERSION
+            return versionText >= required
+        }
+        return platformerSuperTuxAssetsReady()
+    }
+
+    private fun platformerSuperTuxAssetsReady(): Boolean =
+        PLATFORMER_SUPERTUX_MARKERS.all { group -> group.any { assetFileExists(it) } }
+
+    private fun assetFileExists(relativePath: String): Boolean = try {
+        appContext.assets.openFd(relativePath).close()
+        true
+    } catch (_: Exception) {
+        false
     }
 
     private fun clearBundleCache(targetDir: String) {
@@ -1029,7 +1085,8 @@ object ResourceStore {
             return platformerSfxMarkersReady { resolveFile(it) }
         }
         if (targetDir == "platformer_supertux") {
-            return platformerSuperTuxMarkersReady { resolveFile(it) }
+            return isPlatformerSuperTuxCacheAuthoritative() &&
+                platformerSuperTuxMarkersReady { resolveCacheFile(it) }
         }
         return true
     }

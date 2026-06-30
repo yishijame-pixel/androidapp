@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 3,
+  "skinId": "temple_runner",
+  "normalized": true,
+  "canvas": {
+    "w": 573,
+    "h": 601
+  },
+  "anchorFrac": {
+    "x": 0.445026,
+    "y": 0.805324
+  },
+  "clips": {
+    "die": {
+      "count": 10,
+      "folder": "die",
+      "prefix": "die",
+      "sheet": {
+        "file": "die_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 573,
+        "cellH": 601
+      }
+    },
+    "idle": {
+      "count": 10,
+      "folder": "idle",
+      "prefix": "idle",
+      "sheet": {
+        "file": "idle_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 573,
+        "cellH": 601
+      }
+    },
+    "jump": {
+      "count": 10,
+      "folder": "jump",
+      "prefix": "jump",
+      "sheet": {
+        "file": "jump_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 573,
+        "cellH": 601
+      }
+    },
+    "run": {
+      "count": 10,
+      "folder": "run",
+      "prefix": "run",
+      "sheet": {
+        "file": "run_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 573,
+        "cellH": 601
+      }
+    },
+    "slide": {
+      "count": 10,
+      "folder": "slide",
+      "prefix": "slide",
+      "sheet": {
+        "file": "slide_sheet.webp",
+        "columns": 4,
+        "rows": 3,
+        "cellW": 573,
+        "cellH": 601
+      }
+    }
+  },
+  "render": {
+    "syncWalkCycleToSprite": true,
+    "sampleSize": 1
+  },
+  "platformer": {
+    "role": "character",
+    "group": "hero",
+    "title": "神庙跑者",
+    "subtitle": "跑酷 · 滑铲",
+    "unlock": {
+      "type": "default",
+      "value": 0
+    },
+    "abilities": [],
+    "mirrorDefault": true,
+    "heightCellFrac": 1.55
+  }
+}

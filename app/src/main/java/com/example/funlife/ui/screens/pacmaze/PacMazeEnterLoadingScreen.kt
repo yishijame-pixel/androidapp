@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.funlife.ui.screens.platformer.GameResourceLoadCopy
 
 /**
  * 豆人迷宫横屏进局加载页：左侧品牌/动画，右侧进度与状态（类似 MOBA 进大厅前加载）。
@@ -162,14 +163,16 @@ fun PacMazeEnterLoadingScreen(
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    ui.phase,
+                    GameResourceLoadCopy.forDisplay(ui.phase),
                     color = PacMazePalette.accentGold,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    ui.subtitle ?: ui.errorMessage ?: "请稍候，正在准备音效与界面资源…",
+                    GameResourceLoadCopy.forDisplay(
+                        ui.subtitle ?: ui.errorMessage ?: "请稍候，正在准备音效与界面资源…",
+                    ),
                     color = PacMazePalette.inkMuted,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,

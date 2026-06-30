@@ -1,7 +1,7 @@
 {
   "id": 1005,
-  "title": "Fire In The Sky",
-  "subtitle": "SuperTux · Fire in the Sky",
+  "title": "空中烈火",
+  "subtitle": "Bonus 挑战 · SuperTux",
   "sourceStl": "bonus1/fire_in_the_sky.stl",
   "chapterId": "supertux_bonus",
   "seriesId": "supertux_bonus",
