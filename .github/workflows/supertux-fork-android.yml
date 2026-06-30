@@ -6,6 +6,7 @@ on:
     paths:
       - 'engine/supertux-fork/**'
       - 'backend/tools/bootstrap_supertux_fork.*'
+      - 'backend/tools/bootstrap_supertux_android.sh'
       - 'backend/tools/clone_supertux_upstream.*'
       - '.github/workflows/supertux-fork-android.yml'
   pull_request:
@@ -48,6 +49,30 @@ jobs:
       - name: Bootstrap fork worktree
         run: bash backend/tools/bootstrap_supertux_fork.sh
 
+      - name: Cache vcpkg
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: supertux-android-arm64-vcpkg-v3-${{ hashFiles('.github/workflows/supertux-fork-android.yml', 'backend/tools/bootstrap_supertux_android.sh') }}
+
+      - name: Install vcpkg ports (arm64-android)
+        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh"
+          "$VCPKG_ROOT/vcpkg" install --classic --triplet=$VCPKG_TRIPLET \
+            fmt libogg libvorbis libraqm freetype physfs glm libpng zlib \
+            sdl2 sdl2-image sdl2-ttf curl openal-soft
+          find "$VCPKG_ROOT/installed" -name '*.pc' -exec sed -i -E 's/-lc\+\+//g' {} \;
+
+      - name: Patch vcpkg pkg-config files
+        if: steps.cache-vcpkg.outputs.cache-hit == 'true'
+        run: find "$VCPKG_ROOT/installed" -name '*.pc' -exec sed -i -E 's/-lc\+\+//g' {} \;
+
+      - name: Bootstrap SDL Android project
+        run: bash backend/tools/bootstrap_supertux_android.sh "${SDL_TAG}"
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -55,52 +80,22 @@ jobs:
           java-version: 21
           cache: gradle
 
-      # Match upstream SuperTux android.yml (v2 + explicit sdkmanager).
-      - name: Setup Android SDK
+      - name: Setup Android SDK and NDK
         uses: android-actions/setup-android@v2
-
-      - name: Install Android platform, NDK, build-tools
-        run: |
-          sdkmanager --install \
-            "platforms;android-${SDK_VERSION}" \
-            "ndk;${NDK_VERSION}" \
-            "build-tools;${B_T_VERSION}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
-          test -d "${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
-
-      - name: Export NDK for vcpkg / Gradle
-        run: |
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
-
-      - name: Cache vcpkg
-        id: cache-vcpkg
-        uses: actions/cache@v4
         with:
-          path: vcpkg
-          key: supertux-android-arm64-vcpkg-v2-${{ hashFiles('.github/workflows/supertux-fork-android.yml') }}
+          packages: |
+            platforms;android-${{ env.SDK_VERSION }}
+            ndk;${{ env.NDK_VERSION }}
+            build-tools;${{ env.B_T_VERSION }}
 
-      - name: Install vcpkg ports (arm64-android)
-        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      - name: Write mk/android/local.properties
         run: |
-          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
-          cd vcpkg && ./bootstrap-vcpkg.sh
-          ./vcpkg install --classic --triplet=$VCPKG_TRIPLET \
-            fmt libogg libvorbis libraqm freetype physfs glm libpng zlib \
-            sdl2 sdl2-image sdl2-ttf curl openal-soft
-          find "$VCPKG_ROOT/installed" -name '*.pc' -exec sed -i -E 's/-lc\+\+//g' {} \;
-
-      - name: Bootstrap SDL Android project
-        working-directory: engine/supertux-fork
-        run: |
-          chmod +x tools/bootstrap-android-project.sh
-          ./tools/bootstrap-android-project.sh "${SDL_TAG}"
-          mkdir -p mk/android
+          mkdir -p engine/supertux-fork/mk/android
           {
             echo "vcpkg_root=${VCPKG_ROOT}"
-            echo "ndk_home=${ANDROID_NDK_HOME}"
-          } > mk/android/local.properties
-          cat mk/android/local.properties
+            echo "ndk_home=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
+          } > engine/supertux-fork/mk/android/local.properties
+          cat engine/supertux-fork/mk/android/local.properties
 
       - name: Build debug APK (arm64-v8a)
         working-directory: engine/supertux-fork/mk/android

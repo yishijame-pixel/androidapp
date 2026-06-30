@@ -56,7 +56,7 @@ ndk_home=/path/to/ndk/29.0.14206865
 bash backend/tools/clone_supertux_upstream.sh
 powershell -File backend/tools/bootstrap_supertux_fork.ps1
 cd engine/supertux-fork
-./tools/bootstrap-android-project.sh 2.32.10
+bash ../../backend/tools/bootstrap_supertux_android.sh 2.32.10
 cd mk/android && ./gradlew assembleDebug -Pcpuarch=arm64-v8a
 ```
 
