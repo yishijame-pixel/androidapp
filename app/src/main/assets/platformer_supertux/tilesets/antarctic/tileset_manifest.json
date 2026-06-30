@@ -1,0 +1,11 @@
+{
+  "id": "supertux_antarctic",
+  "schemaVersion": 1,
+  "tileSize": 128,
+  "tileCount": 14,
+  "mapping": "craftpix_v1",
+  "sourceSheet": "tiles/snow/ice-floor.png",
+  "theme": "PACK_SUPERTUX",
+  "source": "SuperTux data/images/tiles/snow",
+  "license": "CC-BY-SA 3.0 / GPL v2+"
+}

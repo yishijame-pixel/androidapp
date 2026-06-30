@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "game": "platformer",
+  "updatedAt": "2026-06-30T02:05:26Z",
+  "description": "横版冒险音效（SuperTux 精选 + 全局事件）",
+  "attribution": "SuperTux Team · CC-BY-SA 3.0 / GPL v2+ — see ATTRIBUTION.json",
+  "events": {
+    "player_jump": {
+      "file": "curated/platformer/jump.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "player_big_jump": {
+      "file": "curated/platformer/bigjump.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "player_land": {
+      "file": "curated/platformer/thud.ogg",
+      "volume": 0.65,
+      "loop": false
+    },
+    "player_hurt": {
+      "file": "curated/platformer/hurt.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "player_die": {
+      "file": "curated/platformer/kill.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "pickup_gem": {
+      "file": "curated/platformer/coin.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "enemy_stomp": {
+      "file": "curated/platformer/stomp.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "spring_bounce": {
+      "file": "curated/platformer/trampoline.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "level_clear": {
+      "file": "curated/platformer/welldone.ogg",
+      "volume": 0.65,
+      "loop": false
+    },
+    "checkpoint": {
+      "file": "curated/platformer/savebell2.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "shoot": {
+      "file": "curated/platformer/shoot.wav",
+      "volume": 0.65,
+      "loop": false
+    },
+    "splash": {
+      "file": "curated/platformer/splash.ogg",
+      "volume": 0.65,
+      "loop": false
+    },
+    "switch_toggle": {
+      "file": "curated/platformer/switch.ogg",
+      "volume": 0.65,
+      "loop": false
+    },
+    "power_up": {
+      "file": "curated/platformer/grow.ogg",
+      "volume": 0.65,
+      "loop": false
+    },
+    "bgm_platformer": {
+      "file": "curated/platformer/bgm/snowm_theme.ogg",
+      "volume": 0.72,
+      "loop": true
+    },
+    "bgm_supertux_antarctic": {
+      "file": "curated/platformer/bgm/snowm_theme.ogg",
+      "volume": 0.72,
+      "loop": true
+    },
+    "bgm_supertux_forest": {
+      "file": "curated/platformer/bgm/velf.theme.ogg",
+      "volume": 0.72,
+      "loop": true
+    },
+    "bgm_supertux_bonus": {
+      "file": "curated/platformer/bgm/bonus.theme.ogg",
+      "volume": 0.72,
+      "loop": true
+    },
+    "bgm_supertux_redmond": {
+      "file": "curated/platformer/bgm/redmond.theme.ogg",
+      "volume": 0.72,
+      "loop": true
+    }
+  }
+}

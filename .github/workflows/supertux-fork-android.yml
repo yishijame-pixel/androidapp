@@ -1,0 +1,109 @@
+name: supertux-fork-android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'engine/supertux-fork/**'
+      - 'backend/tools/bootstrap_supertux_fork.ps1'
+      - 'backend/tools/clone_supertux_upstream.*'
+      - '.github/workflows/supertux-fork-android.yml'
+  pull_request:
+    paths:
+      - 'engine/supertux-fork/**'
+      - 'backend/tools/**'
+      - '.github/workflows/supertux-fork-android.yml'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    env:
+      SDL_TAG: "2.32.10"
+      B_T_VERSION: "35.0.0"
+      NDK_VERSION: "29.0.14206865"
+      SDK_VERSION: "35"
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_TRIPLET: arm64-android
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone SuperTux upstream at pin
+        run: bash backend/tools/clone_supertux_upstream.sh
+
+      - name: Bootstrap fork worktree
+        run: pwsh -File backend/tools/bootstrap_supertux_fork.ps1
+
+      - name: Cache vcpkg
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: vcpkg
+          key: supertux-android-arm64-vcpkg-v1
+
+      - name: Install vcpkg ports (arm64-android)
+        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          cd vcpkg && ./bootstrap-vcpkg.sh
+          ./vcpkg install --classic --triplet=$VCPKG_TRIPLET \
+            fmt libogg libvorbis libraqm freetype physfs glm libpng zlib \
+            sdl2 sdl2-image sdl2-ttf curl openal-soft
+          find "$VCPKG_ROOT/installed" -name '*.pc' -exec sed -i -E 's/-lc\+\+//g' {} \;
+
+      - name: Bootstrap SDL Android project
+        working-directory: engine/supertux-fork
+        run: |
+          chmod +x tools/bootstrap-android-project.sh
+          ./tools/bootstrap-android-project.sh "${SDL_TAG}"
+          mkdir -p mk/android
+          echo "vcpkg_root=$VCPKG_ROOT" > mk/android/local.properties
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+          cache: gradle
+
+      - name: Setup Android SDK / NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-${{ env.SDK_VERSION }}
+            ndk;${{ env.NDK_VERSION }}
+            build-tools;${{ env.B_T_VERSION }}
+
+      - name: Write NDK path for CMake
+        working-directory: engine/supertux-fork/mk/android
+        run: |
+          NDK_PATH="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
+          echo "ndk_home=${NDK_PATH}" >> local.properties
+          cat local.properties
+
+      - name: Build debug APK (arm64-v8a)
+        working-directory: engine/supertux-fork/mk/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug \
+            -Pcpuarch=arm64-v8a \
+            -Pcmake_args="-DGIT_HASH=ci;-DGIT_BRANCH=main" \
+            --stacktrace
+
+      - name: Upload libsupertux2.so
+        uses: actions/upload-artifact@v4
+        with:
+          name: libsupertux2-arm64-v8a
+          path: |
+            engine/supertux-fork/mk/android/app/build/intermediates/**/libsupertux2.so
+            engine/supertux-fork/mk/android/app/build/intermediates/**/libc++_shared.so
+          if-no-files-found: warn
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertux-fork-apk-arm64-debug
+          path: engine/supertux-fork/mk/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

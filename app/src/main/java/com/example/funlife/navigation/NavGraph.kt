@@ -135,6 +135,7 @@ sealed class Screen(val route: String, val title: String) {
     object BudgetManager : Screen("budget_manager", "预算管理")
     object AccountManager : Screen("account_manager", "账户管理")
     object Notifications : Screen("notifications", "通知中心")
+    object OpenSourceCredits : Screen("open_source_credits", "开源许可")
     object Inbox : Screen("inbox", "通知收件箱")
     // 🆕 v51 时光信箱
     object LetterMailbox : Screen("letter_mailbox", "时光信箱")
@@ -271,7 +272,6 @@ fun NavGraph(
             HomeScreen(
                 navController = navController,
                 anniversaryViewModel = anniversaryViewModel,
-                scoreViewModel = scoreViewModel,
                 authViewModel = authViewModel,
                 goalViewModel = goalViewModel
             )
@@ -364,8 +364,13 @@ fun NavGraph(
                 viewModel = viewModel(),
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToHelp = { navController.navigate(Screen.Help.route) },
-                onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) }
+                onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
+                onNavigateToCredits = { navController.navigate(Screen.OpenSourceCredits.route) },
             )
+        }
+
+        composable(Screen.OpenSourceCredits.route) {
+            OpenSourceCreditsScreen(onNavigateBack = { navController.popBackStack() })
         }
         
         composable("shop") {
@@ -403,7 +408,19 @@ fun NavGraph(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
-        
+
+        composable("platformer_game") {
+            com.example.funlife.ui.screens.platformer.PlatformerScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable("treasure_hunter_game") {
+            com.example.funlife.ui.screens.treasurehunter.TreasureHunterScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
         composable("riddle_game") {
             val context = LocalContext.current
             val application = context.applicationContext as FunLifeApplication
@@ -575,9 +592,11 @@ fun NavGraph(
                 else -> com.example.funlife.social.game.model.GameCenterTab.ONLINE
             }
             val gameCenterVm = com.example.funlife.ui.screens.socialgame.rememberGameCenterViewModel(userSession)
+            val scorePlayers by scoreViewModel.players.collectAsState()
             com.example.funlife.ui.screens.socialgame.SocialGameCenterScreen(
                 viewModel = gameCenterVm,
                 initialTab = initialTab,
+                leaderboardPlayers = scorePlayers,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToDetail = { gameId ->
                     navController.safeNavigate(Screen.SocialGameDetail.route(gameId), context)
@@ -590,6 +609,9 @@ fun NavGraph(
                 },
                 onNavigateToPlay = { roomId ->
                     navController.safeNavigate(Screen.SocialGamePlay.route(roomId), context)
+                },
+                onOpenScoreLeaderboard = {
+                    navController.safeNavigate("score_counter", context)
                 },
             )
         }

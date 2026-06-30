@@ -1,0 +1,58 @@
+name: supertux-fork-linux
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'engine/supertux-fork/**'
+      - 'backend/tools/bootstrap_supertux_fork.ps1'
+      - 'backend/tools/clone_supertux_upstream.*'
+      - '.github/workflows/supertux-fork-linux.yml'
+  pull_request:
+    paths:
+      - 'engine/supertux-fork/**'
+      - 'backend/tools/**'
+      - '.github/workflows/supertux-fork-linux.yml'
+
+jobs:
+  build-pc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone SuperTux upstream at pin
+        run: bash backend/tools/clone_supertux_upstream.sh
+
+      - name: Bootstrap fork worktree
+        run: pwsh -File backend/tools/bootstrap_supertux_fork.ps1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build build-essential \
+            libogg-dev libvorbis-dev libopenal-dev \
+            libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev \
+            libfreetype6-dev libraqm-dev libcurl4-openssl-dev \
+            libglew-dev libharfbuzz-dev libfribidi-dev \
+            libglm-dev zlib1g-dev libfmt-dev libphysfs-dev
+
+      - name: Configure Release build
+        working-directory: engine/supertux-fork
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_DISCORD=OFF \
+            -DBUILD_DOCUMENTATION=OFF
+
+      - name: Build
+        working-directory: engine/supertux-fork
+        run: cmake --build build
+
+      - name: Smoke — binary and levels
+        working-directory: engine/supertux-fork
+        run: |
+          test -x build/supertux2
+          test -f data/levels/world1/welcome_antarctica.stl
+          test -f data/levels/world1/yeti_boss.stl
+          ./build/supertux2 --version || ./build/supertux2 --help || true

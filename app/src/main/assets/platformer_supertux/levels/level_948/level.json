@@ -1,0 +1,46 @@
+{
+  "id": 948,
+  "title": "Wooden Roots",
+  "subtitle": "SuperTux · Wooden Roots",
+  "sourceStl": "world2/wooden_roots.stl",
+  "chapterId": "supertux_forest",
+  "seriesId": "supertux_forest",
+  "tilesetId": "supertux_forest",
+  "bgmEvent": "bgm_supertux_forest",
+  "skyTop": "#FF81C784",
+  "skyBottom": "#FFE8F5E9",
+  "useCampaignScroll": false,
+  "rows": [
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "@......#....................",
+    "########....................",
+    "#########.................O."
+  ],
+  "segments": [],
+  "width": 28,
+  "viewport": {
+    "x0": 0,
+    "y0": 0
+  },
+  "spawn": {
+    "x": 1,
+    "y": 1
+  },
+  "coinTiles": [],
+  "badguyTiles": [],
+  "coins": [],
+  "badguys": [],
+  "hasVisualTiles": true,
+  "coinCount": 0,
+  "badguyCount": 0
+}

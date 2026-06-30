@@ -1,0 +1,711 @@
+{
+  "schemaVersion": 2,
+  "bundleVersion": 4,
+  "sourcePin": "94996deae99ec9a787896694a4c74f2b7186efe5",
+  "levelRange": [
+    901,
+    1018
+  ],
+  "chapters": [
+    {
+      "id": "supertux_antarctic",
+      "title": "南极探险",
+      "subtitle": "SuperTux World 1 · 改编",
+      "levelRange": [
+        901,
+        931
+      ],
+      "tilesetId": "supertux_antarctic",
+      "theme": "PACK_SUPERTUX",
+      "bgmEvent": "bgm_supertux_antarctic",
+      "skyTop": "#FFB0D4E8",
+      "skyBottom": "#FFE8F4FC"
+    },
+    {
+      "id": "supertux_forest",
+      "title": "森林秘境",
+      "subtitle": "SuperTux World 2 · 改编",
+      "levelRange": [
+        941,
+        978
+      ],
+      "tilesetId": "supertux_forest",
+      "theme": "PACK_SUPERTUX",
+      "bgmEvent": "bgm_supertux_forest",
+      "skyTop": "#FF81C784",
+      "skyBottom": "#FFE8F5E9"
+    },
+    {
+      "id": "supertux_bonus",
+      "title": "Bonus 挑战",
+      "subtitle": "SuperTux Bonus · 改编",
+      "levelRange": [
+        981,
+        1010
+      ],
+      "tilesetId": "supertux_bonus",
+      "theme": "PACK_SUPERTUX",
+      "bgmEvent": "bgm_supertux_bonus",
+      "skyTop": "#FF90CAF9",
+      "skyBottom": "#FFE3F2FD"
+    },
+    {
+      "id": "supertux_redmond",
+      "title": "Redmond 复仇",
+      "subtitle": "SuperTux Revenge · 改编",
+      "levelRange": [
+        1011,
+        1018
+      ],
+      "tilesetId": "supertux_redmond",
+      "theme": "PACK_SUPERTUX",
+      "bgmEvent": "bgm_supertux_redmond",
+      "skyTop": "#FF7986CB",
+      "skyBottom": "#FFE8EAF6"
+    }
+  ],
+  "levels": [
+    {
+      "id": 901,
+      "title": "欢迎来到南极",
+      "sourceStl": "world1/welcome_antarctica.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 902,
+      "title": "旅程开始",
+      "sourceStl": "world1/journey_begins.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 903,
+      "title": "Somewhat Smaller Bath",
+      "sourceStl": "world1/somewhat_smaller_bath.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 904,
+      "title": "岔路",
+      "sourceStl": "world1/fork_in_the_road.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 905,
+      "title": "霜冻原野",
+      "sourceStl": "world1/frosted_fields.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 906,
+      "title": "石寒",
+      "sourceStl": "world1/stone_cold.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 907,
+      "title": "更多雪球",
+      "sourceStl": "world1/more_snowballs.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 908,
+      "title": "弹跳山坡",
+      "sourceStl": "world1/bouncy_mountainside.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 909,
+      "title": "Above Arctic Skies",
+      "sourceStl": "world1/above_arctic_skies.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 910,
+      "title": "23rd Airborne",
+      "sourceStl": "world1/23rd_airborne.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 911,
+      "title": "寒夜",
+      "sourceStl": "world1/night_chill.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 912,
+      "title": "星空之下",
+      "sourceStl": "world1/into_stars.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 913,
+      "title": "Entrance Cave",
+      "sourceStl": "world1/entrance_cave.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 914,
+      "title": "Under The Ice",
+      "sourceStl": "world1/under_the_ice.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 915,
+      "title": "Living Inside Fridge",
+      "sourceStl": "world1/living_inside_fridge.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 916,
+      "title": "Or Just Me",
+      "sourceStl": "world1/or_just_me.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 917,
+      "title": "Deep Dive Chill",
+      "sourceStl": "world1/deep_dive_chill.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 918,
+      "title": "Ice In The Hole",
+      "sourceStl": "world1/ice_in_the_hole.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 919,
+      "title": "End Of Tunnel",
+      "sourceStl": "world1/end_of_tunnel.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 920,
+      "title": "云中径",
+      "sourceStl": "world1/path_in_clouds.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 921,
+      "title": "Slippery Slide",
+      "sourceStl": "world1/slippery_slide.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 922,
+      "title": "Shattered Bridge",
+      "sourceStl": "world1/shattered_bridge.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 923,
+      "title": "Antarctic Outpost",
+      "sourceStl": "world1/antarctic_outpost.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 924,
+      "title": "Nolok 城堡",
+      "sourceStl": "world1/castle_of_nolok.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 925,
+      "title": "雪人 Boss",
+      "sourceStl": "world1/yeti_boss.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 926,
+      "title": "Crystal Mine",
+      "sourceStl": "world1/crystal_mine.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 927,
+      "title": "Between Glaciers",
+      "sourceStl": "world1/between_glaciers.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 928,
+      "title": "企鹅入门",
+      "sourceStl": "world1/intro.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 929,
+      "title": "Yeti Cutscene",
+      "sourceStl": "world1/yeti_cutscene.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 930,
+      "title": "Castle Cutscene",
+      "sourceStl": "world1/castle_cutscene.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 931,
+      "title": "Yetiwin Cutscene",
+      "sourceStl": "world1/yetiwin_cutscene.stl",
+      "chapterId": "supertux_antarctic"
+    },
+    {
+      "id": 941,
+      "title": "欢迎来到森林",
+      "sourceStl": "world2/welcome_forest.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 942,
+      "title": "Rock Roll",
+      "sourceStl": "world2/rock_roll.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 943,
+      "title": "Shallow Green",
+      "sourceStl": "world2/shallow_green.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 944,
+      "title": "Find Bigger Fish",
+      "sourceStl": "world2/find_bigger_fish.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 945,
+      "title": "Mount Crushmore",
+      "sourceStl": "world2/mount_crushmore.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 946,
+      "title": "Tux Builder",
+      "sourceStl": "world2/tux_builder.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 947,
+      "title": "Mouldy Grotto",
+      "sourceStl": "world2/mouldy_grotto.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 948,
+      "title": "Wooden Roots",
+      "sourceStl": "world2/wooden_roots.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 949,
+      "title": "Penguin On Tree",
+      "sourceStl": "world2/penguin_on_tree.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 950,
+      "title": "Three Sheets Wind",
+      "sourceStl": "world2/three_sheets_wind.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 951,
+      "title": "Bouncy Coils",
+      "sourceStl": "world2/bouncy_coils.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 952,
+      "title": "Granito Village",
+      "sourceStl": "world2/granito_village.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 953,
+      "title": "Flooded Chambers",
+      "sourceStl": "world2/flooded_chambers.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 954,
+      "title": "Drop Ball",
+      "sourceStl": "world2/drop_ball.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 955,
+      "title": "Crumbling Path",
+      "sourceStl": "world2/crumbling_path.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 956,
+      "title": "Owls Skydive Commando",
+      "sourceStl": "world2/owls_skydive_commando.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 957,
+      "title": "Shocking",
+      "sourceStl": "world2/shocking.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 958,
+      "title": "Going Underground",
+      "sourceStl": "world2/going_underground.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 959,
+      "title": "Cave Patrol",
+      "sourceStl": "world2/cave_patrol.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 960,
+      "title": "Through Dark",
+      "sourceStl": "world2/through_dark.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 961,
+      "title": "Entangled Roots",
+      "sourceStl": "world2/entangled_roots.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 962,
+      "title": "Square Root Agony",
+      "sourceStl": "world2/square_root_agony.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 963,
+      "title": "Worse Salmonella",
+      "sourceStl": "world2/worse_salmonella.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 964,
+      "title": "Home Dead Home",
+      "sourceStl": "world2/home_dead_home.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 965,
+      "title": "Hollow Earth",
+      "sourceStl": "world2/hollow_earth.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 966,
+      "title": "Sticks Stones",
+      "sourceStl": "world2/sticks_stones.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 967,
+      "title": "Root For You",
+      "sourceStl": "world2/root_for_you.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 968,
+      "title": "Striking Wood",
+      "sourceStl": "world2/striking_wood.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 969,
+      "title": "Collapse Imminent",
+      "sourceStl": "world2/collapse_imminent.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 970,
+      "title": "Rooted Tower",
+      "sourceStl": "world2/rooted_tower.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 971,
+      "title": "Floral Blossom",
+      "sourceStl": "world2/floral_blossom.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 972,
+      "title": "Ancient Ruin",
+      "sourceStl": "world2/ancient_ruin.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 973,
+      "title": "Lost Sanctuary",
+      "sourceStl": "world2/lost_sanctuary.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 974,
+      "title": "幽灵树 Boss",
+      "sourceStl": "world2/ghosttree_boss.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 975,
+      "title": "Forest Intro",
+      "sourceStl": "world2/forest_intro.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 976,
+      "title": "Corrupted Cutscene",
+      "sourceStl": "world2/corrupted_cutscene.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 977,
+      "title": "Ghosttreewin Cutscene",
+      "sourceStl": "world2/ghosttreewin_cutscene.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 978,
+      "title": "Ghosttree Cutscene",
+      "sourceStl": "world2/ghosttree_cutscene.stl",
+      "chapterId": "supertux_forest"
+    },
+    {
+      "id": 981,
+      "title": "Where Everything Possible",
+      "sourceStl": "bonus1/where_everything_possible.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 982,
+      "title": "Fjerd",
+      "sourceStl": "bonus1/fjerd.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 983,
+      "title": "Bonus Dias",
+      "sourceStl": "bonus1/bonus_dias.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 984,
+      "title": "Maze In Sky",
+      "sourceStl": "bonus1/maze_in_sky.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 985,
+      "title": "Mysterious House Of Ice",
+      "sourceStl": "bonus1/mysterious_house_of_ice.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 986,
+      "title": "Snow Bowling",
+      "sourceStl": "bonus1/snow_bowling.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 987,
+      "title": "Pipe Down Over There",
+      "sourceStl": "bonus1/pipe_down_over_there.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 988,
+      "title": "Tip Of Iceberg",
+      "sourceStl": "bonus1/tip_of_iceberg.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 989,
+      "title": "Train Leaves In One Minute",
+      "sourceStl": "bonus1/train_leaves_in_one_minute.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 990,
+      "title": "Cave Of Mirrors",
+      "sourceStl": "bonus1/cave_of_mirrors.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 991,
+      "title": "Crumbel Cavern",
+      "sourceStl": "bonus1/crumbel_cavern.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 992,
+      "title": "All That Glistens",
+      "sourceStl": "bonus1/all_that_glistens.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 993,
+      "title": "Luft Airship",
+      "sourceStl": "bonus1/luft_airship.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 994,
+      "title": "Mario",
+      "sourceStl": "bonus1/mario.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 995,
+      "title": "High Gravity",
+      "sourceStl": "bonus1/high_gravity.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 996,
+      "title": "Snowmans Land",
+      "sourceStl": "bonus1/snowmans_land.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 997,
+      "title": "Let Us Snow",
+      "sourceStl": "bonus1/let_us_snow.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 998,
+      "title": "Ice Test",
+      "sourceStl": "bonus1/ice_test.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 999,
+      "title": "End Of Ice Age",
+      "sourceStl": "bonus1/end_of_ice_age.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1000,
+      "title": "Penguins Cant Fly",
+      "sourceStl": "bonus1/penguins_cant_fly.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1001,
+      "title": "Lies",
+      "sourceStl": "bonus1/lies.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1002,
+      "title": "Area 42",
+      "sourceStl": "bonus1/area_42.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1003,
+      "title": "Noloks Party Pit",
+      "sourceStl": "bonus1/noloks_party_pit.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1004,
+      "title": "Semi Frozen",
+      "sourceStl": "bonus1/semi_frozen.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1005,
+      "title": "Fire In The Sky",
+      "sourceStl": "bonus1/fire_in_the_sky.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1006,
+      "title": "Castle In Sky",
+      "sourceStl": "bonus1/castle_in_sky.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1007,
+      "title": "Flanders Ice Field",
+      "sourceStl": "bonus1/flanders_ice_field.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1008,
+      "title": "Another Cold Day",
+      "sourceStl": "bonus1/another_cold_day.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1009,
+      "title": "Snowy Sunset",
+      "sourceStl": "bonus1/snowy_sunset.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1010,
+      "title": "Refisherator",
+      "sourceStl": "bonus1/refisherator.stl",
+      "chapterId": "supertux_bonus"
+    },
+    {
+      "id": 1011,
+      "title": "Antarctica",
+      "sourceStl": "revenge_in_redmond/antarctica.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1012,
+      "title": "Who Is Gown",
+      "sourceStl": "revenge_in_redmond/who_is_gown.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1013,
+      "title": "Long Office Nights",
+      "sourceStl": "revenge_in_redmond/long_office_nights.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1014,
+      "title": "Get To Choppa",
+      "sourceStl": "revenge_in_redmond/get_to_choppa.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1015,
+      "title": "Where My Super Cape",
+      "sourceStl": "revenge_in_redmond/where_my_super_cape.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1016,
+      "title": "Redmond Headquarters",
+      "sourceStl": "revenge_in_redmond/redmond_headquarters.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1017,
+      "title": "Intro",
+      "sourceStl": "revenge_in_redmond/intro.stl",
+      "chapterId": "supertux_redmond"
+    },
+    {
+      "id": 1018,
+      "title": "Outro",
+      "sourceStl": "revenge_in_redmond/outro.stl",
+      "chapterId": "supertux_redmond"
+    }
+  ]
+}

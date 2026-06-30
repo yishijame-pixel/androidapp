@@ -138,3 +138,13 @@ build_err.txt
 compile_out.txt
 
 tmp_move_test.kt
+
+# SuperTux upstream mirror + fork worktree (CI clones; local: clone + bootstrap)
+reference-assets/supertux/
+engine/supertux-fork/*
+!engine/supertux-fork/patches/
+!engine/supertux-fork/patches/**
+!engine/supertux-fork/NOTICE
+!engine/supertux-fork/source_pin.json
+!engine/supertux-fork/FUNLIFE.md
+!engine/supertux-fork/.gitignore

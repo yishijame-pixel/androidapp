@@ -1,0 +1,46 @@
+{
+  "id": 967,
+  "title": "Root For You",
+  "subtitle": "SuperTux · Rooting For You",
+  "sourceStl": "world2/root_for_you.stl",
+  "chapterId": "supertux_forest",
+  "seriesId": "supertux_forest",
+  "tilesetId": "supertux_forest",
+  "bgmEvent": "bgm_supertux_forest",
+  "skyTop": "#FF81C784",
+  "skyBottom": "#FFE8F5E9",
+  "useCampaignScroll": false,
+  "rows": [
+    "............................",
+    "............................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##..........................",
+    "##@.......................O."
+  ],
+  "segments": [],
+  "width": 28,
+  "viewport": {
+    "x0": 0,
+    "y0": 0
+  },
+  "spawn": {
+    "x": 96,
+    "y": 2496
+  },
+  "coinTiles": [],
+  "badguyTiles": [],
+  "coins": [],
+  "badguys": [],
+  "hasVisualTiles": true,
+  "coinCount": 0,
+  "badguyCount": 0
+}

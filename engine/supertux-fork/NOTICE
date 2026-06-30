@@ -1,0 +1,18 @@
+FunLife SuperTux Fork (engine/supertux-fork)
+==============================================
+
+This directory contains modifications to SuperTux for FunLife "Classic Mode"
+integration. The game engine is licensed under GNU GPL version 2 or later.
+
+Upstream: https://github.com/SuperTux/supertux
+Pinned commit: see source_pin.json
+
+Planned patches (not yet applied in Phase 0 scaffold):
+  001-funlife-brand.patch
+  002-configurable-player-sprite.patch
+  003-jni-funlife-bridge.patch
+
+FunLife application shell (Compose) is separate from GPL engine sources.
+Dynamic linking via libsupertux2.so — legal review required before store release.
+
+Full corresponding source will be published per GPL when fork binaries ship.

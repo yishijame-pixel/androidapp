@@ -43,7 +43,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onNavigateBack: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
-    onNavigateToNotifications: () -> Unit = {}
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToCredits: () -> Unit = {},
 ) {
     val preferences by viewModel.preferences.collectAsState()
     val scrollState = rememberScrollState()
@@ -281,12 +282,20 @@ fun SettingsScreen(
                         valueText = "v1.0.0"
                     )
                     DividerLine()
+                    NavItem(
+                        icon = Icons.Rounded.Copyright,
+                        accent = Color(0xFF00897B),
+                        title = "开源许可",
+                        desc = "SuperTux 等第三方致谢",
+                        onClick = onNavigateToCredits,
+                    )
+                    DividerLine()
                     ActionItem(
                         icon = Icons.Rounded.MenuBook,
                         accent = Color(0xFF8E24AA),
                         title = "使用指南",
                         desc = "应用功能说明",
-                        onClick = { /* TODO */ }
+                        onClick = onNavigateToHelp,
                     )
                 }
 

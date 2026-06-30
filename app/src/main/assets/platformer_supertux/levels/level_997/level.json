@@ -1,0 +1,46 @@
+{
+  "id": 997,
+  "title": "Let Us Snow",
+  "subtitle": "SuperTux · Let Us Snow!",
+  "sourceStl": "bonus1/let_us_snow.stl",
+  "chapterId": "supertux_bonus",
+  "seriesId": "supertux_bonus",
+  "tilesetId": "supertux_bonus",
+  "bgmEvent": "bgm_supertux_bonus",
+  "skyTop": "#FF90CAF9",
+  "skyBottom": "#FFE3F2FD",
+  "useCampaignScroll": false,
+  "rows": [
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "###....##############.......",
+    "##..........###...###.......",
+    "##..................#.......",
+    "##..................#.......",
+    "##.................##.......",
+    "###.....##.........##.......",
+    "###.....##........###.......",
+    "#####################.......",
+    "..@.......................O."
+  ],
+  "segments": [],
+  "width": 28,
+  "viewport": {
+    "x0": 1,
+    "y0": 0
+  },
+  "spawn": {
+    "x": 1,
+    "y": 1
+  },
+  "coinTiles": [],
+  "badguyTiles": [],
+  "coins": [],
+  "badguys": [],
+  "hasVisualTiles": true,
+  "coinCount": 0,
+  "badguyCount": 0
+}

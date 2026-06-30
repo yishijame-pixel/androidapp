@@ -1,0 +1,28 @@
+name: platformer-supertux-validate
+
+on:
+  push:
+    paths:
+      - 'backend/tools/**'
+      - 'dist/platformer_supertux/**'
+      - 'dist/platformer_sfx/**'
+  pull_request:
+    paths:
+      - 'backend/tools/**'
+      - 'dist/platformer_supertux/**'
+      - 'dist/platformer_sfx/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Pillow
+        run: pip install Pillow
+      - name: Import SuperTux bundles
+        run: python backend/tools/import_supertux_platformer.py --skip-assets-mirror
+      - name: Validate dist
+        run: python backend/tools/validate_platformer_supertux.py

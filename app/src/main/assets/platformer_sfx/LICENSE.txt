@@ -1,0 +1,2 @@
+SuperTux sound assets — dual licensed GPL v2+ and CC-BY-SA 3.0.
+See data/AUTHORS in SuperTux source.
