@@ -134,7 +134,7 @@ static void android_notify_loading(int progress, const char* stage)
   env->DeleteLocalRef(cls);
 }
 
-static void android_notify_ready()
+void android_notify_ready()
 {
   JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
   jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
@@ -151,10 +151,40 @@ static void android_notify_ready()
 
 LAUNCH_GAME_READY_ANCHOR = "  m_screen_manager->run();"
 LAUNCH_GAME_READY_REPLACEMENT = """#ifdef __ANDROID__
-  android_notify_loading(95, "\\xe5\\x8d\\xb3\\xe5\\xb0\\x86\\xe8\\xbf\\x9b\\xe5\\x85\\xa5\\xe5\\x85\\xb3\\xe5\\x8d\\xa1\\xe2\\x80\\xa6");
-  android_notify_ready();
+  android_notify_loading(90, "\\xe5\\x90\\xaf\\xe5\\x8a\\xa8\\xe6\\xb8\\xb8\\xe6\\x88\\x8f\\xe2\\x80\\xa6");
 #endif
   m_screen_manager->run();"""
+
+SKIP_INTRO_MARKER = "session->skip_intro();"
+SKIP_INTRO_ANCHOR = (
+    "        std::unique_ptr<GameSession> session = "
+    "std::make_unique<GameSession>(start_level, *m_savegame);"
+)
+SKIP_INTRO_REPLACEMENT = (
+    "        std::unique_ptr<GameSession> session = "
+    "std::make_unique<GameSession>(start_level, *m_savegame);\n"
+    "#ifdef __ANDROID__\n"
+    "        session->skip_intro();\n"
+    "#endif"
+)
+
+GAME_SESSION_DRAW_MARKER = "s_android_ready_sent"
+GAME_SESSION_DRAW_ANCHOR = (
+    "void\nGameSession::draw(Compositor& compositor)\n{\n"
+    "  auto& context = compositor.make_context();"
+)
+GAME_SESSION_DRAW_REPLACEMENT = (
+    "void\nGameSession::draw(Compositor& compositor)\n{\n"
+    "#ifdef __ANDROID__\n"
+    "  extern void android_notify_ready();\n"
+    "  static bool s_android_ready_sent = false;\n"
+    "  if (!s_android_ready_sent) {\n"
+    "    s_android_ready_sent = true;\n"
+    "    android_notify_ready();\n"
+    "  }\n"
+    "#endif\n"
+    "  auto& context = compositor.make_context();"
+)
 
 LAUNCH_PROGRESS_ANCHORS = [
     ('  s_timelog.log("addons");', '  s_timelog.log("addons");\n#ifdef __ANDROID__\n  android_notify_loading(12, "\\xe5\\x88\\x9d\\xe5\\xa7\\x8b\\xe5\\x8c\\x96\\xe9\\x99\\x84\\xe5\\x8a\\xa0\\xe5\\x86\\x85\\xe5\\xae\\xb9\\xe2\\x80\\xa6");\n#endif'),
@@ -167,7 +197,7 @@ LAUNCH_PROGRESS_ANCHORS = [
 def apply_android_engine_loading_jni(main_cpp: Path) -> None:
     text = main_cpp.read_text(encoding="utf-8")
     if ANDROID_JNI_MARKER in text:
-        print(f"skip (already applied): android loading jni in {main_cpp.name}")
+        upgrade_android_engine_loading_jni(main_cpp)
         return
     if ANDROID_JNI_ANCHOR not in text:
         raise SystemExit(f"android jni anchor not found in {main_cpp}")
@@ -175,10 +205,62 @@ def apply_android_engine_loading_jni(main_cpp: Path) -> None:
     for anchor, replacement in LAUNCH_PROGRESS_ANCHORS:
         if anchor in text and replacement not in text:
             text = text.replace(anchor, replacement, 1)
-    if LAUNCH_GAME_READY_ANCHOR in text:
+    if LAUNCH_GAME_READY_ANCHOR in text and "android_notify_loading(90" not in text:
         text = text.replace(LAUNCH_GAME_READY_ANCHOR, LAUNCH_GAME_READY_REPLACEMENT, 1)
     main_cpp.write_text(text, encoding="utf-8", newline="\n")
     print(f"applied android engine loading jni -> {main_cpp}")
+
+
+def upgrade_android_engine_loading_jni(main_cpp: Path) -> None:
+    text = main_cpp.read_text(encoding="utf-8")
+    changed = False
+    old_ready = (
+        "#ifdef __ANDROID__\n"
+        "  android_notify_loading(95,"
+    )
+    if old_ready in text and "android_notify_loading(90" not in text:
+        text = text.replace(
+            """#ifdef __ANDROID__
+  android_notify_loading(95, "\\xe5\\x8d\\xb3\\xe5\\xb0\\x86\\xe8\\xbf\\x9b\\xe5\\x85\\xa5\\xe5\\x85\\xb3\\xe5\\x8d\\xa1\\xe2\\x80\\xa6");
+  android_notify_ready();
+#endif
+  m_screen_manager->run();""",
+            LAUNCH_GAME_READY_REPLACEMENT,
+            1,
+        )
+        changed = True
+    if "static void android_notify_ready()" in text:
+        text = text.replace("static void android_notify_ready()", "void android_notify_ready()", 1)
+        changed = True
+    if changed:
+        main_cpp.write_text(text, encoding="utf-8", newline="\n")
+        print(f"upgraded android engine loading jni -> {main_cpp}")
+    else:
+        print(f"skip (already applied): android loading jni in {main_cpp.name}")
+
+
+def apply_android_skip_intro(main_cpp: Path) -> None:
+    text = main_cpp.read_text(encoding="utf-8")
+    if SKIP_INTRO_MARKER in text:
+        print(f"skip (already applied): skip intro in {main_cpp.name}")
+        return
+    if SKIP_INTRO_ANCHOR not in text:
+        raise SystemExit(f"skip intro anchor not found in {main_cpp}")
+    text = text.replace(SKIP_INTRO_ANCHOR, SKIP_INTRO_REPLACEMENT, 1)
+    main_cpp.write_text(text, encoding="utf-8", newline="\n")
+    print(f"applied android skip intro -> {main_cpp}")
+
+
+def apply_android_first_frame_ready(game_session_cpp: Path) -> None:
+    text = game_session_cpp.read_text(encoding="utf-8")
+    if GAME_SESSION_DRAW_MARKER in text:
+        print(f"skip (already applied): first frame ready in {game_session_cpp.name}")
+        return
+    if GAME_SESSION_DRAW_ANCHOR not in text:
+        raise SystemExit(f"game session draw anchor not found in {game_session_cpp}")
+    text = text.replace(GAME_SESSION_DRAW_ANCHOR, GAME_SESSION_DRAW_REPLACEMENT, 1)
+    game_session_cpp.write_text(text, encoding="utf-8", newline="\n")
+    print(f"applied first frame ready notify -> {game_session_cpp}")
 
 
 def apply_sdl_system_include(main_cpp: Path) -> None:
@@ -215,6 +297,8 @@ def main() -> None:
     apply_sdl_system_include(main_cpp)
     apply_physfs_init_android(main_cpp)
     apply_android_engine_loading_jni(main_cpp)
+    apply_android_skip_intro(main_cpp)
+    apply_android_first_frame_ready(fork / "src/supertux/game_session.cpp")
 
 
 if __name__ == "__main__":

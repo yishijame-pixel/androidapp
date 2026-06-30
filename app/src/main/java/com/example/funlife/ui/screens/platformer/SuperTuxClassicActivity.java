@@ -26,8 +26,8 @@ public class SuperTuxClassicActivity extends SDLActivity {
     public static final String EXTRA_SAVE_SLOT = "save_slot";
 
     private static final String DEFAULT_LEVEL = "levels/world1/welcome_antarctica.stl";
-    private static final long MIN_OVERLAY_MS = 800L;
-    private static final long MAX_OVERLAY_MS = 180_000L;
+    private static final long MIN_OVERLAY_MS = 400L;
+    private static final long MAX_OVERLAY_MS = 120_000L;
 
     private static final String[] FALLBACK_STATUS = {
             "正在挂载游戏资源…",
@@ -97,8 +97,10 @@ public class SuperTuxClassicActivity extends SDLActivity {
         loadingPercent = loadingOverlay.findViewById(R.id.supertux_loading_percent);
         loadingHint = loadingOverlay.findViewById(R.id.supertux_loading_hint);
         if (SuperTuxClassicDataPreparer.isExtracted(this)) {
-            loadingHint.setText("资源已解压，正在加载引擎（约 30 秒～1 分钟）");
+            loadingHint.setText("资源已解压，正在加载关卡（约 15～30 秒）");
         }
+        loadingOverlay.setClickable(false);
+        loadingOverlay.setFocusable(false);
         root.addView(loadingOverlay);
         overlayShownAtMs = System.currentTimeMillis();
         applyProgress(3, "正在启动 SuperTux 引擎…");
@@ -113,7 +115,24 @@ public class SuperTuxClassicActivity extends SDLActivity {
         runOnUiThread(() -> applyProgress(percent, stage));
     }
 
-    /** Called from native via JNI when the game loop is about to start. */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        boostSdlThreadPriority();
+    }
+
+    private void boostSdlThreadPriority() {
+        Thread sdl = SDLActivity.mSDLThread;
+        if (sdl != null && sdl.isAlive()) {
+            try {
+                sdl.setPriority(Thread.MAX_PRIORITY);
+            } catch (Exception e) {
+                Log.w(TAG, "boostSdlThreadPriority failed", e);
+            }
+        }
+    }
+
+    /** Called from native via JNI when the first frame is drawn. */
     @SuppressWarnings("unused")
     public void onEngineReady() {
         engineReady = true;
