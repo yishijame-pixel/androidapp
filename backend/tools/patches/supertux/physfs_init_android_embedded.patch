@@ -1,19 +1,25 @@
 --- a/src/supertux/main.cpp
 +++ b/src/supertux/main.cpp
-@@ -180,7 +180,20 @@ PhysfsSubsystem::PhysfsSubsystem(const char* argv0,
+@@ -23,6 +23,9 @@
+ 
+ #include <SDL_image.h>
+ #include <SDL_ttf.h>
++#ifdef __ANDROID__
++#include <SDL_system.h>
++#endif
+ #include <physfs.h>
+ #include <tinygettext/log.hpp>
+ #include <fmt/format.h>
+@@ -180,7 +183,16 @@ PhysfsSubsystem::PhysfsSubsystem(const char* argv0,
    m_datadir(),
    m_userdir()
  {
 -  if (!PHYSFS_init(argv0))
 +#ifdef __ANDROID__
-+  const char* physfs_init_arg = argv0;
-+  std::string physfs_android_base;
-+  // SDL passes argv[0]="app_process" on Android; PHYSFS_init() dereferences it
-+  // as a filesystem path and SIGSEGVs when embedded in a host app (FunLife).
-+  if (m_forced_userdir && !m_forced_userdir->empty()) {
-+    physfs_android_base = *m_forced_userdir;
-+    physfs_init_arg = physfs_android_base.c_str();
-+  }
++  PHYSFS_AndroidInit physfsAndroidInit{};
++  physfsAndroidInit.jnienv = SDL_AndroidGetJNIEnv();
++  physfsAndroidInit.context = SDL_AndroidGetActivity();
++  const char* physfs_init_arg = reinterpret_cast<const char*>(&physfsAndroidInit);
 +#else
 +  const char* physfs_init_arg = argv0;
 +#endif
