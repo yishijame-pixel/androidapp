@@ -20,11 +20,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone SuperTux upstream at pin
-        run: bash backend/tools/clone_supertux_upstream.sh
+      - name: Read SuperTux upstream pin
+        id: supertux_pin
+        run: |
+          commit=$(python3 -c "import json; print(json.load(open('engine/supertux-fork/source_pin.json'))['commit'])")
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout SuperTux upstream
+        uses: actions/checkout@v4
+        with:
+          repository: SuperTux/supertux
+          ref: ${{ steps.supertux_pin.outputs.commit }}
+          path: reference-assets/supertux
+          submodules: recursive
+          fetch-depth: 1
 
       - name: Bootstrap fork worktree
-        run: pwsh -File backend/tools/bootstrap_supertux_fork.ps1
+        run: bash backend/tools/bootstrap_supertux_fork.sh
 
       - name: Install dependencies
         run: |
