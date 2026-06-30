@@ -71,7 +71,15 @@ function Download-NativeSo([long]$Id) {
     Write-Host "Downloading libsupertux2-arm64-v8a from run $Id ..."
     gh run download $Id --repo $Repo --name libsupertux2-arm64-v8a --dir $out
     if ($LASTEXITCODE -ne 0) { throw "gh run download failed for run $Id" }
-    $so = Get-ChildItem -Path $out -Recurse -Filter "libsupertux2.so" | Select-Object -First 1
+    $so = Get-ChildItem -Path $out -Recurse -Filter "libsupertux2.so" |
+        Sort-Object @{
+            Expression = {
+                if ($_.FullName -match 'stripReleaseDebugSymbols|merged_native_libs') { 0 }
+                elseif ($_.FullName -match 'stripped') { 1 }
+                else { 2 }
+            }
+        }, Length |
+        Select-Object -First 1
     if (-not $so) { throw "libsupertux2.so not found in artifact" }
     Copy-Item $so.FullName (Join-Path $JniDir "libsupertux2.so") -Force
     $cxx = Get-ChildItem -Path $out -Recurse -Filter "libc++_shared.so" | Select-Object -First 1

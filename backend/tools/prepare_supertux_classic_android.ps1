@@ -8,9 +8,12 @@
 
 param(
     [string]$Repo = "yishijame-pixel/androidapp",
-    [long]$RunId = 28449235537,
+    [long]$RunId = 28457850084,
+    [long]$NativeArtifactId = 7986417157,
+    [long]$ApkArtifactId = 7986421584,
     [string]$NativeZip = "",
-    [string]$ApkZip = ""
+    [string]$ApkZip = "",
+    [switch]$NativeOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,38 +40,71 @@ function Get-GitHubTokenFromCredential {
 }
 
 function Invoke-GhDownload($Url, $OutFile) {
-    $headers = @{}
     $token = Get-GitHubTokenFromCredential
-    if ($token) {
-        $headers["Authorization"] = "Bearer $token"
+    if (-not $token) {
+        throw @"
+GitHub token required for artifact download (API URLs cannot open in browser).
+Set: `$env:GITHUB_TOKEN='ghp_...'  (needs actions:read)
+Or ensure 'git credential fill' returns a token with actions:read scope.
+"@
     }
     Write-Host "GET $Url"
-    Invoke-WebRequest -Uri $Url -Headers $headers -OutFile $OutFile
+    Write-Host " -> $OutFile"
+    $headers = @{
+        Authorization = "Bearer $token"
+        Accept        = "application/vnd.github+json"
+        "User-Agent"  = "funlife-prepare-script"
+    }
+    try {
+        Invoke-WebRequest -Uri $Url -Headers $headers -OutFile $OutFile -UseBasicParsing
+    } catch {
+        $body = $_.ErrorDetails.Message
+        if ($body -match '"status":\s*"401"') {
+            throw "GitHub 401: token missing actions:read scope or expired. Create a PAT at github.com/settings/tokens with 'Actions: Read'."
+        }
+        throw
+    }
+    if (-not (Test-Path $OutFile) -or (Get-Item $OutFile).Length -lt 1024) {
+        throw "Download failed or file too small: $OutFile"
+    }
 }
 
 if (-not $NativeZip) {
     $nativeOut = Join-Path $Tmp "libsupertux2-arm64-v8a.zip"
-    $nativeUrl = "https://api.github.com/repos/$Repo/actions/artifacts/7983010678/zip"
+    $nativeUrl = "https://api.github.com/repos/$Repo/actions/artifacts/$NativeArtifactId/zip"
     Invoke-GhDownload $nativeUrl $nativeOut
     $NativeZip = $nativeOut
 }
 
-if (-not $ApkZip) {
-    $apkOut = Join-Path $Tmp "supertux-fork-apk-arm64-release.zip"
-    $apkUrl = "https://api.github.com/repos/$Repo/actions/artifacts/7983015824/zip"
-    Invoke-GhDownload $apkUrl $apkOut
-    $ApkZip = $apkOut
+if (-not $ApkZip -and -not $NativeOnly) {
+    if ((Test-Path $DataZip) -and (Get-Item $DataZip).Length -gt 32MB) {
+        Write-Host "data.zip already present, skipping APK artifact download (-NativeOnly implied)"
+    } else {
+        $apkOut = Join-Path $Tmp "supertux-fork-apk-arm64-release.zip"
+        $apkUrl = "https://api.github.com/repos/$Repo/actions/artifacts/$ApkArtifactId/zip"
+        Invoke-GhDownload $apkUrl $apkOut
+        $ApkZip = $apkOut
+    }
 }
 
 Write-Host "Extract native -> $JniDir"
 Expand-Archive -Path $NativeZip -DestinationPath (Join-Path $Tmp "native") -Force
-Get-ChildItem -Path (Join-Path $Tmp "native") -Recurse -Filter "libsupertux2.so" | ForEach-Object {
+Get-ChildItem -Path (Join-Path $Tmp "native") -Recurse -Filter "libsupertux2.so" |
+    Sort-Object @{
+        Expression = {
+            if ($_.FullName -match 'stripReleaseDebugSymbols|merged_native_libs') { 0 }
+            elseif ($_.FullName -match 'stripped') { 1 }
+            else { 2 }
+        }
+    }, Length |
+    ForEach-Object {
     Copy-Item $_.FullName (Join-Path $JniDir "libsupertux2.so") -Force
 }
 Get-ChildItem -Path (Join-Path $Tmp "native") -Recurse -Filter "libc++_shared.so" | ForEach-Object {
     Copy-Item $_.FullName (Join-Path $JniDir "libc++_shared.so") -Force
 }
 
+if ($ApkZip) {
 Write-Host "Extract data.zip from APK artifact -> $DataZip"
 Expand-Archive -Path $ApkZip -DestinationPath (Join-Path $Tmp "apk") -Force
 $apkFile = Get-ChildItem -Path (Join-Path $Tmp "apk") -Recurse -Filter "*.apk" | Select-Object -First 1
@@ -81,6 +117,9 @@ if (-not (Test-Path $embedded)) {
     throw "assets/data.zip not found inside APK — rebuild supertux-fork-android CI"
 }
 Copy-Item $embedded $DataZip -Force
+} else {
+Write-Host "Skip data.zip (already at $DataZip)"
+}
 
 Write-Host ""
 Write-Host "OK SuperTux classic assets prepared:"
