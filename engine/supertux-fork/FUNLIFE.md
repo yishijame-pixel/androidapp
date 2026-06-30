@@ -2,6 +2,7 @@
 
 > **产品决策：** 已确认（2026-06-26）— **Fork 经典模式 = FunLife 横版 1:1 主线**  
 > **改编 Kotlin bundle = 可选 fallback**  
+> **📊 进度看板（随时打开）：** [`docs/supertux-fork-progress.md`](../../docs/supertux-fork-progress.md)  
 > **战略文档：** [`docs/supertux-fork-strategy.md`](../../docs/supertux-fork-strategy.md)  
 > **产品路线图：** [`docs/supertux-funlife-product-roadmap.md`](../../docs/supertux-funlife-product-roadmap.md)
 

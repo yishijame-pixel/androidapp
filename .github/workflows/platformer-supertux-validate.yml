@@ -6,11 +6,12 @@ on:
       - 'backend/tools/**'
       - 'dist/platformer_supertux/**'
       - 'dist/platformer_sfx/**'
+      - '.github/workflows/platformer-supertux-validate.yml'
   pull_request:
     paths:
       - 'backend/tools/**'
       - 'dist/platformer_supertux/**'
-      - 'dist/platformer_sfx/**'
+      - '.github/workflows/platformer-supertux-validate.yml'
 
 jobs:
   validate:

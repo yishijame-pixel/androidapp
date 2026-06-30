@@ -5,7 +5,7 @@ on:
   push:
     paths:
       - 'engine/supertux-fork/**'
-      - 'backend/tools/bootstrap_supertux_fork.ps1'
+      - 'backend/tools/bootstrap_supertux_fork.*'
       - 'backend/tools/clone_supertux_upstream.*'
       - '.github/workflows/supertux-fork-android.yml'
   pull_request:
@@ -48,12 +48,37 @@ jobs:
       - name: Bootstrap fork worktree
         run: bash backend/tools/bootstrap_supertux_fork.sh
 
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+          cache: gradle
+
+      # Match upstream SuperTux android.yml (v2 + explicit sdkmanager).
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Install Android platform, NDK, build-tools
+        run: |
+          sdkmanager --install \
+            "platforms;android-${SDK_VERSION}" \
+            "ndk;${NDK_VERSION}" \
+            "build-tools;${B_T_VERSION}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          test -d "${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
+
+      - name: Export NDK for vcpkg / Gradle
+        run: |
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
       - name: Cache vcpkg
         id: cache-vcpkg
         uses: actions/cache@v4
         with:
           path: vcpkg
-          key: supertux-android-arm64-vcpkg-v1
+          key: supertux-android-arm64-vcpkg-v2-${{ hashFiles('.github/workflows/supertux-fork-android.yml') }}
 
       - name: Install vcpkg ports (arm64-android)
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -71,29 +96,11 @@ jobs:
           chmod +x tools/bootstrap-android-project.sh
           ./tools/bootstrap-android-project.sh "${SDL_TAG}"
           mkdir -p mk/android
-          echo "vcpkg_root=$VCPKG_ROOT" > mk/android/local.properties
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: 21
-          cache: gradle
-
-      - name: Setup Android SDK / NDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platforms;android-${{ env.SDK_VERSION }}
-            ndk;${{ env.NDK_VERSION }}
-            build-tools;${{ env.B_T_VERSION }}
-
-      - name: Write NDK path for CMake
-        working-directory: engine/supertux-fork/mk/android
-        run: |
-          NDK_PATH="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
-          echo "ndk_home=${NDK_PATH}" >> local.properties
-          cat local.properties
+          {
+            echo "vcpkg_root=${VCPKG_ROOT}"
+            echo "ndk_home=${ANDROID_NDK_HOME}"
+          } > mk/android/local.properties
+          cat mk/android/local.properties
 
       - name: Build debug APK (arm64-v8a)
         working-directory: engine/supertux-fork/mk/android
