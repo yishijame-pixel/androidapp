@@ -1,8 +1,8 @@
 ﻿{
-    "commit":  "94996deae99ec9a787896694a4c74f2b7186efe5",
-    "updatedAt":  "2026-06-30",
-    "forkPhase":  1,
-    "productDecision":  "FunLife classic fork = primary; Kotlin adaptation = fallback",
-    "referencePath":  "reference-assets/supertux",
-    "upstream":  "https://github.com/SuperTux/supertux"
+  "upstream": "https://github.com/SuperTux/supertux",
+  "commit": "94996deae99ec9a787896694a4c74f2b7186efe5",
+  "referencePath": "reference-assets/supertux",
+  "forkPhase": 1,
+  "updatedAt": "2026-06-30",
+  "productDecision": "FunLife classic fork = primary; Kotlin adaptation = fallback"
 }

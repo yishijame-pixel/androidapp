@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Clone SuperTux upstream at pin
+        run: bash backend/tools/clone_supertux_upstream.sh
       - name: Install Pillow
         run: pip install Pillow
       - name: Import SuperTux bundles

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Clone SuperTux upstream at pin commit into reference-assets/supertux (for CI / local bootstrap).
+# Clone SuperTux upstream at pin commit into reference-assets/supertux (CI / local bootstrap).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -11,25 +11,27 @@ if [[ ! -f "$PIN_FILE" ]]; then
   exit 1
 fi
 
-COMMIT="$(python3 -c "import json; print(json.load(open('$PIN_FILE'))['commit'])")"
+COMMIT="$(python3 -c "import json, pathlib; print(json.loads(pathlib.Path('${PIN_FILE}').read_text())['commit'])")"
+COMMIT="${COMMIT//[[:space:]]/}"
 if [[ -z "$COMMIT" || "$COMMIT" == "None" ]]; then
   echo "Invalid commit in $PIN_FILE" >&2
   exit 1
 fi
 
 mkdir -p "$(dirname "$UPSTREAM")"
-if [[ -d "$UPSTREAM/.git" ]]; then
-  echo "Updating existing clone at $UPSTREAM"
-  git -C "$UPSTREAM" fetch --depth 1 origin "$COMMIT"
-  git -C "$UPSTREAM" checkout -q FETCH_HEAD
-else
-  rm -rf "$UPSTREAM"
-  echo "Cloning SuperTux @ $COMMIT -> $UPSTREAM"
-  git init "$UPSTREAM"
-  git -C "$UPSTREAM" remote add origin https://github.com/SuperTux/supertux.git
-  git -C "$UPSTREAM" fetch --depth 1 origin "$COMMIT"
-  git -C "$UPSTREAM" checkout -q FETCH_HEAD
+rm -rf "$UPSTREAM"
+
+echo "Cloning SuperTux @ ${COMMIT} -> ${UPSTREAM}"
+# --revision works on Git 2.36+ (ubuntu-latest); shallow single commit.
+git clone --depth 1 --revision="${COMMIT}" \
+  https://github.com/SuperTux/supertux.git "${UPSTREAM}"
+
+git -C "${UPSTREAM}" submodule update --init --recursive --depth 1 || true
+
+HEAD="$(git -C "${UPSTREAM}" rev-parse HEAD)"
+if [[ "${HEAD}" != "${COMMIT}" ]]; then
+  echo "Checkout mismatch: want ${COMMIT} got ${HEAD}" >&2
+  exit 1
 fi
 
-git -C "$UPSTREAM" submodule update --init --recursive --depth 1 || true
-echo "OK upstream $(git -C "$UPSTREAM" rev-parse --short HEAD)"
+echo "OK upstream $(git -C "${UPSTREAM}" rev-parse --short HEAD)"
