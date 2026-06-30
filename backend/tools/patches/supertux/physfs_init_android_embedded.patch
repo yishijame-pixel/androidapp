@@ -1,0 +1,23 @@
+--- a/src/supertux/main.cpp
++++ b/src/supertux/main.cpp
+@@ -180,7 +180,20 @@ PhysfsSubsystem::PhysfsSubsystem(const char* argv0,
+   m_datadir(),
+   m_userdir()
+ {
+-  if (!PHYSFS_init(argv0))
++#ifdef __ANDROID__
++  const char* physfs_init_arg = argv0;
++  std::string physfs_android_base;
++  // SDL passes argv[0]="app_process" on Android; PHYSFS_init() dereferences it
++  // as a filesystem path and SIGSEGVs when embedded in a host app (FunLife).
++  if (m_forced_userdir && !m_forced_userdir->empty()) {
++    physfs_android_base = *m_forced_userdir;
++    physfs_init_arg = physfs_android_base.c_str();
++  }
++#else
++  const char* physfs_init_arg = argv0;
++#endif
++  if (!PHYSFS_init(physfs_init_arg))
+   {
+     std::stringstream msg;
+     msg << "Couldn't initialize physfs: " << physfsutil::get_last_error();

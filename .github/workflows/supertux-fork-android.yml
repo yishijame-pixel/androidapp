@@ -7,6 +7,8 @@ on:
       - 'engine/supertux-fork/**'
       - 'backend/tools/bootstrap_supertux_fork.*'
       - 'backend/tools/bootstrap_supertux_android.sh'
+      - 'backend/tools/apply_supertux_android_patches.py'
+      - 'backend/tools/patches/**'
       - 'backend/tools/init_supertux_submodules.sh'
       - 'backend/tools/verify_supertux_fork_tree.sh'
       - 'backend/tools/clone_supertux_upstream.*'
